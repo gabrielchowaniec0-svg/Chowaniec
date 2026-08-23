@@ -4,8 +4,7 @@ window.THEATER_CONFIG = {
     theaterSettings: {
         baseSeatPrice: 18.00,
         rows: ['A', 'B', 'C', 'D'],
-        seatColumnsCount: 8,
-        occupiedSeats: ['B3', 'B4', 'C5']
+        seatColumnsCount: 8
     },
 
     // Movie Screenings Catalog
