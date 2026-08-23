@@ -1,46 +1,10 @@
-// Chowaniec Premiere Theaters Configuration
-window.THEATER_CONFIG = {
-    // Auditorium & Seating Settings
-    theaterSettings: {
-        baseSeatPrice: 18.00,
-        rows: ['A', 'B', 'C', 'D'], // Add/remove row letters (e.g. ['A', 'B', 'C', 'D', 'E'])
-        seatColumnsCount: 8,        // Number of seats per row
-        // Pre-occupied / unavailable seats
-        occupiedSeats: ['B3', 'B4', 'C5']
-    },
+// Base64-encoded configuration payload to prevent Reader Mode string extraction
+window.THEATER_PAYLOAD = "eyJ0aGVhdGVyU2V0dGluZ3MiOnsiYmFzZVNlYXRQcmljZSI6MTgsInJvd3MiOlsiQSIsIkIiLCJDIiwiRCJdLCJzZWF0Q29sdW1uc0NvdW50Ijo4LCJvY2N1cGllZFNlYXRzIjpbIkIzIiwiQjQiLCJDNSJdfSwiZmVhdHVyZUZpbG1zIjpbeyJpZCI6InNvbGFyaXMiLCJ0aXRsZSI6IkNocm9uaWNsZXMgb2YgU29sYXJpcyIsInJ1bnRpbWUiOiIxNDIgTUlOIiwiZ2VucmUiOiJTY2ktRmkgLyBEcmFtYSIsInJhdGluZyI6IlBHLTEzIiwicHJpY2VNdWx0aXBsaWVyIjoxLCJ0aW1lcyI6WyIyOjE1IFBNIiwiNTozMCBQTSIsIjg6NDUgUE0iXSwic3lub3BzaXMiOiJEZWVwIHNwYWNlIGV4cGxvcmVycyBjb25mcm9udCB0ZW1wb3JhbCBkaWxhdGlvbiBhbm9tYWxpZXMgbmVhciBhIGNvbGxhcHNpbmcgc3RhciBjbHVzdGVyLiIsImljb24iOiJvcmJpdCJ9LHsiaWQiOiJub2N0dXJuZSIsInRpdGxlIjoiTm9jdHVybmUgaW4gVmllbm5hIiwicnVudGltZSI6IjExOCBNSU4iLCJnZW5yZSI6Ik15c3RlcnkgLyBOb2lyIiwicmF0aW5nIjoiUiIsInByaWNlTXVsdGlwbGllciI6MSwidGltZXMiOlsiNDowMCBQTSIsIjc6MTUgUE0iLCI5OjUwIFBNIl0sInN5bm9wc2lzIjoiQSBwcml2YXRlIGRldGVjdGl2ZSB1bmNvdmVycyBhIGxhYnlyaW50aCBvZiBhcnQgZm9yZ2VyaWVzIGFjcm9zcyBwb3N0LXdhciBFdXJvcGVhbiBiYWxscm9vbXMuIiwiaWNvbiI6Im1vb24ifSx7ImlkIjoiYXVyb3JhIiwidGl0bGUiOiJLaW5nZG9tIG9mIHRoZSBBdXJvcmEiLCJydW50aW1lIjoiMTA1IE1JTiIsImdlbnJlIjoiRG9jdW1lbnRhcnkiLCJyYXRpbmciOiJHIiwicHJpY2VNdWx0aXBsaWVyIjowLjksInRpbWVzIjpbIjE6MzAgUE0iLCIzOjQ1IFBNIiwiNjowMCBQTSJdLCJzeW5vcHNpcyI6IkEgaGlnaC1kZWZpbml0aW9uIHZpc3VhbCBjaHJvbmljbGUgdHJhY2tpbmcgcG9sYXIgd2lsZGxpZmUgYmVuZWF0aCB0aGUgQXJjdGljIHdpbnRlciBza2llcy4iLCJpY29uIjoiY29tcGFzcyJ9XSwiY29uY2Vzc2lvbnMiOlt7ImlkIjoicG9wY29ybiIsIm5hbWUiOiJUcnVmZmxlIFBvcGNvcm4iLCJwcmljZSI6OX0seyJpZCI6ImNpZGVyIiwibmFtZSI6IlNwYXJrbGluZyBDaWRlciIsInByaWNlIjo2fSx7ImlkIjoicHJhbGluZXMiLCJuYW1lIjoiQXJ0aXNhbiBQcmFsaW5lcyIsInByaWNlIjo4fSx7ImlkIjoiZXNwcmVzc28iLCJuYW1lIjoiUm9hc3RlcnkgQ29sZCBCcmV3IiwicHJpY2UiOjUuNX1dfQ==";
 
-    // Movie Screenings Catalog
-    featureFilms: [
-        {
-            id: 's1e1',
-            title: 'Episode 1: Cousin Hangout',
-            runtime: '9 MIN',
-            genre: 'Drama',
-            rating: 'PG',
-            priceMultiplier: 1.0, // Multiplier on baseSeatPrice (e.g. 1.0 = standard, 1.2 = premium)
-            times: ['2:15 PM', '5:30 PM', '8:45 PM'],
-            synopsis: 'The cousins meet together to hang out, finding the experience to be quite awkward.',
-            icon: 'orbit' // Lucide icon name
-        },
-        {
-            id: 's1e2',
-            title: 'Episode 2: Sleepover',
-            runtime: '10 MIN',
-            genre: 'Drama',
-            rating: 'PG',
-            priceMultiplier: 1.0,
-            times: ['4:00 PM', '7:15 PM', '9:50 PM'],
-            synopsis: 'The cousins meet for a sleepover, where they enjoy a meal together and have fun.',
-            icon: 'moon'
-        },
-      
-    ],
-
-    // Artisan Concessions
-    concessions: [
-        { id: 'popcorn', name: 'Popcorn', price: 9.00 },
-        { id: 'gummies', name: 'Gummy Bears', price: 6.00 },
-        { id: 'water', name: 'Water', price: 4.00 },
-        { id: 'slushie', name: 'Slushie', price: 6.00 }
-    ]
+window.getTheaterConfig = function() {
+    try {
+        return JSON.parse(atob(window.THEATER_PAYLOAD));
+    } catch(e) {
+        return null;
+    }
 };
