@@ -11,7 +11,7 @@
     <!-- Security Gate & Passcodes -->
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
-    <!-- Plain Unencrypted Config Data -->
+    <!-- Config Data -->
     <script src="config.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -46,7 +46,6 @@
 </head>
 <body class="min-h-screen flex flex-col selection:bg-gray-200 relative">
 
-    <!-- Blurred Content Root Container -->
     <div id="app-root" class="flex-1 flex flex-col transition-all duration-500">
         
         <!-- Header -->
@@ -68,7 +67,7 @@
             </div>
         </header>
 
-        <!-- Main Content Area -->
+        <!-- Main Container -->
         <main class="flex-1 max-w-6xl mx-auto px-6 py-10 w-full">
 
             <!-- 1. HERO VIEW -->
@@ -79,7 +78,7 @@
                     <p class="text-gray-400 font-light text-base">Select a screening to reserve laser-projected auditorium seating.</p>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8" id="movies-grid">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="movies-grid">
                     <!-- Populated by JS -->
                 </div>
             </section>
@@ -95,6 +94,7 @@
                     <div class="flex flex-wrap gap-2" id="showtime-picker"></div>
                 </div>
 
+                <!-- Seat Grid Container -->
                 <div class="bg-white p-8 sm:p-12 rounded-3xl border border-gray-100 shadow-sm space-y-10">
                     <div class="space-y-3 text-center max-w-md mx-auto">
                         <div class="cinema-screen w-full"></div>
@@ -119,6 +119,7 @@
                     </div>
                 </div>
 
+                <!-- Concessions Selection -->
                 <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
                     <div>
                         <h3 class="text-lg font-medium text-black">Artisan Concessions</h3>
@@ -127,6 +128,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="concession-grid"></div>
                 </div>
 
+                <!-- Summary Bar -->
                 <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6">
                     <div>
                         <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Selected Seats</span>
@@ -137,8 +139,8 @@
                             <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Total</span>
                             <span id="summary-total" class="text-2xl font-semibold font-serif text-black">$0.00</span>
                         </div>
-                        <button id="btn-confirm-booking" onclick="finalizeBooking()" disabled class="bg-black text-white px-8 py-3.5 rounded-full font-medium hover:bg-gray-800 disabled:opacity-30 transition-all shadow-md">
-                            Reserve Passes
+                        <button id="btn-proceed-payment" onclick="openPaymentModal()" disabled class="bg-black text-white px-8 py-3.5 rounded-full font-medium hover:bg-gray-800 disabled:opacity-30 transition-all shadow-md">
+                            Continue to Payment
                         </button>
                     </div>
                 </div>
@@ -172,14 +174,66 @@
         <i data-lucide="arrow-left" class="w-5 h-5"></i>
     </button>
 
+    <!-- Payment Simulation Modal -->
+    <div id="payment-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 space-y-6">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="text-xl font-serif text-black">Checkout & Payment</h3>
+                    <p class="text-xs text-gray-400 font-light">Complete reservation payment simulation</p>
+                </div>
+                <button onclick="closePaymentModal()" class="text-gray-400 hover:text-black">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Amount Due Banner -->
+            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex justify-between items-center text-sm">
+                <span class="text-gray-500 font-light">Amount Due:</span>
+                <span id="payment-modal-total" class="font-serif font-bold text-lg text-black">$0.00</span>
+            </div>
+
+            <!-- Simulated Card Form -->
+            <form onsubmit="handlePaymentSubmit(event)" class="space-y-4 text-xs font-mono">
+                <div>
+                    <label class="block text-gray-400 uppercase tracking-widest mb-1.5">Cardholder Name</label>
+                    <input type="text" id="pay-name" placeholder="Johnathan Doe" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light">
+                </div>
+
+                <div>
+                    <label class="block text-gray-400 uppercase tracking-widest mb-1.5">Card Number</label>
+                    <div class="relative">
+                        <input type="text" id="pay-card" placeholder="4532 •••• •••• 8891" maxlength="19" oninput="formatCardNumber(this)" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pl-11 outline-none focus:border-black font-mono">
+                        <i data-lucide="credit-card" class="w-4 h-4 text-gray-400 absolute left-4 top-3.5"></i>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-400 uppercase tracking-widest mb-1.5">Exp Date</label>
+                        <input type="text" id="pay-exp" placeholder="MM/YY" maxlength="5" oninput="formatExpDate(this)" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 uppercase tracking-widest mb-1.5">Security CVV</label>
+                        <input type="password" id="pay-cvv" placeholder="•••" maxlength="4" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-mono">
+                    </div>
+                </div>
+
+                <div class="pt-4 flex gap-3">
+                    <button type="button" onclick="closePaymentModal()" class="flex-1 py-3 text-xs font-sans font-medium text-gray-500 hover:bg-gray-50 rounded-xl transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" id="btn-pay-submit" class="flex-1 py-3 text-xs font-sans font-medium bg-black text-white rounded-xl hover:bg-gray-800 transition-all shadow-md flex items-center justify-center gap-2">
+                        <span>Authorize Payment</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const CONFIG = window.THEATER_CONFIG || {
-            theaterSettings: {
-                baseSeatPrice: 18.00,
-                rows: ['A', 'B', 'C', 'D'],
-                seatColumnsCount: 8,
-                occupiedSeats: ['B3', 'B4', 'C5']
-            },
+            theaterSettings: { baseSeatPrice: 18.00, rows: ['A', 'B', 'C', 'D'], seatColumnsCount: 8 },
             featureFilms: [],
             concessions: []
         };
@@ -210,6 +264,33 @@
 
             if (viewName === 'my-tickets') renderTickets();
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // --- RANDOMIZED DETERMINISTIC SEATS BY MOVIE & TIME SLOT ---
+        function getOccupiedSeatsForSlot(movieId, showtime) {
+            const rows = CONFIG.theaterSettings.rows || ['A', 'B', 'C', 'D'];
+            const colCount = CONFIG.theaterSettings.seatColumnsCount || 8;
+            
+            // Seeded hash generator
+            let hash = 0;
+            const seedStr = `${movieId}_${showtime}`;
+            for (let i = 0; i < seedStr.length; i++) {
+                hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+                hash |= 0;
+            }
+
+            const taken = [];
+            rows.forEach((r, rIdx) => {
+                for (let c = 1; c <= colCount; c++) {
+                    const pseudoRandom = Math.sin(hash + (rIdx * 10) + c) * 10000;
+                    const val = pseudoRandom - Math.floor(pseudoRandom);
+                    // ~25% chance of being reserved
+                    if (val < 0.25) {
+                        taken.push(`${r}${c}`);
+                    }
+                }
+            });
+            return taken;
         }
 
         function renderMovies() {
@@ -277,6 +358,7 @@
 
         function changeShowtime(time) {
             selectedTime = time;
+            selectedSeats = [];
             startBooking(selectedMovie.id, time);
         }
 
@@ -284,7 +366,7 @@
             const grid = document.getElementById('seat-grid');
             const rows = CONFIG.theaterSettings.rows || ['A', 'B', 'C', 'D'];
             const colCount = CONFIG.theaterSettings.seatColumnsCount || 8;
-            const occupied = CONFIG.theaterSettings.occupiedSeats || [];
+            const occupied = getOccupiedSeatsForSlot(selectedMovie.id, selectedTime);
 
             grid.innerHTML = rows.map(r => `
                 <div class="flex items-center gap-2 sm:gap-3">
@@ -354,10 +436,58 @@
 
             document.getElementById('summary-seats').innerText = selectedSeats.length > 0 ? selectedSeats.sort().join(', ') : 'None chosen';
             document.getElementById('summary-total').innerText = `$${total.toFixed(2)}`;
-            document.getElementById('btn-confirm-booking').disabled = (selectedSeats.length === 0);
+            document.getElementById('btn-proceed-payment').disabled = (selectedSeats.length === 0);
+            return total;
         }
 
-        function finalizeBooking() {
+        // --- PAYMENT MODAL WORKFLOW ---
+        function openPaymentModal() {
+            const total = calculateTotal();
+            document.getElementById('payment-modal-total').innerText = `$${total.toFixed(2)}`;
+            document.getElementById('payment-modal').classList.remove('hidden');
+            document.getElementById('payment-modal').classList.add('flex');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function closePaymentModal() {
+            document.getElementById('payment-modal').classList.add('hidden');
+            document.getElementById('payment-modal').classList.remove('flex');
+        }
+
+        function formatCardNumber(input) {
+            let val = input.value.replace(/\D/g, '');
+            let formatted = '';
+            for (let i = 0; i < val.length; i++) {
+                if (i > 0 && i % 4 === 0) formatted += ' ';
+                formatted += val[i];
+            }
+            input.value = formatted;
+        }
+
+        function formatExpDate(input) {
+            let val = input.value.replace(/\D/g, '');
+            if (val.length >= 2) {
+                input.value = val.substring(0, 2) + '/' + val.substring(2, 4);
+            } else {
+                input.value = val;
+            }
+        }
+
+        function handlePaymentSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-pay-submit');
+            btn.innerHTML = `<span class="animate-pulse">Processing...</span>`;
+            btn.disabled = true;
+
+            setTimeout(() => {
+                btn.innerHTML = `<span>Authorize Payment</span>`;
+                btn.disabled = false;
+                closePaymentModal();
+                finalizePassIssuance();
+            }, 800);
+        }
+
+        function finalizePassIssuance() {
             const pass = {
                 id: 'CP-' + Math.floor(100000 + Math.random() * 900000),
                 movie: selectedMovie.title,
@@ -374,6 +504,16 @@
             navigate('my-tickets');
         }
 
+        // --- TICKET DELETION ---
+        function deletePass(passId) {
+            if (confirm(`Are you sure you want to cancel and remove pass ${passId}?`)) {
+                let passes = JSON.parse(localStorage.getItem('chowaniec_theater_passes')) || [];
+                passes = passes.filter(p => p.id !== passId);
+                localStorage.setItem('chowaniec_theater_passes', JSON.stringify(passes));
+                renderTickets();
+            }
+        }
+
         function renderTickets() {
             const container = document.getElementById('tickets-container');
             const passes = JSON.parse(localStorage.getItem('chowaniec_theater_passes')) || [];
@@ -382,7 +522,7 @@
                 container.innerHTML = `
                     <div class="bg-white p-12 rounded-3xl border border-gray-100 text-center space-y-4">
                         <i data-lucide="ticket" class="w-8 h-8 text-gray-300 mx-auto"></i>
-                        <h3 class="text-lg font-medium text-black">No Passes Found</h3>
+                        <h3 class="text-lg font-medium text-black">No Active Passes Found</h3>
                         <p class="text-xs text-gray-400 font-light">Select a film screening to generate admission passes.</p>
                         <button onclick="navigate('hero')" class="mt-2 px-6 py-2.5 rounded-full bg-black text-white text-xs font-medium hover:bg-gray-800 transition-colors">
                             Explore Showtimes
@@ -394,7 +534,7 @@
             }
 
             container.innerHTML = passes.map(p => `
-                <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col sm:flex-row">
+                <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col sm:flex-row justify-between group">
                     <div class="p-8 flex-1 space-y-4">
                         <div class="flex justify-between items-start">
                             <div>
@@ -427,6 +567,12 @@
                                 </div>
                             </div>
                         ` : ''}
+
+                        <div class="pt-2">
+                            <button onclick="deletePass('${p.id}')" class="text-xs font-mono text-gray-400 hover:text-red-600 transition-colors flex items-center gap-1.5">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Cancel / Delete Pass
+                            </button>
+                        </div>
                     </div>
 
                     <div class="border-t sm:border-t-0 sm:border-l border-dashed border-gray-200 p-8 sm:w-48 bg-gray-50/50 flex flex-col items-center justify-center text-center space-y-2">
