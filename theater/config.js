@@ -33,17 +33,7 @@ window.THEATER_CONFIG = {
             synopsis: 'The cousins meet for a sleepover, where they enjoy a meal together and have fun.',
             icon: 'moon'
         },
-        {
-            id: 'aurora',
-            title: 'Kingdom of the Aurora',
-            runtime: '105 MIN',
-            genre: 'Documentary',
-            rating: 'G',
-            priceMultiplier: 0.9,
-            times: ['1:30 PM', '3:45 PM', '6:00 PM'],
-            synopsis: 'A high-definition visual chronicle tracking polar wildlife beneath the Arctic winter skies.',
-            icon: 'compass'
-        }
+      
     ],
 
     // Artisan Concessions
