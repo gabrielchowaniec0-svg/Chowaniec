@@ -8,6 +8,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- External Passcode & Gate Authentication -->
+    <script src="../passwords.js"></script>
+    <script src="../auth-gate.js"></script>
     <!-- External Theater Configuration File -->
     <script src="config.js"></script>
     <style>
@@ -41,7 +44,6 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Curved Projection Screen Illusion */
         .cinema-screen {
             height: 8px;
             border-radius: 50% / 100% 100% 0 0;
@@ -83,7 +85,6 @@
                 <p class="text-gray-400 font-light text-base">Select a screening to reserve laser-projected auditorium seating.</p>
             </div>
 
-            <!-- Movie Catalog -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8" id="movies-grid">
                 <!-- Dynamically Populated from config.js -->
             </div>
@@ -91,33 +92,27 @@
 
         <!-- 2. SEAT & CONCESSION BOOKING WIZARD -->
         <section id="view-booking" class="theater-view hidden max-w-4xl mx-auto space-y-8 fade-in">
-            <!-- Movie Banner Header -->
             <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6">
                 <div>
                     <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block mb-1">Reserving Seats</span>
                     <h2 id="booking-movie-title" class="text-2xl font-serif text-black">--</h2>
                     <p id="booking-movie-meta" class="text-xs font-mono text-gray-500 mt-1 font-light">--</p>
                 </div>
-                <!-- Showtime Picker -->
                 <div class="flex flex-wrap gap-2" id="showtime-picker">
                     <!-- Populated dynamically -->
                 </div>
             </div>
 
-            <!-- Auditorium Layout -->
             <div class="bg-white p-8 sm:p-12 rounded-3xl border border-gray-100 shadow-sm space-y-10">
-                <!-- Curved Screen Display -->
                 <div class="space-y-3 text-center max-w-md mx-auto">
                     <div class="cinema-screen w-full"></div>
                     <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400">Curved Laser Screen</span>
                 </div>
 
-                <!-- Interactive Seat Matrix -->
                 <div class="flex flex-col items-center gap-3" id="seat-grid">
                     <!-- Populated dynamically from config.js rows & columns -->
                 </div>
 
-                <!-- Seat Legend -->
                 <div class="flex justify-center items-center gap-6 pt-4 border-t border-gray-100 text-xs font-mono text-gray-500">
                     <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded-md bg-gray-50 border border-gray-200"></div>
@@ -134,7 +129,6 @@
                 </div>
             </div>
 
-            <!-- Concessions & Extras -->
             <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
                 <div>
                     <h3 class="text-lg font-medium text-black">Artisan Concessions</h3>
@@ -146,7 +140,6 @@
                 </div>
             </div>
 
-            <!-- Checkout Summary & Action -->
             <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6">
                 <div>
                     <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Selected Seats</span>
@@ -195,7 +188,6 @@
     </button>
 
     <script>
-        // Fallback defaults if config.js is missing
         const CONFIG = window.THEATER_CONFIG || {
             theaterSettings: {
                 baseSeatPrice: 18.00,
@@ -212,7 +204,6 @@
         let selectedSeats = [];
         let selectedConcessions = {};
 
-        // --- NAVIGATION HANDLER ---
         function navigate(viewName) {
             document.querySelectorAll('.theater-view').forEach(v => v.classList.add('hidden'));
             const target = document.getElementById(`view-${viewName}`);
@@ -233,10 +224,9 @@
         }
 
         function returnToHub() {
-            window.location.href = window.location.pathname.includes('/src/theater') ? '../../index.html' : 'https://chowaniec.net';
+            window.location.href = window.location.pathname.includes('/src/theater') ? '../index.html' : '/';
         }
 
-        // --- RENDER MOVIE CARDS ---
         function renderMovies() {
             const grid = document.getElementById('movies-grid');
             const films = CONFIG.featureFilms;
@@ -281,7 +271,6 @@
             lucide.createIcons();
         }
 
-        // --- BOOKING WORKFLOW ---
         function startBooking(movieId, time) {
             selectedMovie = CONFIG.featureFilms.find(f => f.id === movieId);
             selectedTime = time;
@@ -294,7 +283,6 @@
             document.getElementById('booking-movie-title').innerText = selectedMovie.title;
             document.getElementById('booking-movie-meta').innerText = `${selectedMovie.runtime} • ${selectedMovie.rating} • ${selectedMovie.genre}`;
 
-            // Render showtimes picker
             const picker = document.getElementById('showtime-picker');
             picker.innerHTML = selectedMovie.times.map(t => `
                 <button onclick="changeShowtime('${t}')" class="px-3.5 py-1.5 rounded-full text-xs font-mono border transition-all ${t === selectedTime ? 'bg-black text-white border-black' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}">
@@ -407,7 +395,6 @@
             navigate('my-tickets');
         }
 
-        // --- RENDER PASSES ---
         function renderTickets() {
             const container = document.getElementById('tickets-container');
             const passes = JSON.parse(localStorage.getItem('chowaniec_theater_passes')) || [];
@@ -463,7 +450,6 @@
                         ` : ''}
                     </div>
 
-                    <!-- Perforated Stub Line -->
                     <div class="border-t sm:border-t-0 sm:border-l border-dashed border-gray-200 p-8 sm:w-48 bg-gray-50/50 flex flex-col items-center justify-center text-center space-y-2">
                         <i data-lucide="qr-code" class="w-12 h-12 text-black"></i>
                         <span class="text-[9px] font-mono uppercase tracking-widest text-gray-400">Scan at Podium</span>
