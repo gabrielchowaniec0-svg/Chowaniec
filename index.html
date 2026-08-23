@@ -10,6 +10,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- External Passcode Configuration File -->
     <script src="passwords.js"></script>
+    <!-- External Directory Grid Configuration File -->
+    <script src="directory.js"></script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -173,7 +175,6 @@
         class="pt-6 border-t border-gray-100 text-xs font-mono text-gray-400 space-y-1"
       >
         <p>Welcome to Chowaniec</p>
-        <p class="text-gray-300"></p>
       </div>
     </aside>
 
@@ -188,204 +189,9 @@
           </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <!-- 1. Hotels & Resorts -->
-          <div
-            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
-          >
-            <div class="space-y-4">
-              <div class="flex items-center justify-between">
-                <div
-                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
-                >
-                  <i data-lucide="palmtree" class="w-5 h-5"></i>
-                </div>
-                <span
-                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
-                >
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Active
-                </span>
-              </div>
-              <div>
-                <h3 class="text-lg font-medium text-black">
-                  Chowaniec Hotels & Resorts
-                </h3>
-                <span class="text-xs font-mono text-gray-400 block mt-0.5"
-                  >resort.chowaniec.net</span
-                >
-              </div>
-              <p class="text-gray-400 font-light text-sm leading-relaxed">
-                Book a room or sign in to your visit with our kiosk.
-              </p>
-            </div>
-            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
-              <button
-                onclick="requestAccess({ type: 'redirect', target: 'https://resort.chowaniec.net' })"
-                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
-              >
-                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-              </button>
-            </div>
-          </div>
-
-          <!-- 2. Premiere Theaters -->
-          <div
-            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
-          >
-            <div class="space-y-4">
-              <div class="flex items-center justify-between">
-                <div
-                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
-                >
-                  <i data-lucide="film" class="w-5 h-5"></i>
-                </div>
-                <span
-                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
-                >
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Active
-                </span>
-              </div>
-              <div>
-                <h3 class="text-lg font-medium text-black">
-                  Chowaniec Premiere Theaters
-                </h3>
-                <span class="text-xs font-mono text-gray-400 block mt-0.5"
-                  >theater.chowaniec.net</span
-                >
-              </div>
-              <p class="text-gray-400 font-light text-sm leading-relaxed">
-                Select and purchase seats for exclusive films in our theater.
-              </p>
-            </div>
-            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
-              <button
-                onclick="requestAccess({ type: 'redirect', target: 'https://theater.chowaniec.net' })"
-                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
-              >
-                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-              </button>
-            </div>
-          </div>
-
-          <!-- 3. Restaurants -->
-          <div
-            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
-          >
-            <div class="space-y-4">
-              <div class="flex items-center justify-between">
-                <div
-                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
-                >
-                  <i data-lucide="utensils" class="w-5 h-5"></i>
-                </div>
-                <span
-                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
-                >
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Active
-                </span>
-              </div>
-              <div>
-                <h3 class="text-lg font-medium text-black">
-                  Chowaniec Restaurants
-                </h3>
-                <span class="text-xs font-mono text-gray-400 block mt-0.5"
-                  >dining.chowaniec.net</span
-                >
-              </div>
-              <p class="text-gray-400 font-light text-sm leading-relaxed">
-                View our curated menu and book a reservation in advance.
-              </p>
-            </div>
-            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
-              <button
-                onclick="requestAccess({ type: 'redirect', target: 'https://dining.chowaniec.net' })"
-                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
-              >
-                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-              </button>
-            </div>
-          </div>
-
-          <!-- 4. Cleaning Service -->
-          <div
-            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
-          >
-            <div class="space-y-4">
-              <div class="flex items-center justify-between">
-                <div
-                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
-                >
-                  <i data-lucide="sparkles" class="w-5 h-5"></i>
-                </div>
-                <span
-                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
-                >
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Active
-                </span>
-              </div>
-              <div>
-                <h3 class="text-lg font-medium text-black">
-                  Chowaniec Cleaning Service
-                </h3>
-                <span class="text-xs font-mono text-gray-400 block mt-0.5"
-                  >cleaning.chowaniec.net</span
-                >
-              </div>
-              <p class="text-gray-400 font-light text-sm leading-relaxed">
-                Navigate through accomodative cleaning packages for your home.
-              </p>
-            </div>
-            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
-              <button
-                onclick="requestAccess({ type: 'redirect', target: 'https://cleaning.chowaniec.net' })"
-                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
-              >
-                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-              </button>
-            </div>
-          </div>
-
-          <!-- 5. Spa -->
-          <div
-            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
-          >
-            <div class="space-y-4">
-              <div class="flex items-center justify-between">
-                <div
-                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
-                >
-                  <i data-lucide="flower2" class="w-5 h-5"></i>
-                </div>
-                <span
-                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
-                >
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Active
-                </span>
-              </div>
-              <div>
-                <h3 class="text-lg font-medium text-black">Chowaniec Spa</h3>
-                <span class="text-xs font-mono text-gray-400 block mt-0.5"
-                  >spa.chowaniec.net</span
-                >
-              </div>
-              <p class="text-gray-400 font-light text-sm leading-relaxed">
-                Relax with our spa services, available to book im advance.
-              </p>
-            </div>
-            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
-              <button
-                onclick="requestAccess({ type: 'redirect', target: 'https://spa.chowaniec.net' })"
-                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
-              >
-                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-              </button>
-            </div>
-          </div>
+        <!-- Dynamically Rendered Service Grid -->
+        <div id="directory-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <!-- Populated from directory.js -->
         </div>
       </section>
 
@@ -463,7 +269,7 @@
             <div>
               <h3 class="text-lg font-medium text-black">Gabriel Chowaniec</h3>
               <p class="text-xs font-mono text-gray-400">
-                Founder + Management
+                Founder
               </p>
             </div>
             <p class="text-gray-400 font-light text-sm leading-relaxed">
@@ -499,7 +305,7 @@
               L
             </div>
             <div>
-              <h3 class="text-lg font-medium text-black">Liliana</h3>
+              <h3 class="text-lg font-medium text-black">Liliana Chowaniec</h3>
               <p class="text-xs font-mono text-gray-400">Employee</p>
             </div>
             <p class="text-gray-400 font-light text-sm leading-relaxed">
@@ -568,7 +374,7 @@
       >
         <span>&copy; Chowaniec &bull; All Rights Reserved</span>
         <div class="flex items-center gap-6">
-          <span class="inline-flex items-center gap-1.5"
+          <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Node Mesh Synchronized</span>
         </div>
       </div>
     </footer>
@@ -627,6 +433,43 @@
 
     <script>
       let pendingAction = null;
+
+      // --- DYNAMIC DIRECTORY GRID RENDERER ---
+      function renderDirectoryGrid() {
+        const grid = document.getElementById('directory-grid');
+        const items = window.DIRECTORY_CONFIG || [];
+
+        grid.innerHTML = items.map(item => `
+          <div class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group">
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black">
+                  <i data-lucide="${item.icon}" class="w-5 h-5"></i>
+                </div>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  ${item.status}
+                </span>
+              </div>
+              <div>
+                <h3 class="text-lg font-medium text-black">${item.title}</h3>
+                <span class="text-xs font-mono text-gray-400 block mt-0.5">chowaniec.net${item.path}</span>
+              </div>
+              <p class="text-gray-400 font-light text-sm leading-relaxed">${item.description}</p>
+            </div>
+            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
+              <button
+                onclick="requestAccess({ type: 'redirect', target: '${item.path}', localFallback: '${item.localFallback}' })"
+                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
+              >
+                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        `).join('');
+
+        lucide.createIcons();
+      }
 
       function isAuthenticated() {
         return sessionStorage.getItem('chowaniec_authenticated') === 'true';
@@ -701,7 +544,9 @@
         if (action.type === 'tab') {
           executeTabSwitch(action.target);
         } else if (action.type === 'redirect') {
-          window.open(action.target, '_blank');
+          const isLocal = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const destination = (isLocal && action.localFallback) ? action.localFallback : action.target;
+          window.location.href = destination;
         }
       }
 
@@ -744,7 +589,7 @@
       }
 
       window.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
+        renderDirectoryGrid();
         updateLockBtn();
       });
     </script>
