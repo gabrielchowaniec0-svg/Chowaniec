@@ -1,5 +1,5 @@
 (function () {
-  const DEFAULT_PASSCODES = ['chowaniec2026'];
+  const DEFAULT_PASSCODES = ['gabrielc12', 'lilianac15', 'victoriac11', 'ameliac18', 'emiliap14'];
 
   function isAuthorized() {
     return sessionStorage.getItem('chowaniec_authenticated') === 'true';
