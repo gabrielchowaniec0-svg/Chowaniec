@@ -1,639 +1,419 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chowaniec Premiere Theaters</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- External Theater Configuration File -->
+    <script src="config.js"></script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
-      body {
-        font-family: 'Outfit', sans-serif;
-        background-color: #fafafa;
-        color: #111827;
-      }
-
-      .font-serif {
-        font-family: 'Playfair Display', serif;
-      }
-
-      .font-mono {
-        font-family: 'JetBrains Mono', monospace;
-      }
-
-      /* Minimal scrollbar */
-      ::-webkit-scrollbar {
-        width: 4px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #e5e7eb;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #d1d5db;
-      }
-
-      .fade-in {
-        animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      }
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(6px);
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #fafafa;
+            color: #111827;
         }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
 
-      /* Curved Projection Screen Illusion */
-      .cinema-screen {
-        height: 8px;
-        border-radius: 50% / 100% 100% 0 0;
-        background: linear-gradient(
-          180deg,
-          #111827 0%,
-          rgba(17, 24, 39, 0.2) 100%
-        );
-        box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.15);
-      }
+        .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Minimal scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+
+        .fade-in {
+            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Curved Projection Screen Illusion */
+        .cinema-screen {
+            height: 8px;
+            border-radius: 50% / 100% 100% 0 0;
+            background: linear-gradient(180deg, #111827 0%, rgba(17, 24, 39, 0.2) 100%);
+            box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.15);
+        }
     </style>
-  </head>
-  <body class="min-h-screen flex flex-col selection:bg-gray-200 relative">
-    <!-- Minimalist Header -->
-    <header
-      class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30"
-    >
-      <div
-        class="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between"
-      >
-        <div
-          class="flex items-center gap-3 cursor-pointer"
-          onclick="navigate('hero')"
-        >
-          <div
-            class="w-8 h-8 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans"
-          >
-            CP
-          </div>
-          <div class="font-serif tracking-wide text-xl">
-            Chowaniec
-            <span class="text-gray-400 italic font-light text-base"
-              >Theaters</span
-            >
-          </div>
-        </div>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-gray-200 relative">
 
-        <!-- View Switcher -->
-        <div class="flex items-center gap-2">
-          <button
-            onclick="navigate('hero')"
-            class="nav-tab px-4 py-2 text-xs font-medium rounded-full transition-colors text-black bg-gray-100"
-            data-view="hero"
-          >
-            Now Showing
-          </button>
-          <button
-            onclick="navigate('my-tickets')"
-            class="nav-tab px-4 py-2 text-xs font-medium rounded-full transition-colors text-gray-500 hover:text-black"
-            data-view="my-tickets"
-          >
-            My Passes
-          </button>
+    <!-- Minimalist Header -->
+    <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
+        <div class="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="navigate('hero')">
+                <div class="w-8 h-8 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans">
+                    CP
+                </div>
+                <div class="font-serif tracking-wide text-xl">
+                    Chowaniec <span class="text-gray-400 italic font-light text-base">Theaters</span>
+                </div>
+            </div>
+
+            <!-- View Switcher -->
+            <div class="flex items-center gap-2">
+                <button onclick="navigate('hero')" class="nav-tab px-4 py-2 text-xs font-medium rounded-full transition-colors text-black bg-gray-100" data-view="hero">Now Showing</button>
+                <button onclick="navigate('my-tickets')" class="nav-tab px-4 py-2 text-xs font-medium rounded-full transition-colors text-gray-500 hover:text-black" data-view="my-tickets">My Passes</button>
+            </div>
         </div>
-      </div>
     </header>
 
     <!-- Main Container -->
     <main class="flex-1 max-w-6xl mx-auto px-6 py-10 w-full">
-      <!-- 1. HERO & NOW SHOWING VIEW -->
-      <section id="view-hero" class="theater-view space-y-12 fade-in">
-        <div class="max-w-2xl">
-          <p
-            class="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2 font-medium"
-          >
-            Auditorium Screening Hub
-          </p>
-          <h1 class="text-4xl font-serif text-black mb-3">
-            Feature Presentations
-          </h1>
-          <p class="text-gray-400 font-light text-base">
-            Select a screening to reserve laser-projected auditorium seating.
-          </p>
-        </div>
 
-        <!-- Movie Catalog -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8" id="movies-grid">
-          <!-- Dynamically Populated by JS -->
-        </div>
-      </section>
-
-      <!-- 2. SEAT & CONCESSION BOOKING WIZARD -->
-      <section
-        id="view-booking"
-        class="theater-view hidden max-w-4xl mx-auto space-y-8 fade-in"
-      >
-        <!-- Movie Banner Header -->
-        <div
-          class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6"
-        >
-          <div>
-            <span
-              class="text-xs font-mono text-gray-400 uppercase tracking-widest block mb-1"
-              >Reserving Seats</span
-            >
-            <h2 id="booking-movie-title" class="text-2xl font-serif text-black">
-              --
-            </h2>
-            <p
-              id="booking-movie-meta"
-              class="text-xs font-mono text-gray-500 mt-1 font-light"
-            >
-              --
-            </p>
-          </div>
-          <!-- Showtime Picker -->
-          <div class="flex flex-wrap gap-2" id="showtime-picker">
-            <!-- Injected by JS -->
-          </div>
-        </div>
-
-        <!-- Auditorium Layout -->
-        <div
-          class="bg-white p-8 sm:p-12 rounded-3xl border border-gray-100 shadow-sm space-y-10"
-        >
-          <!-- Curved Screen Display -->
-          <div class="space-y-3 text-center max-w-md mx-auto">
-            <div class="cinema-screen w-full"></div>
-            <span
-              class="text-[10px] font-mono uppercase tracking-widest text-gray-400"
-              >Curved Laser Screen</span
-            >
-          </div>
-
-          <!-- Interactive Seat Matrix -->
-          <div class="flex flex-col items-center gap-3" id="seat-grid">
-            <!-- Populated by JS (Rows A-E) -->
-          </div>
-
-          <!-- Seat Legend -->
-          <div
-            class="flex justify-center items-center gap-6 pt-4 border-t border-gray-100 text-xs font-mono text-gray-500"
-          >
-            <div class="flex items-center gap-2">
-              <div
-                class="w-4 h-4 rounded-md bg-gray-100 border border-gray-200"
-              ></div>
-              <span>Available ($18)</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <div class="w-4 h-4 rounded-md bg-black text-white"></div>
-              <span>Selected</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <div
-                class="w-4 h-4 rounded-md bg-gray-200 border border-gray-300 opacity-40"
-              ></div>
-              <span>Reserved</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Concessions & Extras -->
-        <div
-          class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6"
-        >
-          <div>
-            <h3 class="text-lg font-medium text-black">Artisan Concessions</h3>
-            <p class="text-xs text-gray-400 font-light">
-              Delivered directly to your auditorium row before showtime.
-            </p>
-          </div>
-
-          <div
-            class="grid grid-cols-1 sm:grid-cols-3 gap-4"
-            id="concession-grid"
-          >
-            <div
-              class="p-5 rounded-2xl border border-gray-100 flex items-center justify-between hover:border-gray-300 transition-colors"
-            >
-              <div>
-                <h4 class="text-sm font-medium text-black">Truffle Popcorn</h4>
-                <span class="text-xs font-mono text-gray-400">$9.00</span>
-              </div>
-              <input
-                type="checkbox"
-                id="extra-popcorn"
-                onchange="calculateTotal()"
-                class="w-5 h-5 accent-black rounded cursor-pointer"
-              />
+        <!-- 1. HERO & NOW SHOWING VIEW -->
+        <section id="view-hero" class="theater-view space-y-12 fade-in">
+            <div class="max-w-2xl">
+                <p class="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2 font-medium">Auditorium Screening Hub</p>
+                <h1 class="text-4xl font-serif text-black mb-3">Feature Presentations</h1>
+                <p class="text-gray-400 font-light text-base">Select a screening to reserve laser-projected auditorium seating.</p>
             </div>
 
-            <div
-              class="p-5 rounded-2xl border border-gray-100 flex items-center justify-between hover:border-gray-300 transition-colors"
-            >
-              <div>
-                <h4 class="text-sm font-medium text-black">Sparkling Cider</h4>
-                <span class="text-xs font-mono text-gray-400">$6.00</span>
-              </div>
-              <input
-                type="checkbox"
-                id="extra-cider"
-                onchange="calculateTotal()"
-                class="w-5 h-5 accent-black rounded cursor-pointer"
-              />
+            <!-- Movie Catalog -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8" id="movies-grid">
+                <!-- Dynamically Populated from config.js -->
+            </div>
+        </section>
+
+        <!-- 2. SEAT & CONCESSION BOOKING WIZARD -->
+        <section id="view-booking" class="theater-view hidden max-w-4xl mx-auto space-y-8 fade-in">
+            <!-- Movie Banner Header -->
+            <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6">
+                <div>
+                    <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block mb-1">Reserving Seats</span>
+                    <h2 id="booking-movie-title" class="text-2xl font-serif text-black">--</h2>
+                    <p id="booking-movie-meta" class="text-xs font-mono text-gray-500 mt-1 font-light">--</p>
+                </div>
+                <!-- Showtime Picker -->
+                <div class="flex flex-wrap gap-2" id="showtime-picker">
+                    <!-- Populated dynamically -->
+                </div>
             </div>
 
-            <div
-              class="p-5 rounded-2xl border border-gray-100 flex items-center justify-between hover:border-gray-300 transition-colors"
-            >
-              <div>
-                <h4 class="text-sm font-medium text-black">Artisan Pralines</h4>
-                <span class="text-xs font-mono text-gray-400">$8.00</span>
-              </div>
-              <input
-                type="checkbox"
-                id="extra-sweets"
-                onchange="calculateTotal()"
-                class="w-5 h-5 accent-black rounded cursor-pointer"
-              />
+            <!-- Auditorium Layout -->
+            <div class="bg-white p-8 sm:p-12 rounded-3xl border border-gray-100 shadow-sm space-y-10">
+                <!-- Curved Screen Display -->
+                <div class="space-y-3 text-center max-w-md mx-auto">
+                    <div class="cinema-screen w-full"></div>
+                    <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400">Curved Laser Screen</span>
+                </div>
+
+                <!-- Interactive Seat Matrix -->
+                <div class="flex flex-col items-center gap-3" id="seat-grid">
+                    <!-- Populated dynamically from config.js rows & columns -->
+                </div>
+
+                <!-- Seat Legend -->
+                <div class="flex justify-center items-center gap-6 pt-4 border-t border-gray-100 text-xs font-mono text-gray-500">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-md bg-gray-50 border border-gray-200"></div>
+                        <span id="legend-price">Available</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-md bg-black text-white"></div>
+                        <span>Selected</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-md bg-gray-200 border border-gray-300 opacity-40"></div>
+                        <span>Reserved</span>
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
 
-        <!-- Checkout Summary & Action -->
-        <div
-          class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6"
-        >
-          <div>
-            <span
-              class="text-xs font-mono text-gray-400 uppercase tracking-widest block"
-              >Selected Seats</span
-            >
-            <span id="summary-seats" class="text-sm font-medium text-black"
-              >None chosen</span
-            >
-          </div>
-          <div class="flex items-center gap-6">
-            <div class="text-right">
-              <span
-                class="text-xs font-mono text-gray-400 uppercase tracking-widest block"
-                >Total</span
-              >
-              <span
-                id="summary-total"
-                class="text-2xl font-semibold font-serif text-black"
-                >$0.00</span
-              >
+            <!-- Concessions & Extras -->
+            <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                <div>
+                    <h3 class="text-lg font-medium text-black">Artisan Concessions</h3>
+                    <p class="text-xs text-gray-400 font-light">Delivered directly to your auditorium row before showtime.</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="concession-grid">
+                    <!-- Populated dynamically from config.js concessions -->
+                </div>
             </div>
-            <button
-              id="btn-confirm-booking"
-              onclick="finalizeBooking()"
-              disabled
-              class="bg-black text-white px-8 py-3.5 rounded-full font-medium hover:bg-gray-800 disabled:opacity-30 transition-all shadow-md"
-            >
-              Reserve Passes
-            </button>
-          </div>
-        </div>
-      </section>
 
-      <!-- 3. MY TICKETS VIEW -->
-      <section
-        id="view-my-tickets"
-        class="theater-view hidden max-w-3xl mx-auto space-y-10 fade-in"
-      >
-        <div
-          class="flex justify-between items-end border-b border-gray-100 pb-4"
-        >
-          <div>
-            <h1 class="text-3xl font-serif text-black">Active Passes</h1>
-            <p class="text-gray-400 font-light text-sm">
-              Present your digital pass at the auditorium podium.
-            </p>
-          </div>
-        </div>
+            <!-- Checkout Summary & Action -->
+            <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6">
+                <div>
+                    <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Selected Seats</span>
+                    <span id="summary-seats" class="text-sm font-medium text-black">None chosen</span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="text-right">
+                        <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Total</span>
+                        <span id="summary-total" class="text-2xl font-semibold font-serif text-black">$0.00</span>
+                    </div>
+                    <button id="btn-confirm-booking" onclick="finalizeBooking()" disabled class="bg-black text-white px-8 py-3.5 rounded-full font-medium hover:bg-gray-800 disabled:opacity-30 transition-all shadow-md">
+                        Reserve Passes
+                    </button>
+                </div>
+            </div>
+        </section>
 
-        <div id="tickets-container" class="space-y-6">
-          <!-- Dynamically Rendered Passes -->
-        </div>
-      </section>
+        <!-- 3. MY TICKETS VIEW -->
+        <section id="view-my-tickets" class="theater-view hidden max-w-3xl mx-auto space-y-10 fade-in">
+            <div class="flex justify-between items-end border-b border-gray-100 pb-4">
+                <div>
+                    <h1 class="text-3xl font-serif text-black">Active Passes</h1>
+                    <p class="text-gray-400 font-light text-sm">Present your digital pass at the auditorium podium.</p>
+                </div>
+            </div>
+
+            <div id="tickets-container" class="space-y-6">
+                <!-- Dynamically Rendered Passes -->
+            </div>
+        </section>
     </main>
 
     <!-- Minimalist Footer -->
-    <footer
-      class="mt-auto border-t border-gray-100 py-8 text-xs font-mono text-gray-400"
-    >
-      <div
-        class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4"
-      >
-        <span
-          >&copy; Chowaniec Premiere Theaters &bull; All Rights Reserved</span
-        >
-        <div class="flex items-center gap-6">
-          <span class="inline-flex items-center gap-1.5"
-            ><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 4K
-            Laser Projection Active</span
-          >
+    <footer class="mt-auto border-t border-gray-100 py-8 text-xs font-mono text-gray-400">
+        <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span>&copy; Chowaniec Premiere Theaters &bull; All Rights Reserved</span>
+            <div class="flex items-center gap-6">
+                <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 4K Laser Projection Active</span>
+            </div>
         </div>
-      </div>
     </footer>
 
     <!-- Floating Return to Hub Button (Bottom-Right) -->
-    <button
-      onclick="returnToHub()"
-      title="Return to Hub"
-      class="fixed bottom-8 right-8 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full flex items-center justify-center text-gray-600 hover:text-black hover:bg-gray-50 hover:scale-105 transition-all z-50"
-    >
-      <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-8 right-8 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full flex items-center justify-center text-gray-600 hover:text-black hover:bg-gray-50 hover:scale-105 transition-all z-50">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
     </button>
 
     <script>
-      // --- MOVIE DIRECTORY ---
-      const featureFilms = [
-        {
-          id: 'solaris',
-          title: 'Chronicles of Solaris',
-          runtime: '142 MIN',
-          genre: 'Sci-Fi / Drama',
-          rating: 'PG-13',
-          times: ['2:15 PM', '5:30 PM', '8:45 PM'],
-          synopsis:
-            'Deep space explorers confront temporal dilation anomalies near a collapsing star cluster.',
-          icon: 'orbit',
-        },
-        {
-          id: 'nocturne',
-          title: 'Nocturne in Vienna',
-          runtime: '118 MIN',
-          genre: 'Mystery / Noir',
-          rating: 'R',
-          times: ['4:00 PM', '7:15 PM', '9:50 PM'],
-          synopsis:
-            'A private detective uncovers a labyrinth of art forgeries across post-war European ballrooms.',
-          icon: 'moon',
-        },
-        {
-          id: 'aurora',
-          title: 'Kingdom of the Aurora',
-          runtime: '105 MIN',
-          genre: 'Documentary',
-          rating: 'G',
-          times: ['1:30 PM', '3:45 PM', '6:00 PM'],
-          synopsis:
-            'A high-definition visual chronicle tracking polar wildlife beneath the Arctic winter skies.',
-          icon: 'compass',
-        },
-      ];
+        // Fallback defaults if config.js is missing
+        const CONFIG = window.THEATER_CONFIG || {
+            theaterSettings: {
+                baseSeatPrice: 18.00,
+                rows: ['A', 'B', 'C', 'D'],
+                seatColumnsCount: 8,
+                occupiedSeats: ['B3', 'B4', 'C5']
+            },
+            featureFilms: [],
+            concessions: []
+        };
 
-      let selectedMovie = null;
-      let selectedTime = null;
-      let selectedSeats = [];
-      const SEAT_PRICE = 18.0;
+        let selectedMovie = null;
+        let selectedTime = null;
+        let selectedSeats = [];
+        let selectedConcessions = {};
 
-      // --- NAVIGATION HANDLER ---
-      function navigate(viewName) {
-        document
-          .querySelectorAll('.theater-view')
-          .forEach((v) => v.classList.add('hidden'));
-        const target = document.getElementById(`view-${viewName}`);
-        if (target) target.classList.remove('hidden');
+        // --- NAVIGATION HANDLER ---
+        function navigate(viewName) {
+            document.querySelectorAll('.theater-view').forEach(v => v.classList.add('hidden'));
+            const target = document.getElementById(`view-${viewName}`);
+            if (target) target.classList.remove('hidden');
 
-        document.querySelectorAll('.nav-tab').forEach((tab) => {
-          if (tab.dataset.view === viewName) {
-            tab.classList.add('text-black', 'bg-gray-100');
-            tab.classList.remove('text-gray-500');
-          } else {
-            tab.classList.remove('text-black', 'bg-gray-100');
-            tab.classList.add('text-gray-500');
-          }
-        });
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                if (tab.dataset.view === viewName) {
+                    tab.classList.add('text-black', 'bg-gray-100');
+                    tab.classList.remove('text-gray-500');
+                } else {
+                    tab.classList.remove('text-black', 'bg-gray-100');
+                    tab.classList.add('text-gray-500');
+                }
+            });
 
-        if (viewName === 'my-tickets') renderTickets();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
+            if (viewName === 'my-tickets') renderTickets();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
 
-      function returnToHub() {
-        // Check if directory exists relative, otherwise navigate to root
-        window.location.href = window.location.pathname.includes('/src/theater')
-          ? '../../index.html'
-          : 'https://chowaniec.net';
-      }
+        function returnToHub() {
+            window.location.href = window.location.pathname.includes('/src/theater') ? '../../index.html' : 'https://chowaniec.net';
+        }
 
-      // --- RENDER MOVIE CARDS ---
-      function renderMovies() {
-        const grid = document.getElementById('movies-grid');
-        grid.innerHTML = featureFilms
-          .map(
-            (m) => `
-                <div class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between space-y-6">
-                    <div class="space-y-4">
-                        <div class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black">
-                            <i data-lucide="${m.icon}" class="w-5 h-5"></i>
+        // --- RENDER MOVIE CARDS ---
+        function renderMovies() {
+            const grid = document.getElementById('movies-grid');
+            const films = CONFIG.featureFilms;
+
+            if (!films || films.length === 0) {
+                grid.innerHTML = `<p class="col-span-3 text-center text-sm font-mono text-gray-400">No screenings configured in config.js.</p>`;
+                return;
+            }
+
+            grid.innerHTML = films.map(m => {
+                const effectivePrice = (CONFIG.theaterSettings.baseSeatPrice * (m.priceMultiplier || 1.0)).toFixed(2);
+                return `
+                    <div class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between space-y-6">
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black">
+                                    <i data-lucide="${m.icon || 'film'}" class="w-5 h-5"></i>
+                                </div>
+                                <span class="text-xs font-mono font-medium text-gray-500">$${effectivePrice} / seat</span>
+                            </div>
+                            <div>
+                                <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">${m.runtime} &bull; ${m.rating}</span>
+                                <h3 class="text-xl font-serif text-black mt-0.5">${m.title}</h3>
+                                <span class="text-xs font-mono text-gray-400 block">${m.genre}</span>
+                            </div>
+                            <p class="text-gray-500 font-light text-sm leading-relaxed">${m.synopsis}</p>
                         </div>
-                        <div>
-                            <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">${
-                              m.runtime
-                            } &bull; ${m.rating}</span>
-                            <h3 class="text-xl font-serif text-black mt-0.5">${
-                              m.title
-                            }</h3>
-                            <span class="text-xs font-mono text-gray-400 block">${
-                              m.genre
-                            }</span>
-                        </div>
-                        <p class="text-gray-500 font-light text-sm leading-relaxed">${
-                          m.synopsis
-                        }</p>
-                    </div>
 
-                    <div class="pt-6 border-t border-gray-100 space-y-3">
-                        <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">Available Showtimes</span>
-                        <div class="flex flex-wrap gap-2">
-                            ${m.times
-                              .map(
-                                (t) => `
-                                <button onclick="startBooking('${m.id}', '${t}')" class="px-3 py-1.5 rounded-full bg-gray-50 hover:bg-black hover:text-white border border-gray-200/60 text-xs font-mono transition-colors">
-                                    ${t}
-                                </button>
-                            `
-                              )
-                              .join('')}
+                        <div class="pt-6 border-t border-gray-100 space-y-3">
+                            <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">Available Showtimes</span>
+                            <div class="flex flex-wrap gap-2">
+                                ${m.times.map(t => `
+                                    <button onclick="startBooking('${m.id}', '${t}')" class="px-3 py-1.5 rounded-full bg-gray-50 hover:bg-black hover:text-white border border-gray-200/60 text-xs font-mono transition-colors">
+                                        ${t}
+                                    </button>
+                                `).join('')}
+                            </div>
                         </div>
                     </div>
-                </div>
-            `
-          )
-          .join('');
-        lucide.createIcons();
-      }
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
 
-      // --- BOOKING WORKFLOW ---
-      function startBooking(movieId, time) {
-        selectedMovie = featureFilms.find((f) => f.id === movieId);
-        selectedTime = time;
-        selectedSeats = [];
+        // --- BOOKING WORKFLOW ---
+        function startBooking(movieId, time) {
+            selectedMovie = CONFIG.featureFilms.find(f => f.id === movieId);
+            selectedTime = time;
+            selectedSeats = [];
+            selectedConcessions = {};
 
-        // Reset concessions
-        document.getElementById('extra-popcorn').checked = false;
-        document.getElementById('extra-cider').checked = false;
-        document.getElementById('extra-sweets').checked = false;
+            const effectiveSeatPrice = (CONFIG.theaterSettings.baseSeatPrice * (selectedMovie.priceMultiplier || 1.0)).toFixed(2);
+            document.getElementById('legend-price').innerText = `Available ($${effectiveSeatPrice})`;
 
-        document.getElementById('booking-movie-title').innerText =
-          selectedMovie.title;
-        document.getElementById(
-          'booking-movie-meta'
-        ).innerText = `${selectedMovie.runtime} • ${selectedMovie.rating} • ${selectedMovie.genre}`;
+            document.getElementById('booking-movie-title').innerText = selectedMovie.title;
+            document.getElementById('booking-movie-meta').innerText = `${selectedMovie.runtime} • ${selectedMovie.rating} • ${selectedMovie.genre}`;
 
-        // Render showtimes picker in booking screen
-        const picker = document.getElementById('showtime-picker');
-        picker.innerHTML = selectedMovie.times
-          .map(
-            (t) => `
-                <button onclick="changeShowtime('${t}')" class="px-3.5 py-1.5 rounded-full text-xs font-mono border transition-all ${
-              t === selectedTime
-                ? 'bg-black text-white border-black'
-                : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-            }">
+            // Render showtimes picker
+            const picker = document.getElementById('showtime-picker');
+            picker.innerHTML = selectedMovie.times.map(t => `
+                <button onclick="changeShowtime('${t}')" class="px-3.5 py-1.5 rounded-full text-xs font-mono border transition-all ${t === selectedTime ? 'bg-black text-white border-black' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}">
                     ${t}
                 </button>
-            `
-          )
-          .join('');
+            `).join('');
 
-        renderSeatGrid();
-        calculateTotal();
-        navigate('booking');
-      }
+            renderConcessions();
+            renderSeatGrid();
+            calculateTotal();
+            navigate('booking');
+        }
 
-      function changeShowtime(time) {
-        selectedTime = time;
-        startBooking(selectedMovie.id, time);
-      }
+        function changeShowtime(time) {
+            selectedTime = time;
+            startBooking(selectedMovie.id, time);
+        }
 
-      function renderSeatGrid() {
-        const grid = document.getElementById('seat-grid');
-        const rows = ['A', 'B', 'C', 'D'];
-        const cols = [1, 2, 3, 4, 5, 6, 7, 8];
+        function renderSeatGrid() {
+            const grid = document.getElementById('seat-grid');
+            const rows = CONFIG.theaterSettings.rows || ['A', 'B', 'C', 'D'];
+            const colCount = CONFIG.theaterSettings.seatColumnsCount || 8;
+            const occupied = CONFIG.theaterSettings.occupiedSeats || [];
 
-        // Deterministic mock taken seats
-        const isTaken = (r, c) =>
-          (r === 'B' && (c === 3 || c === 4)) || (r === 'C' && c === 5);
-
-        grid.innerHTML = rows
-          .map(
-            (r) => `
+            grid.innerHTML = rows.map(r => `
                 <div class="flex items-center gap-2 sm:gap-3">
                     <span class="w-4 text-center font-mono text-xs text-gray-400">${r}</span>
                     <div class="flex gap-1.5 sm:gap-2">
-                        ${cols
-                          .map((c) => {
+                        ${Array.from({ length: colCount }, (_, i) => i + 1).map(c => {
                             const seatId = `${r}${c}`;
-                            const taken = isTaken(r, c);
+                            const taken = occupied.includes(seatId);
                             const selected = selectedSeats.includes(seatId);
 
                             if (taken) {
-                              return `<div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-200 border border-gray-300 opacity-40 cursor-not-allowed flex items-center justify-center text-[10px] font-mono text-gray-400">×</div>`;
+                                return `<div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-200 border border-gray-300 opacity-40 cursor-not-allowed flex items-center justify-center text-[10px] font-mono text-gray-400">×</div>`;
                             }
 
                             return `
-                                <button onclick="toggleSeat('${seatId}')" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg font-mono text-[11px] transition-all flex items-center justify-center ${
-                              selected
-                                ? 'bg-black text-white shadow-md'
-                                : 'bg-gray-50 border border-gray-200 hover:border-black text-gray-600'
-                            }">
+                                <button onclick="toggleSeat('${seatId}')" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg font-mono text-[11px] transition-all flex items-center justify-center ${selected ? 'bg-black text-white shadow-md' : 'bg-gray-50 border border-gray-200 hover:border-black text-gray-600'}">
                                     ${c}
                                 </button>
                             `;
-                          })
-                          .join('')}
+                        }).join('')}
                     </div>
                 </div>
-            `
-          )
-          .join('');
-      }
-
-      function toggleSeat(seatId) {
-        if (selectedSeats.includes(seatId)) {
-          selectedSeats = selectedSeats.filter((s) => s !== seatId);
-        } else {
-          selectedSeats.push(seatId);
+            `).join('');
         }
-        renderSeatGrid();
-        calculateTotal();
-      }
 
-      function calculateTotal() {
-        let total = selectedSeats.length * SEAT_PRICE;
+        function renderConcessions() {
+            const grid = document.getElementById('concession-grid');
+            const items = CONFIG.concessions || [];
 
-        if (document.getElementById('extra-popcorn').checked) total += 9.0;
-        if (document.getElementById('extra-cider').checked) total += 6.0;
-        if (document.getElementById('extra-sweets').checked) total += 8.0;
+            grid.innerHTML = items.map(c => `
+                <div class="p-5 rounded-2xl border border-gray-100 flex items-center justify-between hover:border-gray-300 transition-colors">
+                    <div>
+                        <h4 class="text-sm font-medium text-black">${c.name}</h4>
+                        <span class="text-xs font-mono text-gray-400">$${c.price.toFixed(2)}</span>
+                    </div>
+                    <input type="checkbox" id="concession-${c.id}" onchange="toggleConcession('${c.id}', ${c.price}, '${c.name.replace(/'/g, "\\'")}', this.checked)" class="w-5 h-5 accent-black rounded cursor-pointer">
+                </div>
+            `).join('');
+        }
 
-        document.getElementById('summary-seats').innerText =
-          selectedSeats.length > 0
-            ? selectedSeats.sort().join(', ')
-            : 'None chosen';
-        document.getElementById('summary-total').innerText = `$${total.toFixed(
-          2
-        )}`;
+        function toggleConcession(id, price, name, checked) {
+            if (checked) {
+                selectedConcessions[id] = { name, price };
+            } else {
+                delete selectedConcessions[id];
+            }
+            calculateTotal();
+        }
 
-        document.getElementById('btn-confirm-booking').disabled =
-          selectedSeats.length === 0;
-      }
+        function toggleSeat(seatId) {
+            if (selectedSeats.includes(seatId)) {
+                selectedSeats = selectedSeats.filter(s => s !== seatId);
+            } else {
+                selectedSeats.push(seatId);
+            }
+            renderSeatGrid();
+            calculateTotal();
+        }
 
-      function finalizeBooking() {
-        const pass = {
-          id: 'CP-' + Math.floor(100000 + Math.random() * 900000),
-          movie: selectedMovie.title,
-          time: selectedTime,
-          seats: selectedSeats.sort(),
-          extras: [
-            document.getElementById('extra-popcorn').checked
-              ? 'Truffle Popcorn'
-              : null,
-            document.getElementById('extra-cider').checked
-              ? 'Sparkling Cider'
-              : null,
-            document.getElementById('extra-sweets').checked
-              ? 'Artisan Pralines'
-              : null,
-          ].filter(Boolean),
-          date: new Date().toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          }),
-        };
+        function calculateTotal() {
+            const seatUnitPrice = CONFIG.theaterSettings.baseSeatPrice * (selectedMovie ? (selectedMovie.priceMultiplier || 1.0) : 1.0);
+            let total = selectedSeats.length * seatUnitPrice;
 
-        const existing =
-          JSON.parse(localStorage.getItem('chowaniec_theater_passes')) || [];
-        existing.unshift(pass);
-        localStorage.setItem(
-          'chowaniec_theater_passes',
-          JSON.stringify(existing)
-        );
+            Object.values(selectedConcessions).forEach(item => {
+                total += item.price;
+            });
 
-        navigate('my-tickets');
-      }
+            document.getElementById('summary-seats').innerText = selectedSeats.length > 0 ? selectedSeats.sort().join(', ') : 'None chosen';
+            document.getElementById('summary-total').innerText = `$${total.toFixed(2)}`;
+            document.getElementById('btn-confirm-booking').disabled = (selectedSeats.length === 0);
+        }
 
-      // --- RENDER PASSES ---
-      function renderTickets() {
-        const container = document.getElementById('tickets-container');
-        const passes =
-          JSON.parse(localStorage.getItem('chowaniec_theater_passes')) || [];
+        function finalizeBooking() {
+            const pass = {
+                id: 'CP-' + Math.floor(100000 + Math.random() * 900000),
+                movie: selectedMovie.title,
+                time: selectedTime,
+                seats: selectedSeats.sort(),
+                extras: Object.values(selectedConcessions).map(c => c.name),
+                date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            };
 
-        if (passes.length === 0) {
-          container.innerHTML = `
+            const existing = JSON.parse(localStorage.getItem('chowaniec_theater_passes')) || [];
+            existing.unshift(pass);
+            localStorage.setItem('chowaniec_theater_passes', JSON.stringify(existing));
+
+            navigate('my-tickets');
+        }
+
+        // --- RENDER PASSES ---
+        function renderTickets() {
+            const container = document.getElementById('tickets-container');
+            const passes = JSON.parse(localStorage.getItem('chowaniec_theater_passes')) || [];
+
+            if (passes.length === 0) {
+                container.innerHTML = `
                     <div class="bg-white p-12 rounded-3xl border border-gray-100 text-center space-y-4">
                         <i data-lucide="ticket" class="w-8 h-8 text-gray-300 mx-auto"></i>
                         <h3 class="text-lg font-medium text-black">No Passes Found</h3>
@@ -643,65 +423,44 @@
                         </button>
                     </div>
                 `;
-          lucide.createIcons();
-          return;
-        }
+                lucide.createIcons();
+                return;
+            }
 
-        container.innerHTML = passes
-          .map(
-            (p) => `
+            container.innerHTML = passes.map(p => `
                 <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col sm:flex-row">
                     <div class="p-8 flex-1 space-y-4">
                         <div class="flex justify-between items-start">
                             <div>
                                 <span class="text-[10px] font-mono text-gray-400 uppercase tracking-widest block">Screening Pass</span>
-                                <h3 class="text-2xl font-serif text-black mt-0.5">${
-                                  p.movie
-                                }</h3>
+                                <h3 class="text-2xl font-serif text-black mt-0.5">${p.movie}</h3>
                             </div>
-                            <span class="font-mono text-xs font-bold text-black px-3 py-1 bg-gray-50 rounded-full border border-gray-100">${
-                              p.id
-                            }</span>
+                            <span class="font-mono text-xs font-bold text-black px-3 py-1 bg-gray-50 rounded-full border border-gray-100">${p.id}</span>
                         </div>
 
                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2 font-mono text-xs">
                             <div>
                                 <span class="text-gray-400 block text-[10px]">TIME</span>
-                                <span class="font-medium text-black">${
-                                  p.time
-                                }</span>
+                                <span class="font-medium text-black">${p.time}</span>
                             </div>
                             <div>
                                 <span class="text-gray-400 block text-[10px]">SEATS</span>
-                                <span class="font-medium text-black">${p.seats.join(
-                                  ', '
-                                )}</span>
+                                <span class="font-medium text-black">${p.seats.join(', ')}</span>
                             </div>
                             <div>
                                 <span class="text-gray-400 block text-[10px]">DATE</span>
-                                <span class="font-medium text-black">${
-                                  p.date
-                                }</span>
+                                <span class="font-medium text-black">${p.date}</span>
                             </div>
                         </div>
 
-                        ${
-                          p.extras.length > 0
-                            ? `
+                        ${p.extras.length > 0 ? `
                             <div class="pt-2">
                                 <span class="text-[10px] font-mono text-gray-400 block mb-1">CONCESSIONS INCLUDED</span>
                                 <div class="flex flex-wrap gap-1.5">
-                                    ${p.extras
-                                      .map(
-                                        (e) =>
-                                          `<span class="px-2.5 py-1 bg-gray-50 border border-gray-100 rounded-lg text-[10px] font-mono text-gray-600">${e}</span>`
-                                      )
-                                      .join('')}
+                                    ${p.extras.map(e => `<span class="px-2.5 py-1 bg-gray-50 border border-gray-100 rounded-lg text-[10px] font-mono text-gray-600">${e}</span>`).join('')}
                                 </div>
                             </div>
-                        `
-                            : ''
-                        }
+                        ` : ''}
                     </div>
 
                     <!-- Perforated Stub Line -->
@@ -710,16 +469,14 @@
                         <span class="text-[9px] font-mono uppercase tracking-widest text-gray-400">Scan at Podium</span>
                     </div>
                 </div>
-            `
-          )
-          .join('');
-        lucide.createIcons();
-      }
+            `).join('');
+            lucide.createIcons();
+        }
 
-      window.addEventListener('DOMContentLoaded', () => {
-        renderMovies();
-        lucide.createIcons();
-      });
+        window.addEventListener('DOMContentLoaded', () => {
+            renderMovies();
+            lucide.createIcons();
+        });
     </script>
-  </body>
+</body>
 </html>
