@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chowaniec</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- External Passcode Configuration File -->
+    <script src="passwords.js"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+      body {
+        font-family: 'Outfit', sans-serif;
+        background-color: #fafafa;
+        color: #111827;
+      }
+
+      .font-serif {
+        font-family: 'Playfair Display', serif;
+      }
+
+      .font-mono {
+        font-family: 'JetBrains Mono', monospace;
+      }
+
+      /* Minimal scrollbar */
+      ::-webkit-scrollbar {
+        width: 4px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #e5e7eb;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #d1d5db;
+      }
+
+      .fade-in {
+        animation: fadeIn 0.3s ease-in-out forwards;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Passcode Shake Animation */
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        20%,
+        60% {
+          transform: translateX(-6px);
+        }
+        40%,
+        80% {
+          transform: translateX(6px);
+        }
+      }
+      .animate-shake {
+        animation: shake 0.35s ease-in-out;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen flex flex-col selection:bg-gray-200">
+    <!-- Minimalist Header -->
+    <header
+      class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30"
+    >
+      <div
+        class="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between"
+      >
+        <!-- Brand Title -->
+        <div
+          class="cursor-pointer"
+          onclick="requestAccess({ type: 'tab', target: 'directory' })"
+        >
+          <span class="text-2xl font-serif tracking-tight text-black"
+            >Chowaniec</span
+          >
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button
+            id="lock-btn"
+            onclick="clearSession()"
+            class="hidden text-xs font-mono text-gray-400 hover:text-red-600 px-3 py-1.5 rounded-full hover:bg-gray-100 transition-colors"
+          >
+            Sign Out
+          </button>
+          <!-- Hamburger Menu Button -->
+          <button
+            onclick="toggleMenu(true)"
+            class="w-11 h-11 rounded-full bg-gray-50 hover:bg-gray-100 border border-gray-200/60 flex items-center justify-center text-black transition-colors focus:outline-none"
+          >
+            <i data-lucide="menu" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Slide-over Drawer Navigation -->
+    <div
+      id="menu-backdrop"
+      class="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-300"
+      onclick="toggleMenu(false)"
+    ></div>
+
+    <aside
+      id="side-menu"
+      class="fixed top-0 right-0 h-full w-80 bg-white border-l border-gray-100 z-50 transform translate-x-full transition-transform duration-300 ease-out flex flex-col justify-between p-8 shadow-2xl"
+    >
+      <div class="space-y-8">
+        <div
+          class="flex items-center justify-between border-b border-gray-100 pb-6"
+        >
+          <span class="text-xl font-serif tracking-tight text-black">Menu</span>
+          <button
+            onclick="toggleMenu(false)"
+            class="w-9 h-9 rounded-full bg-gray-50 hover:bg-gray-100 flex items-center justify-center text-gray-500 hover:text-black transition-colors"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <nav class="flex flex-col gap-2">
+          <button
+            onclick="handleMenuClick('directory')"
+            class="w-full text-left px-4 py-3 rounded-2xl text-base font-medium text-gray-600 hover:text-black hover:bg-gray-50 transition-colors flex items-center justify-between"
+          >
+            <span>Chowaniec</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+          </button>
+          <button
+            onclick="handleMenuClick('about')"
+            class="w-full text-left px-4 py-3 rounded-2xl text-base font-medium text-gray-600 hover:text-black hover:bg-gray-50 transition-colors flex items-center justify-between"
+          >
+            <span>About</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+          </button>
+          <button
+            onclick="handleMenuClick('team')"
+            class="w-full text-left px-4 py-3 rounded-2xl text-base font-medium text-gray-600 hover:text-black hover:bg-gray-50 transition-colors flex items-center justify-between"
+          >
+            <span>Team</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+          </button>
+          <button
+            onclick="handleMenuClick('terms')"
+            class="w-full text-left px-4 py-3 rounded-2xl text-base font-medium text-gray-600 hover:text-black hover:bg-gray-50 transition-colors flex items-center justify-between"
+          >
+            <span>Terms</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+          </button>
+        </nav>
+      </div>
+
+      <div
+        class="pt-6 border-t border-gray-100 text-xs font-mono text-gray-400 space-y-1"
+      >
+        <p>Welcome to Chowaniec</p>
+        <p class="text-gray-300"></p>
+      </div>
+    </aside>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-6xl mx-auto px-6 py-12 w-full">
+      <!-- DIRECTORY VIEW -->
+      <section id="view-directory" class="tab-view space-y-12 fade-in">
+        <div class="max-w-2xl">
+          <h1 class="text-4xl font-serif mb-3 text-black">Welcome to Chowaniec</h1>
+          <p class="text-gray-400 font-light text-base">
+            Where luxury meets reality.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <!-- 1. Hotels & Resorts -->
+          <div
+            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
+          >
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div
+                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
+                >
+                  <i data-lucide="palmtree" class="w-5 h-5"></i>
+                </div>
+                <span
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  Active
+                </span>
+              </div>
+              <div>
+                <h3 class="text-lg font-medium text-black">
+                  Chowaniec Hotels & Resorts
+                </h3>
+                <span class="text-xs font-mono text-gray-400 block mt-0.5"
+                  >resort.chowaniec.net</span
+                >
+              </div>
+              <p class="text-gray-400 font-light text-sm leading-relaxed">
+                Book a room or sign in to your visit with our kiosk.
+              </p>
+            </div>
+            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
+              <button
+                onclick="requestAccess({ type: 'redirect', target: 'https://resort.chowaniec.net' })"
+                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
+              >
+                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. Premiere Theaters -->
+          <div
+            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
+          >
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div
+                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
+                >
+                  <i data-lucide="film" class="w-5 h-5"></i>
+                </div>
+                <span
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  Active
+                </span>
+              </div>
+              <div>
+                <h3 class="text-lg font-medium text-black">
+                  Chowaniec Premiere Theaters
+                </h3>
+                <span class="text-xs font-mono text-gray-400 block mt-0.5"
+                  >theater.chowaniec.net</span
+                >
+              </div>
+              <p class="text-gray-400 font-light text-sm leading-relaxed">
+                Select and purchase seats for exclusive films in our theater.
+              </p>
+            </div>
+            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
+              <button
+                onclick="requestAccess({ type: 'redirect', target: 'https://theater.chowaniec.net' })"
+                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
+              >
+                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. Restaurants -->
+          <div
+            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
+          >
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div
+                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
+                >
+                  <i data-lucide="utensils" class="w-5 h-5"></i>
+                </div>
+                <span
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  Active
+                </span>
+              </div>
+              <div>
+                <h3 class="text-lg font-medium text-black">
+                  Chowaniec Restaurants
+                </h3>
+                <span class="text-xs font-mono text-gray-400 block mt-0.5"
+                  >dining.chowaniec.net</span
+                >
+              </div>
+              <p class="text-gray-400 font-light text-sm leading-relaxed">
+                View our curated menu and book a reservation in advance.
+              </p>
+            </div>
+            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
+              <button
+                onclick="requestAccess({ type: 'redirect', target: 'https://dining.chowaniec.net' })"
+                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
+              >
+                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- 4. Cleaning Service -->
+          <div
+            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
+          >
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div
+                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
+                >
+                  <i data-lucide="sparkles" class="w-5 h-5"></i>
+                </div>
+                <span
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  Active
+                </span>
+              </div>
+              <div>
+                <h3 class="text-lg font-medium text-black">
+                  Chowaniec Cleaning Service
+                </h3>
+                <span class="text-xs font-mono text-gray-400 block mt-0.5"
+                  >cleaning.chowaniec.net</span
+                >
+              </div>
+              <p class="text-gray-400 font-light text-sm leading-relaxed">
+                Navigate through accomodative cleaning packages for your home.
+              </p>
+            </div>
+            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
+              <button
+                onclick="requestAccess({ type: 'redirect', target: 'https://cleaning.chowaniec.net' })"
+                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
+              >
+                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- 5. Spa -->
+          <div
+            class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group"
+          >
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div
+                  class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black"
+                >
+                  <i data-lucide="flower2" class="w-5 h-5"></i>
+                </div>
+                <span
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  Active
+                </span>
+              </div>
+              <div>
+                <h3 class="text-lg font-medium text-black">Chowaniec Spa</h3>
+                <span class="text-xs font-mono text-gray-400 block mt-0.5"
+                  >spa.chowaniec.net</span
+                >
+              </div>
+              <p class="text-gray-400 font-light text-sm leading-relaxed">
+                Relax with our spa services, available to book im advance.
+              </p>
+            </div>
+            <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
+              <button
+                onclick="requestAccess({ type: 'redirect', target: 'https://spa.chowaniec.net' })"
+                class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
+              >
+                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABOUT US VIEW -->
+      <section
+        id="view-about"
+        class="tab-view hidden max-w-3xl mx-auto space-y-12 fade-in"
+      >
+        <div>
+          <h1 class="text-4xl font-serif mb-3 text-black">About Chowaniec</h1>
+          <p class="text-gray-400 font-light text-base">
+            A centralized hub for all your needs — curated and selected for optimal experiences.
+          </p>
+        </div>
+
+        <div
+          class="bg-white p-10 rounded-3xl border border-gray-100 space-y-8 font-light text-gray-600 leading-relaxed text-sm md:text-base"
+        >
+          <p>
+            Since 2026, Chowaniec has served its community, providing immersive cinema, exquisite dining, luxurious resorts, and immersive activities, bound to give your vacation the lasting touch.
+          </p>
+
+          <div
+            class="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-gray-100"
+          >
+            <div class="space-y-2">
+              <span
+                class="text-xs font-mono uppercase tracking-widest text-gray-400 font-medium block"
+                >Luxury</span
+              >
+              <h4 class="text-base font-medium text-black">
+                More About Chowaniec
+              </h4>
+              <p class="text-sm text-gray-400 font-light">
+                Chowaniec is operated by skilled individuals to allow perfect experiences for anything you can imagine.
+              </p>
+            </div>
+            <div class="space-y-2">
+              <span
+                class="text-xs font-mono uppercase tracking-widest text-gray-400 font-medium block"
+                >Simplicity</span
+              >
+              <h4 class="text-base font-medium text-black">
+                What We Believe
+              </h4>
+              <p class="text-sm text-gray-400 font-light">
+                We at Chowaniec strive to give your family the best experience, thus we have expensive and fulfilling packages for all.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MEET THE TEAM VIEW -->
+      <section
+        id="view-team"
+        class="tab-view hidden max-w-4xl mx-auto space-y-12 fade-in"
+      >
+        <div class="text-center max-w-xl mx-auto">
+          <h1 class="text-4xl font-serif mb-3 text-black">Our Team</h1>
+          <p class="text-gray-400 font-light text-base">
+            The people leading our departments and managing services.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          <div
+            class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4"
+          >
+            <div
+              class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold"
+            >
+              G
+            </div>
+            <div>
+              <h3 class="text-lg font-medium text-black">Gabriel Chowaniec</h3>
+              <p class="text-xs font-mono text-gray-400">
+                Founder + Management
+              </p>
+            </div>
+            <p class="text-gray-400 font-light text-sm leading-relaxed">
+              Directs lower rankes staff and manages everything with the foundership team.
+            </p>
+          </div>
+
+          <div
+            class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4"
+          >
+            <div
+              class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold"
+            >
+              V
+            </div>
+            <div>
+              <h3 class="text-lg font-medium text-black">Victoria Chowaniec</h3>
+              <p class="text-xs font-mono text-gray-400">
+                Co-Founder
+              </p>
+            </div>
+            <p class="text-gray-400 font-light text-sm leading-relaxed">
+              Plans ideas and designs everything from our hotels to our cinema.
+            </p>
+          </div>
+
+          <div
+            class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4"
+          >
+            <div
+              class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold"
+            >
+              L
+            </div>
+            <div>
+              <h3 class="text-lg font-medium text-black">Liliana</h3>
+              <p class="text-xs font-mono text-gray-400">Employee</p>
+            </div>
+            <p class="text-gray-400 font-light text-sm leading-relaxed">
+              Acts in movies and works at our luxurious hotels and spa.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TERMS VIEW -->
+      <section
+        id="view-terms"
+        class="tab-view hidden max-w-3xl mx-auto space-y-12 fade-in"
+      >
+        <div>
+          <h1 class="text-4xl font-serif mb-3 text-black">Terms of Service</h1>
+          <p class="text-gray-400 font-light text-base">
+            Standard terms governing access to chowaniec.net.
+          </p>
+        </div>
+
+        <div
+          class="bg-white p-10 rounded-3xl border border-gray-100 space-y-8 font-light text-gray-600 text-sm leading-relaxed"
+        >
+          <div class="space-y-2">
+            <h3 class="text-base font-medium text-black">1. Access & Scope</h3>
+            <p>
+              By accessing chowaniec.net or any registered subdomain
+              (*.chowaniec.net), you agree to use our applications in compliance
+              with applicable laws. Certain panels are private test environments
+              and may be restricted without prior notice.
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-base font-medium text-black">2. Data & Privacy</h3>
+            <p>
+              Our standalone demonstration applications prioritize client-side
+              execution and local browser storage. We do not sell, rent, or
+              monetize interaction telemetry generated through test
+              environments.
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="text-base font-medium text-black">
+              3. Availability & Warranties
+            </h3>
+            <p>
+              All services are delivered on an "as-is" basis. While we strive
+              for high uptime across every node, we make no express warranties
+              regarding uninterrupted availability during scheduled maintenance
+              cycles.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Minimalist Footer -->
+    <footer
+      class="mt-auto border-t border-gray-100 py-8 text-xs font-mono text-gray-400"
+    >
+      <div
+        class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4"
+      >
+        <span>&copy; Chowaniec &bull; All Rights Reserved</span>
+        <div class="flex items-center gap-6">
+          <span class="inline-flex items-center gap-1.5"
+        </div>
+      </div>
+    </footer>
+
+    <!-- Passcode Authentication Modal -->
+    <div
+      id="passcode-modal"
+      class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4"
+    >
+      <div
+        id="passcode-box"
+        class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 space-y-6 text-center"
+      >
+        <div
+          class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center mx-auto text-black"
+        >
+          <i data-lucide="lock" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-serif text-black mb-1">Enter Passcode</h3>
+          <p class="text-xs text-gray-400 font-light">
+            Authentication required to proceed
+          </p>
+        </div>
+        <div class="space-y-3">
+          <input
+            type="password"
+            id="passcode-input"
+            placeholder="••••••••"
+            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-center text-sm font-mono tracking-widest outline-none focus:border-black focus:bg-white transition-all"
+            onkeydown="if(event.key === 'Enter') submitPasscode()"
+          />
+          <p
+            id="passcode-error"
+            class="text-xs text-red-500 font-medium hidden"
+          >
+            Invalid passcode
+          </p>
+        </div>
+        <div class="flex gap-3 pt-2">
+          <button
+            onclick="closePasscodeModal()"
+            class="flex-1 py-3 text-xs font-medium text-gray-500 hover:bg-gray-50 rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onclick="submitPasscode()"
+            class="flex-1 py-3 text-xs font-medium bg-black text-white rounded-xl hover:bg-gray-800 transition-colors shadow-sm"
+          >
+            Authorize
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let pendingAction = null;
+
+      function isAuthenticated() {
+        return sessionStorage.getItem('chowaniec_authenticated') === 'true';
+      }
+
+      function setAuthenticated() {
+        sessionStorage.setItem('chowaniec_authenticated', 'true');
+        updateLockBtn();
+      }
+
+      function clearSession() {
+        sessionStorage.removeItem('chowaniec_authenticated');
+        updateLockBtn();
+        executeTabSwitch('directory');
+      }
+
+      function updateLockBtn() {
+        const btn = document.getElementById('lock-btn');
+        if (isAuthenticated()) {
+          btn.classList.remove('hidden');
+        } else {
+          btn.classList.add('hidden');
+        }
+      }
+
+      function toggleMenu(open) {
+        const drawer = document.getElementById('side-menu');
+        const backdrop = document.getElementById('menu-backdrop');
+        if (open) {
+          backdrop.classList.remove('hidden');
+          setTimeout(() => backdrop.classList.remove('opacity-0'), 10);
+          drawer.classList.remove('translate-x-full');
+        } else {
+          backdrop.classList.add('opacity-0');
+          drawer.classList.add('translate-x-full');
+          setTimeout(() => backdrop.classList.add('hidden'), 300);
+        }
+      }
+
+      function handleMenuClick(tabId) {
+        toggleMenu(false);
+        requestAccess({ type: 'tab', target: tabId });
+      }
+
+      function requestAccess(action) {
+        if (isAuthenticated()) {
+          executeAction(action);
+          return;
+        }
+
+        pendingAction = action;
+        const modal = document.getElementById('passcode-modal');
+        const input = document.getElementById('passcode-input');
+        const error = document.getElementById('passcode-error');
+
+        input.value = '';
+        error.classList.add('hidden');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        setTimeout(() => input.focus(), 100);
+      }
+
+      function closePasscodeModal() {
+        const modal = document.getElementById('passcode-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        pendingAction = null;
+      }
+
+      function executeAction(action) {
+        if (!action) return;
+        if (action.type === 'tab') {
+          executeTabSwitch(action.target);
+        } else if (action.type === 'redirect') {
+          window.open(action.target, '_blank');
+        }
+      }
+
+      function submitPasscode() {
+        const input = document.getElementById('passcode-input');
+        const error = document.getElementById('passcode-error');
+        const box = document.getElementById('passcode-box');
+        const entered = input.value.trim();
+
+        const authorized =
+          window.CHOWANIEC_CONFIG &&
+          window.CHOWANIEC_CONFIG.AUTHORIZED_PASSCODES
+            ? window.CHOWANIEC_CONFIG.AUTHORIZED_PASSCODES
+            : ['chowaniec2026'];
+
+        if (authorized.includes(entered)) {
+          setAuthenticated();
+          const action = pendingAction;
+          closePasscodeModal();
+          executeAction(action);
+        } else {
+          error.classList.remove('hidden');
+          box.classList.add('animate-shake');
+          input.value = '';
+          setTimeout(() => box.classList.remove('animate-shake'), 400);
+        }
+      }
+
+      function executeTabSwitch(tabId) {
+        document.querySelectorAll('.tab-view').forEach((view) => {
+          view.classList.add('hidden');
+        });
+
+        const target = document.getElementById(`view-${tabId}`);
+        if (target) {
+          target.classList.remove('hidden');
+        }
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      window.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+        updateLockBtn();
+      });
+    </script>
+  </body>
+</html>
