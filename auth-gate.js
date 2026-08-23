@@ -1,5 +1,6 @@
 (function () {
-  const DEFAULT_PASSCODES = ['gabrielc12', 'lilianac15', 'victoriac11', 'ameliac18', 'emiliap14'];
+  const DEFAULT_PASSCODES = ['chowaniec2026'];
+  let quarantinedContent = null;
 
   function isAuthorized() {
     return sessionStorage.getItem('chowaniec_authenticated') === 'true';
@@ -10,10 +11,44 @@
   }
 
   function getHubUrl() {
-    const isLocal = window.location.protocol === 'file:' || 
-                    window.location.hostname === 'localhost' || 
-                    window.location.hostname === '127.0.0.1';
+    const isLocal =
+      window.location.protocol === 'file:' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
     return isLocal ? '../index.html' : '/';
+  }
+
+  // Hide the body immediately before rendering to prevent Reader Mode extraction
+  if (!isAuthorized()) {
+    document.documentElement.style.visibility = 'hidden';
+  }
+
+  function quarantineDOM() {
+    if (isAuthorized()) {
+      document.documentElement.style.visibility = '';
+      return;
+    }
+
+    const mainEl = document.querySelector('main') || document.body;
+    // Extract real HTML into memory so Reader Mode has zero text to read
+    quarantinedContent = mainEl.innerHTML;
+    mainEl.innerHTML = '';
+
+    document.documentElement.style.visibility = '';
+    renderGateModal();
+  }
+
+  function restoreDOM() {
+    const mainEl = document.querySelector('main') || document.body;
+    if (quarantinedContent) {
+      mainEl.innerHTML = quarantinedContent;
+    }
+    document.body.style.overflow = '';
+    
+    // Re-trigger dynamic script initializations
+    if (typeof renderMovies === 'function') renderMovies();
+    if (typeof renderDirectoryGrid === 'function') renderDirectoryGrid();
+    if (window.lucide) window.lucide.createIcons();
   }
 
   function verifyInputPasscode() {
@@ -31,8 +66,7 @@
       setAuthorized();
       const modal = document.getElementById('gate-passcode-modal');
       if (modal) modal.remove();
-      document.body.style.overflow = '';
-      if (window.lucide) window.lucide.createIcons();
+      restoreDOM();
     } else {
       error.classList.remove('hidden');
       box.classList.add('animate-shake');
@@ -42,11 +76,8 @@
   }
 
   function renderGateModal() {
-    if (isAuthorized()) return;
-
     document.body.style.overflow = 'hidden';
 
-    // Inject shake animation style if not present
     if (!document.getElementById('gate-shake-style')) {
       const style = document.createElement('style');
       style.id = 'gate-shake-style';
@@ -63,7 +94,8 @@
 
     const modal = document.createElement('div');
     modal.id = 'gate-passcode-modal';
-    modal.className = 'fixed inset-0 bg-gray-900/40 backdrop-blur-md z-[9999] flex items-center justify-center p-4 selection:bg-gray-200';
+    modal.className =
+      'fixed inset-0 bg-gray-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4 selection:bg-gray-200';
     modal.innerHTML = `
       <div id="gate-passcode-box" class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-gray-100 space-y-6 text-center">
         <div class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center mx-auto text-black font-serif text-lg">
@@ -120,8 +152,8 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', renderGateModal);
+    document.addEventListener('DOMContentLoaded', quarantineDOM);
   } else {
-    renderGateModal();
+    quarantineDOM();
   }
 })();
