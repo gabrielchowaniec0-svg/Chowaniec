@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chowaniec</title>
+    <title>Chowaniec Premiere Theaters</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -11,7 +11,7 @@
     <!-- Security Gate & Passcodes -->
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
-    <!-- Encoded Config Data -->
+    <!-- Plain Unencrypted Config Data -->
     <script src="config.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -46,70 +46,125 @@
 </head>
 <body class="min-h-screen flex flex-col selection:bg-gray-200 relative">
 
-    <!-- Blurred Visual Shell (No readable paragraph text for Reader Mode) -->
-    <div id="app-root" class="flex-1 flex flex-col transition-all duration-500 filter blur-md pointer-events-none select-none" aria-hidden="true">
+    <!-- Blurred Content Root Container -->
+    <div id="app-root" class="flex-1 flex flex-col transition-all duration-500">
         
-        <!-- Header Shell -->
-        <div class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
+        <!-- Header -->
+        <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
             <div class="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans">CP</div>
-                    <div class="h-6 w-36 bg-gray-100 rounded-md"></div>
+                <div class="flex items-center gap-3 cursor-pointer" onclick="navigate('hero')">
+                    <div class="w-8 h-8 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans">
+                        CP
+                    </div>
+                    <div class="font-serif tracking-wide text-xl">
+                        Chowaniec <span class="text-gray-400 italic font-light text-base">Theaters</span>
+                    </div>
                 </div>
+
                 <div class="flex items-center gap-2">
-                    <div class="h-8 w-24 bg-gray-100 rounded-full"></div>
-                    <div class="h-8 w-24 bg-gray-50 rounded-full"></div>
+                    <button onclick="navigate('hero')" class="nav-tab px-4 py-2 text-xs font-medium rounded-full transition-colors text-black bg-gray-100" data-view="hero">Now Showing</button>
+                    <button onclick="navigate('my-tickets')" class="nav-tab px-4 py-2 text-xs font-medium rounded-full transition-colors text-gray-500 hover:text-black" data-view="my-tickets">My Passes</button>
                 </div>
             </div>
-        </div>
+        </header>
 
-        <!-- Dynamic Container Root -->
-        <div id="dynamic-content-mount" class="flex-1 max-w-6xl mx-auto px-6 py-10 w-full">
-            <!-- Visual Placeholder Skeleton -->
-            <div class="space-y-12">
-                <div class="space-y-3 max-w-md">
-                    <div class="h-4 bg-gray-200 rounded w-1/4"></div>
-                    <div class="h-8 bg-gray-200 rounded w-3/4"></div>
-                    <div class="h-4 bg-gray-100 rounded w-full"></div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div class="bg-white p-8 rounded-3xl border border-gray-100 space-y-6">
-                        <div class="w-12 h-12 rounded-2xl bg-gray-100"></div>
-                        <div class="space-y-2">
-                            <div class="h-4 bg-gray-100 rounded w-1/3"></div>
-                            <div class="h-6 bg-gray-100 rounded w-3/4"></div>
-                        </div>
-                        <div class="h-16 bg-gray-50 rounded-xl"></div>
-                        <div class="h-10 bg-gray-100 rounded-full w-full"></div>
-                    </div>
-                    <div class="bg-white p-8 rounded-3xl border border-gray-100 space-y-6">
-                        <div class="w-12 h-12 rounded-2xl bg-gray-100"></div>
-                        <div class="space-y-2">
-                            <div class="h-4 bg-gray-100 rounded w-1/3"></div>
-                            <div class="h-6 bg-gray-100 rounded w-3/4"></div>
-                        </div>
-                        <div class="h-16 bg-gray-50 rounded-xl"></div>
-                        <div class="h-10 bg-gray-100 rounded-full w-full"></div>
-                    </div>
-                    <div class="bg-white p-8 rounded-3xl border border-gray-100 space-y-6">
-                        <div class="w-12 h-12 rounded-2xl bg-gray-100"></div>
-                        <div class="space-y-2">
-                            <div class="h-4 bg-gray-100 rounded w-1/3"></div>
-                            <div class="h-6 bg-gray-100 rounded w-3/4"></div>
-                        </div>
-                        <div class="h-16 bg-gray-50 rounded-xl"></div>
-                        <div class="h-10 bg-gray-100 rounded-full w-full"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Main Content Area -->
+        <main class="flex-1 max-w-6xl mx-auto px-6 py-10 w-full">
 
-        <div class="mt-auto border-t border-gray-100 py-8 px-6">
-            <div class="max-w-6xl mx-auto flex justify-between">
-                <div class="h-4 w-32 bg-gray-100 rounded"></div>
-                <div class="h-4 w-24 bg-gray-100 rounded"></div>
+            <!-- 1. HERO VIEW -->
+            <section id="view-hero" class="theater-view space-y-12 fade-in">
+                <div class="max-w-2xl">
+                    <p class="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2 font-medium">Auditorium Screening Hub</p>
+                    <h1 class="text-4xl font-serif text-black mb-3">Feature Presentations</h1>
+                    <p class="text-gray-400 font-light text-base">Select a screening to reserve laser-projected auditorium seating.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8" id="movies-grid">
+                    <!-- Populated by JS -->
+                </div>
+            </section>
+
+            <!-- 2. BOOKING VIEW -->
+            <section id="view-booking" class="theater-view hidden max-w-4xl mx-auto space-y-8 fade-in">
+                <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6">
+                    <div>
+                        <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block mb-1">Reserving Seats</span>
+                        <h2 id="booking-movie-title" class="text-2xl font-serif text-black">--</h2>
+                        <p id="booking-movie-meta" class="text-xs font-mono text-gray-500 mt-1 font-light">--</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2" id="showtime-picker"></div>
+                </div>
+
+                <div class="bg-white p-8 sm:p-12 rounded-3xl border border-gray-100 shadow-sm space-y-10">
+                    <div class="space-y-3 text-center max-w-md mx-auto">
+                        <div class="cinema-screen w-full"></div>
+                        <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400">Curved Laser Screen</span>
+                    </div>
+
+                    <div class="flex flex-col items-center gap-3" id="seat-grid"></div>
+
+                    <div class="flex justify-center items-center gap-6 pt-4 border-t border-gray-100 text-xs font-mono text-gray-500">
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 rounded-md bg-gray-50 border border-gray-200"></div>
+                            <span id="legend-price">Available</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 rounded-md bg-black text-white"></div>
+                            <span>Selected</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 rounded-md bg-gray-200 border border-gray-300 opacity-40"></div>
+                            <span>Reserved</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                    <div>
+                        <h3 class="text-lg font-medium text-black">Artisan Concessions</h3>
+                        <p class="text-xs text-gray-400 font-light">Delivered directly to your auditorium row before showtime.</p>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="concession-grid"></div>
+                </div>
+
+                <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6">
+                    <div>
+                        <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Selected Seats</span>
+                        <span id="summary-seats" class="text-sm font-medium text-black">None chosen</span>
+                    </div>
+                    <div class="flex items-center gap-6">
+                        <div class="text-right">
+                            <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Total</span>
+                            <span id="summary-total" class="text-2xl font-semibold font-serif text-black">$0.00</span>
+                        </div>
+                        <button id="btn-confirm-booking" onclick="finalizeBooking()" disabled class="bg-black text-white px-8 py-3.5 rounded-full font-medium hover:bg-gray-800 disabled:opacity-30 transition-all shadow-md">
+                            Reserve Passes
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. MY TICKETS VIEW -->
+            <section id="view-my-tickets" class="theater-view hidden max-w-3xl mx-auto space-y-10 fade-in">
+                <div class="flex justify-between items-end border-b border-gray-100 pb-4">
+                    <div>
+                        <h1 class="text-3xl font-serif text-black">Active Passes</h1>
+                        <p class="text-gray-400 font-light text-sm">Present your digital pass at the auditorium podium.</p>
+                    </div>
+                </div>
+                <div id="tickets-container" class="space-y-6"></div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="mt-auto border-t border-gray-100 py-8 text-xs font-mono text-gray-400">
+            <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <span>&copy; Chowaniec Premiere Theaters &bull; All Rights Reserved</span>
+                <div class="flex items-center gap-6">
+                    <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 4K Laser Projection Active</span>
+                </div>
             </div>
-        </div>
+        </footer>
     </div>
 
     <!-- Floating Return Button -->
@@ -118,7 +173,17 @@
     </button>
 
     <script>
-        let CONFIG = null;
+        const CONFIG = window.THEATER_CONFIG || {
+            theaterSettings: {
+                baseSeatPrice: 18.00,
+                rows: ['A', 'B', 'C', 'D'],
+                seatColumnsCount: 8,
+                occupiedSeats: ['B3', 'B4', 'C5']
+            },
+            featureFilms: [],
+            concessions: []
+        };
+
         let selectedMovie = null;
         let selectedTime = null;
         let selectedSeats = [];
@@ -127,125 +192,6 @@
         function returnToHub() {
             window.location.href = window.location.pathname.includes('/src/theater') ? '../index.html' : '/';
         }
-
-        // Build entire authenticated DOM programmatically
-        window.initializeProtectedContent = function() {
-            if (typeof window.getTheaterConfig !== 'function') return;
-            CONFIG = window.getTheaterConfig();
-            if (!CONFIG) return;
-
-            // Reconstruct Real Header
-            const root = document.getElementById('app-root');
-            root.innerHTML = `
-                <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
-                    <div class="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-                        <div class="flex items-center gap-3 cursor-pointer" onclick="navigate('hero')">
-                            <div class="w-8 h-8 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans">CP</div>
-                            <div class="font-serif tracking-wide text-xl">
-                                Chowaniec <span class="text-gray-400 italic font-light text-base">Theaters</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="navigate('hero')" class="nav-tab px-4 py-2 text-xs font-medium rounded-full transition-colors text-black bg-gray-100" data-view="hero">Now Showing</button>
-                            <button onclick="navigate('my-tickets')" class="nav-tab px-4 py-2 text-xs font-medium rounded-full transition-colors text-gray-500 hover:text-black" data-view="my-tickets">My Passes</button>
-                        </div>
-                    </div>
-                </header>
-
-                <main class="flex-1 max-w-6xl mx-auto px-6 py-10 w-full">
-                    <!-- HERO -->
-                    <section id="view-hero" class="theater-view space-y-12 fade-in">
-                        <div class="max-w-2xl">
-                            <p class="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2 font-medium">Auditorium Screening Hub</p>
-                            <h1 class="text-4xl font-serif text-black mb-3">Feature Presentations</h1>
-                            <p class="text-gray-400 font-light text-base">Select a screening to reserve laser-projected auditorium seating.</p>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8" id="movies-grid"></div>
-                    </section>
-
-                    <!-- BOOKING -->
-                    <section id="view-booking" class="theater-view hidden max-w-4xl mx-auto space-y-8 fade-in">
-                        <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6">
-                            <div>
-                                <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block mb-1">Reserving Seats</span>
-                                <h2 id="booking-movie-title" class="text-2xl font-serif text-black">--</h2>
-                                <p id="booking-movie-meta" class="text-xs font-mono text-gray-500 mt-1 font-light">--</p>
-                            </div>
-                            <div class="flex flex-wrap gap-2" id="showtime-picker"></div>
-                        </div>
-
-                        <div class="bg-white p-8 sm:p-12 rounded-3xl border border-gray-100 shadow-sm space-y-10">
-                            <div class="space-y-3 text-center max-w-md mx-auto">
-                                <div class="cinema-screen w-full"></div>
-                                <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400">Curved Laser Screen</span>
-                            </div>
-                            <div class="flex flex-col items-center gap-3" id="seat-grid"></div>
-                            <div class="flex justify-center items-center gap-6 pt-4 border-t border-gray-100 text-xs font-mono text-gray-500">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-4 h-4 rounded-md bg-gray-50 border border-gray-200"></div>
-                                    <span id="legend-price">Available</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <div class="w-4 h-4 rounded-md bg-black text-white"></div>
-                                    <span>Selected</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <div class="w-4 h-4 rounded-md bg-gray-200 border border-gray-300 opacity-40"></div>
-                                    <span>Reserved</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
-                            <div>
-                                <h3 class="text-lg font-medium text-black">Artisan Concessions</h3>
-                                <p class="text-xs text-gray-400 font-light">Delivered directly to your auditorium row before showtime.</p>
-                            </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="concession-grid"></div>
-                        </div>
-
-                        <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-6">
-                            <div>
-                                <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Selected Seats</span>
-                                <span id="summary-seats" class="text-sm font-medium text-black">None chosen</span>
-                            </div>
-                            <div class="flex items-center gap-6">
-                                <div class="text-right">
-                                    <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Total</span>
-                                    <span id="summary-total" class="text-2xl font-semibold font-serif text-black">$0.00</span>
-                                </div>
-                                <button id="btn-confirm-booking" onclick="finalizeBooking()" disabled class="bg-black text-white px-8 py-3.5 rounded-full font-medium hover:bg-gray-800 disabled:opacity-30 transition-all shadow-md">
-                                    Reserve Passes
-                                </button>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- PASSES -->
-                    <section id="view-my-tickets" class="theater-view hidden max-w-3xl mx-auto space-y-10 fade-in">
-                        <div class="flex justify-between items-end border-b border-gray-100 pb-4">
-                            <div>
-                                <h1 class="text-3xl font-serif text-black">Active Passes</h1>
-                                <p class="text-gray-400 font-light text-sm">Present your digital pass at the auditorium podium.</p>
-                            </div>
-                        </div>
-                        <div id="tickets-container" class="space-y-6"></div>
-                    </section>
-                </main>
-
-                <footer class="mt-auto border-t border-gray-100 py-8 text-xs font-mono text-gray-400">
-                    <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <span>&copy; Chowaniec Premiere Theaters &bull; All Rights Reserved</span>
-                        <div class="flex items-center gap-6">
-                            <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 4K Laser Projection Active</span>
-                        </div>
-                    </div>
-                </footer>
-            `;
-
-            renderMovies();
-            if (window.lucide) lucide.createIcons();
-        };
 
         function navigate(viewName) {
             document.querySelectorAll('.theater-view').forEach(v => v.classList.add('hidden'));
@@ -268,7 +214,7 @@
 
         function renderMovies() {
             const grid = document.getElementById('movies-grid');
-            if (!grid || !CONFIG || !CONFIG.featureFilms) return;
+            if (!grid || !CONFIG.featureFilms) return;
 
             grid.innerHTML = CONFIG.featureFilms.map(m => {
                 const effectivePrice = (CONFIG.theaterSettings.baseSeatPrice * (m.priceMultiplier || 1.0)).toFixed(2);
@@ -492,7 +438,13 @@
             if (window.lucide) lucide.createIcons();
         }
 
+        window.initializeProtectedContent = function() {
+            renderMovies();
+            if (window.lucide) lucide.createIcons();
+        };
+
         window.addEventListener('DOMContentLoaded', () => {
+            renderMovies();
             if (window.isAppAuthorized && window.isAppAuthorized()) {
                 window.initializeProtectedContent();
             }
