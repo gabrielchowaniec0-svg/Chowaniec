@@ -3,27 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chowaniec Meet &bull; Production Room</title>
+  <title>Chowaniec Meet &bull; Production Studio</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Daily.co SDK -->
   <script src="https://unpkg.com/@daily-co/daily-js"></script>
-  <!-- Network Auth Protection -->
+  <!-- Security Gate & Passcodes -->
   <script src="../passwords.js"></script>
   <script src="../auth-gate.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     body {
       font-family: 'Outfit', sans-serif;
-      background-color: #202124; /* Google Meet Dark Background */
+      background-color: #202124;
       color: #e8eaed;
       overflow: hidden;
     }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
     
-    /* Google Meet bottom pill transition */
     .meet-btn {
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -40,14 +39,19 @@
   <!-- ================= LOBBY / PRE-JOIN MODAL ================= -->
   <div id="lobby-screen" class="fixed inset-0 bg-[#202124] z-50 flex items-center justify-center p-6">
     <div class="max-w-md w-full bg-[#282a2d] border border-white/10 p-8 rounded-3xl shadow-2xl space-y-6">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black font-serif font-bold text-sm">
-          CP
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black font-serif font-bold text-sm">
+            CP
+          </div>
+          <div>
+            <h2 class="text-xl font-medium text-white tracking-wide">Chowaniec Meet</h2>
+            <p class="text-xs text-zinc-400 font-light">Theater & Production Stage</p>
+          </div>
         </div>
-        <div>
-          <h2 class="text-xl font-medium text-white tracking-wide">Chowaniec Meet</h2>
-          <p class="text-xs text-zinc-400 font-light">Theater & Production Broadcast</p>
-        </div>
+        <span id="lobby-code-badge" class="hidden text-xs font-mono px-3 py-1 bg-white/5 border border-white/10 rounded-full text-sky-400">
+          Room Linked
+        </span>
       </div>
 
       <div class="space-y-4">
@@ -58,8 +62,12 @@
         </div>
 
         <div>
-          <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Daily.co Room URL</label>
-          <input type="url" id="room-url-input" placeholder="https://your-domain.daily.co/production" value="https://chowaniec.daily.co/production" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
+          <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Meeting Code / Room Target</label>
+          <div class="relative">
+            <input type="text" id="room-code-input" placeholder="1234567890" value="production" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
+            <span class="absolute right-4 top-3 text-[10px] font-mono text-zinc-500 uppercase">Daily.co</span>
+          </div>
+          <p id="room-subtext" class="text-[11px] text-zinc-500 mt-1">Connecting via chowaniec.daily.co/&lt;code&gt;</p>
         </div>
       </div>
 
@@ -74,6 +82,8 @@
   <header class="p-4 px-6 flex justify-between items-center z-10">
     <div class="flex items-center gap-3">
       <span class="text-sm font-medium tracking-wide text-zinc-200">Theater Production Stage</span>
+      <span class="text-zinc-600">|</span>
+      <span id="active-code-display" class="text-xs font-mono text-zinc-400">ID: --</span>
       <span class="text-zinc-600">|</span>
       <span id="clock" class="text-xs font-mono text-zinc-400">00:00 PM</span>
     </div>
@@ -94,14 +104,12 @@
 
   <!-- ================= MAIN STAGE / VIDEO GRID ================= -->
   <main class="flex-1 px-6 pb-2 relative flex gap-4 overflow-hidden">
-    <!-- Daily Video Frame -->
     <div id="video-stage" class="flex-1 h-full rounded-2xl overflow-hidden bg-[#18191b] border border-white/5 relative flex items-center justify-center">
       <div id="daily-container" class="w-full h-full"></div>
     </div>
 
-    <!-- ================= RIGHT DRAWER (PANELS: FORMS, POLLS, PEOPLE) ================= -->
+    <!-- ================= RIGHT DRAWER (FORMS, POLLS, PEOPLE) ================= -->
     <aside id="side-drawer" class="w-80 h-full bg-[#282a2d] border border-white/10 rounded-2xl flex flex-col justify-between hidden p-5 shadow-2xl transition-all">
-      <!-- Drawer Header -->
       <div class="flex items-center justify-between border-b border-white/10 pb-4">
         <h3 id="drawer-title" class="text-sm font-semibold text-white tracking-wide">Activities</h3>
         <button onclick="toggleDrawer(null)" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white">
@@ -109,46 +117,45 @@
         </button>
       </div>
 
-      <!-- Drawer Content Dynamic Area -->
       <div id="drawer-body" class="flex-1 py-4 overflow-y-auto space-y-4">
-        <!-- Injected dynamically: Forms, Polls, or Roles -->
+        <!-- Injected dynamically -->
       </div>
     </aside>
   </main>
 
   <!-- ================= BOTTOM GOOGLE MEET CONTROL BAR ================= -->
   <footer class="h-20 px-6 flex items-center justify-between border-t border-white/5 bg-[#202124]">
-    <!-- Meeting Details -->
     <div class="hidden sm:flex items-center gap-2 text-xs font-mono text-zinc-400">
       <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
       <span id="current-user-role-label">Connecting...</span>
     </div>
 
-    <!-- Main Pill Action Controls (Meet Style) -->
+    <!-- Main Pill Action Controls -->
     <div class="flex items-center gap-3">
-      <!-- Mic Toggle -->
       <button id="btn-mic" onclick="toggleAudio()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
         <i data-lucide="mic" id="icon-mic" class="w-5 h-5"></i>
       </button>
 
-      <!-- Cam Toggle -->
       <button id="btn-cam" onclick="toggleVideo()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
         <i data-lucide="video" id="icon-cam" class="w-5 h-5"></i>
       </button>
 
-      <!-- Screen Share -->
       <button id="btn-share" onclick="toggleScreenShare()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
         <i data-lucide="screen-share" id="icon-share" class="w-5 h-5"></i>
       </button>
 
-      <!-- Leave Call -->
       <button onclick="leaveMeeting()" class="meet-btn px-6 h-12 rounded-full bg-red-600 hover:bg-red-500 text-white font-medium flex items-center justify-center gap-2 shadow-lg">
         <i data-lucide="phone-off" class="w-5 h-5"></i>
       </button>
     </div>
 
-    <!-- Extra Tool Buttons (Forms, Polls, Roster) -->
+    <!-- Extra Action Buttons -->
     <div class="flex items-center gap-2">
+      <!-- Copy Invite Link -->
+      <button onclick="copyInviteLink()" title="Copy Meeting Link" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+        <i data-lucide="link-2" class="w-4 h-4"></i>
+      </button>
+
       <!-- Quick Polls -->
       <button onclick="toggleDrawer('polls')" title="Quick Polls" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
         <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
@@ -174,29 +181,26 @@
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
-    <div id="popup-content" class="space-y-3">
-      <!-- Form or Poll injected here -->
-    </div>
+    <div id="popup-content" class="space-y-3"></div>
   </div>
 
-  <!-- ================= SCRIPTS ================= -->
   <script>
     // --- STATE MANAGEMENT ---
+    const DAILY_DOMAIN = 'chowaniec.daily.co';
     let callFrame = null;
     let localUserName = '';
+    let currentMeetingCode = 'production';
     let currentDrawerTab = null;
     let isAudioMuted = false;
     let isVideoMuted = false;
     let isScreenSharing = false;
 
-    // Authority Tracking (Director: 1, Co-Director: 1, Guest: max 4)
     let sessionRoles = {
-      director: null,     // Name or participant ID
-      coDirector: null,   // Name or participant ID
-      guests: []          // List of names/IDs
+      director: null,
+      coDirector: null,
+      guests: []
     };
 
-    // Pre-saved Forms for quick distribution
     let productionForms = [
       {
         id: 'scene-review',
@@ -210,8 +214,32 @@
       }
     ];
 
-    // Live Active Poll
     let activePoll = null;
+
+    // --- URL PARSING (?1234567890 or ?room=1234567890) ---
+    function parseMeetingCodeFromUrl() {
+      const search = window.location.search.replace(/^\?/, '').trim();
+      if (!search) return;
+
+      let extractedCode = search;
+      // Handle standard queries like ?room=1234567890 or direct query strings like ?1234567890
+      if (search.includes('=')) {
+        const params = new URLSearchParams(window.location.search);
+        extractedCode = params.get('room') || params.get('id') || search.split('=')[1];
+      }
+
+      if (extractedCode) {
+        currentMeetingCode = extractedCode;
+        const codeInput = document.getElementById('room-code-input');
+        if (codeInput) {
+          codeInput.value = extractedCode;
+          codeInput.disabled = true;
+          codeInput.classList.add('opacity-75', 'bg-black/40');
+        }
+        document.getElementById('lobby-code-badge').classList.remove('hidden');
+        document.getElementById('room-subtext').innerText = `Joining meeting ID: ${extractedCode}`;
+      }
+    }
 
     // --- TIME TICKER ---
     setInterval(() => {
@@ -219,24 +247,29 @@
       document.getElementById('clock').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }, 1000);
 
-    // --- 1. INITIALIZE & JOIN MEETING ---
+    // --- JOIN MEETING ---
     async function joinMeeting() {
       const nameInput = document.getElementById('user-name-input').value.trim();
-      const roomUrl = document.getElementById('room-url-input').value.trim();
+      const codeInput = document.getElementById('room-code-input').value.trim();
 
       if (!nameInput) {
         alert("Please specify your name.");
         return;
       }
-      if (!roomUrl) {
-        alert("Please enter a valid Daily.co room URL.");
+      if (!codeInput) {
+        alert("Please enter a meeting code or room name.");
         return;
       }
 
       localUserName = nameInput;
+      currentMeetingCode = codeInput;
+      document.getElementById('active-code-display').innerText = `ID: ${currentMeetingCode}`;
       document.getElementById('lobby-screen').classList.add('hidden');
 
-      // Initialize Daily call frame embedded inside our container
+      const targetUrl = codeInput.startsWith('http') 
+        ? codeInput 
+        : `https://${DAILY_DOMAIN}/${codeInput}`;
+
       callFrame = window.DailyIframe.createFrame(document.getElementById('daily-container'), {
         iframeStyle: {
           width: '100%',
@@ -249,26 +282,31 @@
         showFullscreenButton: false
       });
 
-      // Daily Event Listeners
       callFrame.on('joined-meeting', handleMeetingJoined);
       callFrame.on('participant-joined', handleParticipantChange);
       callFrame.on('participant-left', handleParticipantChange);
-      callFrame.on('app-message', handleAppMessage); // Receives custom Forms & Polls
+      callFrame.on('app-message', handleAppMessage);
 
-      // Join the Daily Room
       await callFrame.join({
-        url: roomUrl,
+        url: targetUrl,
         userName: localUserName
       });
     }
 
-    // --- 2. AUTHORITY & ROLE ASSIGNMENT ---
-    function handleMeetingJoined(e) {
+    // --- COPY INVITE LINK ---
+    function copyInviteLink() {
+      const origin = window.location.origin;
+      const inviteUrl = `${origin}/meet/join?${currentMeetingCode}`;
+      navigator.clipboard.writeText(inviteUrl).then(() => {
+        alert(`Meeting link copied to clipboard:\n${inviteUrl}`);
+      });
+    }
+
+    // --- AUTHORITY SYSTEM ---
+    function handleMeetingJoined() {
       const participants = callFrame.participants();
       const count = Object.keys(participants).length;
 
-      // FIRST PERSON LOGIC:
-      // If you are the first person, or if your name is Vicky or Gabriel, claim Director
       const normalizedName = localUserName.toLowerCase();
       const isPriorityName = normalizedName.includes('gabriel') || normalizedName.includes('vicky');
 
@@ -318,7 +356,6 @@
 
       document.getElementById('guest-count').innerText = `${sessionRoles.guests.length}/4`;
 
-      // Update role label on footer
       let myRole = 'Guest';
       if (sessionRoles.director === localUserName) myRole = 'Director';
       else if (sessionRoles.coDirector === localUserName) myRole = 'Co-Director';
@@ -326,7 +363,7 @@
       document.getElementById('current-user-role-label').innerText = `${localUserName} (${myRole})`;
     }
 
-    // --- 3. HARDWARE TOGGLES (MIC / CAM / SCREEN) ---
+    // --- HARDWARE CONTROLS ---
     function toggleAudio() {
       isAudioMuted = !isAudioMuted;
       callFrame.setLocalAudio(!isAudioMuted);
@@ -376,7 +413,7 @@
       window.location.href = '../theater/index.html';
     }
 
-    // --- 4. DATA MESSAGING: FORMS & POLLS ---
+    // --- FORMS & POLLS MESSAGING ---
     function handleAppMessage(evt) {
       const msg = evt.data;
 
@@ -424,7 +461,7 @@
       document.getElementById('broadcast-popup').classList.add('hidden');
     }
 
-    // --- 5. DRAWER PANELS ---
+    // --- DRAWER PANELS ---
     function toggleDrawer(tab) {
       const drawer = document.getElementById('side-drawer');
       if (!tab || currentDrawerTab === tab) {
@@ -523,6 +560,7 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      parseMeetingCodeFromUrl();
       lucide.createIcons();
     });
   </script>
