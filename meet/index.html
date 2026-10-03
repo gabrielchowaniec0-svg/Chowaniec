@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chowaniec Meet &bull; Production Room</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Daily.co SDK -->
+  <script src="https://unpkg.com/@daily-co/daily-js"></script>
+  <!-- Network Auth Protection -->
+  <script src="../passwords.js"></script>
+  <script src="../auth-gate.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: #202124; /* Google Meet Dark Background */
+      color: #e8eaed;
+      overflow: hidden;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    
+    /* Google Meet bottom pill transition */
+    .meet-btn {
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .meet-btn:hover {
+      transform: scale(1.05);
+    }
+    .meet-btn:active {
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between selection:bg-sky-500/20">
+
+  <!-- ================= LOBBY / PRE-JOIN MODAL ================= -->
+  <div id="lobby-screen" class="fixed inset-0 bg-[#202124] z-50 flex items-center justify-center p-6">
+    <div class="max-w-md w-full bg-[#282a2d] border border-white/10 p-8 rounded-3xl shadow-2xl space-y-6">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black font-serif font-bold text-sm">
+          CP
+        </div>
+        <div>
+          <h2 class="text-xl font-medium text-white tracking-wide">Chowaniec Meet</h2>
+          <p class="text-xs text-zinc-400 font-light">Theater & Production Broadcast</p>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Your Name</label>
+          <input type="text" id="user-name-input" placeholder="e.g. Gabriel, Vicky, or Guest" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none transition-all">
+          <p class="text-[11px] text-zinc-500 mt-1">Naming yourself 'Vicky' or 'Gabriel' grants automatic Host priority.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Daily.co Room URL</label>
+          <input type="url" id="room-url-input" placeholder="https://your-domain.daily.co/production" value="https://chowaniec.daily.co/production" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
+        </div>
+      </div>
+
+      <button onclick="joinMeeting()" class="w-full py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-medium text-sm transition-all shadow-lg flex items-center justify-center gap-2">
+        <span>Enter Production Studio</span>
+        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= TOP HUD (ROOM INFO & RANKS) ================= -->
+  <header class="p-4 px-6 flex justify-between items-center z-10">
+    <div class="flex items-center gap-3">
+      <span class="text-sm font-medium tracking-wide text-zinc-200">Theater Production Stage</span>
+      <span class="text-zinc-600">|</span>
+      <span id="clock" class="text-xs font-mono text-zinc-400">00:00 PM</span>
+    </div>
+
+    <!-- Live Ranks Display -->
+    <div class="flex items-center gap-2" id="authority-pills">
+      <span id="director-badge" class="hidden text-[11px] font-mono px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300">
+        Director: <strong id="director-name">Vacant</strong>
+      </span>
+      <span id="co-director-badge" class="hidden text-[11px] font-mono px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-300">
+        Co-Director: <strong id="co-director-name">Vacant</strong>
+      </span>
+      <span class="text-[11px] font-mono px-3 py-1 rounded-full bg-white/5 border border-white/10 text-zinc-300">
+        Guests: <strong id="guest-count">0/4</strong>
+      </span>
+    </div>
+  </header>
+
+  <!-- ================= MAIN STAGE / VIDEO GRID ================= -->
+  <main class="flex-1 px-6 pb-2 relative flex gap-4 overflow-hidden">
+    <!-- Daily Video Frame -->
+    <div id="video-stage" class="flex-1 h-full rounded-2xl overflow-hidden bg-[#18191b] border border-white/5 relative flex items-center justify-center">
+      <div id="daily-container" class="w-full h-full"></div>
+    </div>
+
+    <!-- ================= RIGHT DRAWER (PANELS: FORMS, POLLS, PEOPLE) ================= -->
+    <aside id="side-drawer" class="w-80 h-full bg-[#282a2d] border border-white/10 rounded-2xl flex flex-col justify-between hidden p-5 shadow-2xl transition-all">
+      <!-- Drawer Header -->
+      <div class="flex items-center justify-between border-b border-white/10 pb-4">
+        <h3 id="drawer-title" class="text-sm font-semibold text-white tracking-wide">Activities</h3>
+        <button onclick="toggleDrawer(null)" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Drawer Content Dynamic Area -->
+      <div id="drawer-body" class="flex-1 py-4 overflow-y-auto space-y-4">
+        <!-- Injected dynamically: Forms, Polls, or Roles -->
+      </div>
+    </aside>
+  </main>
+
+  <!-- ================= BOTTOM GOOGLE MEET CONTROL BAR ================= -->
+  <footer class="h-20 px-6 flex items-center justify-between border-t border-white/5 bg-[#202124]">
+    <!-- Meeting Details -->
+    <div class="hidden sm:flex items-center gap-2 text-xs font-mono text-zinc-400">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span id="current-user-role-label">Connecting...</span>
+    </div>
+
+    <!-- Main Pill Action Controls (Meet Style) -->
+    <div class="flex items-center gap-3">
+      <!-- Mic Toggle -->
+      <button id="btn-mic" onclick="toggleAudio()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
+        <i data-lucide="mic" id="icon-mic" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Cam Toggle -->
+      <button id="btn-cam" onclick="toggleVideo()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
+        <i data-lucide="video" id="icon-cam" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Screen Share -->
+      <button id="btn-share" onclick="toggleScreenShare()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
+        <i data-lucide="screen-share" id="icon-share" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Leave Call -->
+      <button onclick="leaveMeeting()" class="meet-btn px-6 h-12 rounded-full bg-red-600 hover:bg-red-500 text-white font-medium flex items-center justify-center gap-2 shadow-lg">
+        <i data-lucide="phone-off" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Extra Tool Buttons (Forms, Polls, Roster) -->
+    <div class="flex items-center gap-2">
+      <!-- Quick Polls -->
+      <button onclick="toggleDrawer('polls')" title="Quick Polls" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+        <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+      </button>
+
+      <!-- Form Maker / Broadcaster -->
+      <button onclick="toggleDrawer('forms')" title="Push Production Form" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+      </button>
+
+      <!-- Roster & Authority Delegation -->
+      <button onclick="toggleDrawer('roster')" title="Role Delegations" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+        <i data-lucide="users" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </footer>
+
+  <!-- ================= INCOMING FORM / POLL MODAL POPUP ================= -->
+  <div id="broadcast-popup" class="fixed bottom-24 left-8 max-w-sm w-full bg-[#282a2d] border border-sky-400/40 rounded-2xl p-5 shadow-2xl z-40 hidden animate-bounce">
+    <div class="flex justify-between items-start mb-3">
+      <span class="text-xs font-mono uppercase tracking-widest text-sky-400 font-semibold" id="popup-badge">Production Alert</span>
+      <button onclick="document.getElementById('broadcast-popup').classList.add('hidden')" class="text-zinc-400 hover:text-white">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div id="popup-content" class="space-y-3">
+      <!-- Form or Poll injected here -->
+    </div>
+  </div>
+
+  <!-- ================= SCRIPTS ================= -->
+  <script>
+    // --- STATE MANAGEMENT ---
+    let callFrame = null;
+    let localUserName = '';
+    let currentDrawerTab = null;
+    let isAudioMuted = false;
+    let isVideoMuted = false;
+    let isScreenSharing = false;
+
+    // Authority Tracking (Director: 1, Co-Director: 1, Guest: max 4)
+    let sessionRoles = {
+      director: null,     // Name or participant ID
+      coDirector: null,   // Name or participant ID
+      guests: []          // List of names/IDs
+    };
+
+    // Pre-saved Forms for quick distribution
+    let productionForms = [
+      {
+        id: 'scene-review',
+        title: 'Episode 1 Scene 3 Approval',
+        fields: ['Lighting Quality (1-10)', 'Audio Sync Status', 'Director Notes']
+      },
+      {
+        id: 'gear-check',
+        title: 'Stage Gear Checklist',
+        fields: ['Boom Mic Position', 'Lens Aperture Set', 'SD Card Backed Up']
+      }
+    ];
+
+    // Live Active Poll
+    let activePoll = null;
+
+    // --- TIME TICKER ---
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('clock').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }, 1000);
+
+    // --- 1. INITIALIZE & JOIN MEETING ---
+    async function joinMeeting() {
+      const nameInput = document.getElementById('user-name-input').value.trim();
+      const roomUrl = document.getElementById('room-url-input').value.trim();
+
+      if (!nameInput) {
+        alert("Please specify your name.");
+        return;
+      }
+      if (!roomUrl) {
+        alert("Please enter a valid Daily.co room URL.");
+        return;
+      }
+
+      localUserName = nameInput;
+      document.getElementById('lobby-screen').classList.add('hidden');
+
+      // Initialize Daily call frame embedded inside our container
+      callFrame = window.DailyIframe.createFrame(document.getElementById('daily-container'), {
+        iframeStyle: {
+          width: '100%',
+          height: '100%',
+          border: '0',
+          borderRadius: '1rem',
+          backgroundColor: '#18191b'
+        },
+        showLeaveButton: false,
+        showFullscreenButton: false
+      });
+
+      // Daily Event Listeners
+      callFrame.on('joined-meeting', handleMeetingJoined);
+      callFrame.on('participant-joined', handleParticipantChange);
+      callFrame.on('participant-left', handleParticipantChange);
+      callFrame.on('app-message', handleAppMessage); // Receives custom Forms & Polls
+
+      // Join the Daily Room
+      await callFrame.join({
+        url: roomUrl,
+        userName: localUserName
+      });
+    }
+
+    // --- 2. AUTHORITY & ROLE ASSIGNMENT ---
+    function handleMeetingJoined(e) {
+      const participants = callFrame.participants();
+      const count = Object.keys(participants).length;
+
+      // FIRST PERSON LOGIC:
+      // If you are the first person, or if your name is Vicky or Gabriel, claim Director
+      const normalizedName = localUserName.toLowerCase();
+      const isPriorityName = normalizedName.includes('gabriel') || normalizedName.includes('vicky');
+
+      if (count === 1 || isPriorityName) {
+        if (!sessionRoles.director || isPriorityName) {
+          sessionRoles.director = localUserName;
+        }
+      } else if (!sessionRoles.coDirector) {
+        sessionRoles.coDirector = localUserName;
+      } else {
+        if (sessionRoles.guests.length < 4) {
+          sessionRoles.guests.push(localUserName);
+        } else {
+          alert("Maximum 4 guest limit reached for this session.");
+        }
+      }
+
+      broadcastRoleSync();
+      updateAuthorityUI();
+    }
+
+    function handleParticipantChange() {
+      updateAuthorityUI();
+    }
+
+    function broadcastRoleSync() {
+      if (callFrame) {
+        callFrame.sendAppMessage({
+          type: 'ROLE_SYNC',
+          roles: sessionRoles
+        }, '*');
+      }
+    }
+
+    function updateAuthorityUI() {
+      const dirBadge = document.getElementById('director-badge');
+      const coDirBadge = document.getElementById('co-director-badge');
+
+      if (sessionRoles.director) {
+        dirBadge.classList.remove('hidden');
+        document.getElementById('director-name').innerText = sessionRoles.director;
+      }
+      if (sessionRoles.coDirector) {
+        coDirBadge.classList.remove('hidden');
+        document.getElementById('co-director-name').innerText = sessionRoles.coDirector;
+      }
+
+      document.getElementById('guest-count').innerText = `${sessionRoles.guests.length}/4`;
+
+      // Update role label on footer
+      let myRole = 'Guest';
+      if (sessionRoles.director === localUserName) myRole = 'Director';
+      else if (sessionRoles.coDirector === localUserName) myRole = 'Co-Director';
+
+      document.getElementById('current-user-role-label').innerText = `${localUserName} (${myRole})`;
+    }
+
+    // --- 3. HARDWARE TOGGLES (MIC / CAM / SCREEN) ---
+    function toggleAudio() {
+      isAudioMuted = !isAudioMuted;
+      callFrame.setLocalAudio(!isAudioMuted);
+      const btn = document.getElementById('btn-mic');
+      const icon = document.getElementById('icon-mic');
+
+      if (isAudioMuted) {
+        btn.classList.replace('bg-[#3c4043]', 'bg-red-600');
+        icon.setAttribute('data-lucide', 'mic-off');
+      } else {
+        btn.classList.replace('bg-red-600', 'bg-[#3c4043]');
+        icon.setAttribute('data-lucide', 'mic');
+      }
+      lucide.createIcons();
+    }
+
+    function toggleVideo() {
+      isVideoMuted = !isVideoMuted;
+      callFrame.setLocalVideo(!isVideoMuted);
+      const btn = document.getElementById('btn-cam');
+      const icon = document.getElementById('icon-cam');
+
+      if (isVideoMuted) {
+        btn.classList.replace('bg-[#3c4043]', 'bg-red-600');
+        icon.setAttribute('data-lucide', 'video-off');
+      } else {
+        btn.classList.replace('bg-red-600', 'bg-[#3c4043]');
+        icon.setAttribute('data-lucide', 'video');
+      }
+      lucide.createIcons();
+    }
+
+    async function toggleScreenShare() {
+      if (!isScreenSharing) {
+        await callFrame.startScreenShare();
+        isScreenSharing = true;
+        document.getElementById('btn-share').classList.replace('bg-[#3c4043]', 'bg-sky-600');
+      } else {
+        await callFrame.stopScreenShare();
+        isScreenSharing = false;
+        document.getElementById('btn-share').classList.replace('bg-sky-600', 'bg-[#3c4043]');
+      }
+    }
+
+    function leaveMeeting() {
+      if (callFrame) callFrame.leave();
+      window.location.href = '../theater/index.html';
+    }
+
+    // --- 4. DATA MESSAGING: FORMS & POLLS ---
+    function handleAppMessage(evt) {
+      const msg = evt.data;
+
+      if (msg.type === 'ROLE_SYNC') {
+        sessionRoles = msg.roles;
+        updateAuthorityUI();
+      } else if (msg.type === 'PUSH_FORM') {
+        displayBroadcastPopup('Form Received: ' + msg.form.title, `
+          <p class="text-xs text-zinc-300 font-light mb-2">Fill out before continuing shoot:</p>
+          <div class="space-y-2">
+            ${msg.form.fields.map(f => `<input type="text" placeholder="${f}" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2 text-xs text-white">`).join('')}
+            <button onclick="submitFormResponse()" class="w-full py-2 bg-sky-500 rounded-lg text-xs font-medium text-white">Submit to Director</button>
+          </div>
+        `);
+      } else if (msg.type === 'PUSH_POLL') {
+        activePoll = msg.poll;
+        displayBroadcastPopup('Live Poll', `
+          <p class="text-sm font-medium text-white mb-2">${msg.poll.question}</p>
+          <div class="space-y-1.5">
+            ${msg.poll.options.map((opt, i) => `
+              <button onclick="votePoll(${i})" class="w-full text-left p-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-200 border border-white/5">
+                ${opt}
+              </button>
+            `).join('')}
+          </div>
+        `);
+      }
+    }
+
+    function displayBroadcastPopup(badge, innerHtml) {
+      const popup = document.getElementById('broadcast-popup');
+      document.getElementById('popup-badge').innerText = badge;
+      document.getElementById('popup-content').innerHTML = innerHtml;
+      popup.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function submitFormResponse() {
+      alert("Form answers submitted to the session records.");
+      document.getElementById('broadcast-popup').classList.add('hidden');
+    }
+
+    function votePoll(optionIndex) {
+      alert(`Vote registered for: ${activePoll.options[optionIndex]}`);
+      document.getElementById('broadcast-popup').classList.add('hidden');
+    }
+
+    // --- 5. DRAWER PANELS ---
+    function toggleDrawer(tab) {
+      const drawer = document.getElementById('side-drawer');
+      if (!tab || currentDrawerTab === tab) {
+        drawer.classList.add('hidden');
+        currentDrawerTab = null;
+        return;
+      }
+
+      currentDrawerTab = tab;
+      drawer.classList.remove('hidden');
+
+      const title = document.getElementById('drawer-title');
+      const body = document.getElementById('drawer-body');
+
+      if (tab === 'forms') {
+        title.innerText = 'Pre-made Production Forms';
+        body.innerHTML = `
+          <div class="space-y-4">
+            <p class="text-xs text-zinc-400 font-light">Push forms instantly to all participant screens:</p>
+            ${productionForms.map((f, i) => `
+              <div class="p-4 rounded-xl bg-white/5 border border-white/5 space-y-2">
+                <h4 class="text-xs font-semibold text-white">${f.title}</h4>
+                <p class="text-[11px] text-zinc-400">${f.fields.length} checklist fields</p>
+                <button onclick="broadcastForm(${i})" class="w-full py-1.5 bg-white text-black text-xs rounded-lg font-medium hover:bg-zinc-200 transition-colors">
+                  Push Form to Team
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else if (tab === 'polls') {
+        title.innerText = 'Launch Quick Poll';
+        body.innerHTML = `
+          <div class="space-y-3">
+            <label class="block text-xs font-mono text-zinc-400">POLL QUESTION</label>
+            <input type="text" id="poll-q" placeholder="e.g., Approve Take 4?" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
+            
+            <label class="block text-xs font-mono text-zinc-400 mt-2">OPTIONS (COMMA-SEPARATED)</label>
+            <input type="text" id="poll-opts" placeholder="Yes, No, Needs Recut" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
+            
+            <button onclick="broadcastQuickPoll()" class="w-full mt-4 py-2.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-medium transition-colors">
+              Broadcast Poll Now
+            </button>
+          </div>
+        `;
+      } else if (tab === 'roster') {
+        title.innerText = 'Role Management';
+        body.innerHTML = `
+          <div class="space-y-3 text-xs">
+            <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+              <span class="text-zinc-500 font-mono block text-[10px]">DIRECTOR (MAX 1)</span>
+              <span class="text-white font-medium">${sessionRoles.director || 'None'}</span>
+            </div>
+            <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+              <span class="text-zinc-500 font-mono block text-[10px]">CO-DIRECTOR (MAX 1)</span>
+              <span class="text-white font-medium">${sessionRoles.coDirector || 'None'}</span>
+            </div>
+            <div class="p-3 bg-white/5 rounded-xl border border-white/5">
+              <span class="text-zinc-500 font-mono block text-[10px]">GUESTS (MAX 4)</span>
+              <span class="text-white font-medium">${sessionRoles.guests.join(', ') || 'No guests present'}</span>
+            </div>
+          </div>
+        `;
+      }
+      lucide.createIcons();
+    }
+
+    function broadcastForm(index) {
+      const selectedForm = productionForms[index];
+      if (callFrame) {
+        callFrame.sendAppMessage({
+          type: 'PUSH_FORM',
+          form: selectedForm
+        }, '*');
+      }
+      alert(`Broadcasting '${selectedForm.title}' to everyone in call!`);
+    }
+
+    function broadcastQuickPoll() {
+      const q = document.getElementById('poll-q').value.trim();
+      const opts = document.getElementById('poll-opts').value.split(',').map(s => s.trim()).filter(Boolean);
+
+      if (!q || opts.length < 2) {
+        alert("Please enter a question and at least 2 comma-separated options.");
+        return;
+      }
+
+      if (callFrame) {
+        callFrame.sendAppMessage({
+          type: 'PUSH_POLL',
+          poll: { question: q, options: opts }
+        }, '*');
+      }
+      alert("Poll dispatched live to the theater crew!");
+      toggleDrawer(null);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
