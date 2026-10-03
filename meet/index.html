@@ -22,7 +22,6 @@
       overflow: hidden;
     }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
-    
     .meet-btn {
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -92,7 +91,7 @@
         <span id="current-user-role-label">Ready</span>
       </div>
 
-      <!-- Meet Action Buttons -->
+      <!-- Action Buttons -->
       <div class="flex items-center gap-3">
         <button id="btn-mic" onclick="toggleAudio()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
           <i data-lucide="mic" id="icon-mic" class="w-5 h-5"></i>
@@ -224,7 +223,6 @@
       window.location.href = window.location.pathname.includes('/src/meet') ? '../index.html' : '/';
     }
 
-    // Direct parser: supports /meet?1234567890 or /meet?room=1234567890
     function parseMeetingCodeFromUrl() {
       const search = window.location.search.replace(/^\?/, '').trim();
       if (!search) return;
@@ -303,7 +301,6 @@
       }
     }
 
-    // Copies https://chowaniec.net/meet?<code> directly
     function copyInviteLink() {
       const origin = window.location.origin;
       const inviteUrl = `${origin}/meet?${currentMeetingCode}`;
