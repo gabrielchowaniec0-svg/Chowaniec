@@ -10,19 +10,26 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Daily.co SDK -->
   <script src="https://unpkg.com/@daily-co/daily-js"></script>
-  <!-- Security Gate & Passcodes -->
+  <!-- Security Gate & Passcodes (Identical to Theater) -->
   <script src="../passwords.js"></script>
   <script src="../auth-gate.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
     body {
       font-family: 'Outfit', sans-serif;
       background-color: #202124;
       color: #e8eaed;
       overflow: hidden;
     }
+    .font-serif { font-family: 'Playfair Display', serif; }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
-    
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3c4043; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #5f6368; }
+
     .meet-btn {
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -34,10 +41,109 @@
     }
   </style>
 </head>
-<body class="h-screen w-screen flex flex-col justify-between selection:bg-sky-500/20">
+<body class="h-screen w-screen flex flex-col justify-between selection:bg-sky-500/20 relative">
 
-  <!-- ================= LOBBY / PRE-JOIN MODAL ================= -->
-  <div id="lobby-screen" class="fixed inset-0 bg-[#202124] z-50 flex items-center justify-center p-6">
+  <!-- Main Root Container: TARGETED AND MANAGED BY AUTH-GATE.JS -->
+  <div id="app-root" class="flex-1 flex flex-col h-full w-full justify-between transition-all duration-500">
+
+    <!-- ================= TOP HUD ================= -->
+    <header class="p-4 px-6 flex justify-between items-center z-10 bg-[#202124] border-b border-white/5">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center text-black font-serif font-bold text-xs">
+          CM
+        </div>
+        <span class="text-sm font-medium tracking-wide text-zinc-200">Theater Production Stage</span>
+        <span class="text-zinc-600">|</span>
+        <span id="active-code-display" class="text-xs font-mono text-zinc-400">ID: --</span>
+        <span class="text-zinc-600">|</span>
+        <span id="clock" class="text-xs font-mono text-zinc-400">00:00 PM</span>
+      </div>
+
+      <!-- Live Ranks Display -->
+      <div class="flex items-center gap-2" id="authority-pills">
+        <span id="director-badge" class="hidden text-[11px] font-mono px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300">
+          Director: <strong id="director-name">Vacant</strong>
+        </span>
+        <span id="co-director-badge" class="hidden text-[11px] font-mono px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-300">
+          Co-Director: <strong id="co-director-name">Vacant</strong>
+        </span>
+        <span class="text-[11px] font-mono px-3 py-1 rounded-full bg-white/5 border border-white/10 text-zinc-300">
+          Guests: <strong id="guest-count">0/4</strong>
+        </span>
+      </div>
+    </header>
+
+    <!-- ================= MAIN STAGE ================= -->
+    <main class="flex-1 px-6 py-4 relative flex gap-4 overflow-hidden">
+      <!-- Daily Video Frame -->
+      <div id="video-stage" class="flex-1 h-full rounded-2xl overflow-hidden bg-[#18191b] border border-white/5 relative flex items-center justify-center">
+        <div id="daily-container" class="w-full h-full"></div>
+      </div>
+
+      <!-- Right Drawer (Activities: Forms, Polls, People) -->
+      <aside id="side-drawer" class="w-80 h-full bg-[#282a2d] border border-white/10 rounded-2xl flex flex-col justify-between hidden p-5 shadow-2xl transition-all">
+        <div class="flex items-center justify-between border-b border-white/10 pb-4">
+          <h3 id="drawer-title" class="text-sm font-semibold text-white tracking-wide">Activities</h3>
+          <button onclick="toggleDrawer(null)" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div id="drawer-body" class="flex-1 py-4 overflow-y-auto space-y-4">
+          <!-- Dynamic Form/Poll options -->
+        </div>
+      </aside>
+    </main>
+
+    <!-- ================= BOTTOM CONTROLS ================= -->
+    <footer class="h-20 px-6 flex items-center justify-between border-t border-white/5 bg-[#202124]">
+      <div class="hidden sm:flex items-center gap-2 text-xs font-mono text-zinc-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="current-user-role-label">Studio Ready</span>
+      </div>
+
+      <!-- Action Pills -->
+      <div class="flex items-center gap-3">
+        <button id="btn-mic" onclick="toggleAudio()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
+          <i data-lucide="mic" id="icon-mic" class="w-5 h-5"></i>
+        </button>
+
+        <button id="btn-cam" onclick="toggleVideo()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
+          <i data-lucide="video" id="icon-cam" class="w-5 h-5"></i>
+        </button>
+
+        <button id="btn-share" onclick="toggleScreenShare()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
+          <i data-lucide="screen-share" id="icon-share" class="w-5 h-5"></i>
+        </button>
+
+        <button onclick="leaveMeeting()" class="meet-btn px-6 h-12 rounded-full bg-red-600 hover:bg-red-500 text-white font-medium flex items-center justify-center gap-2 shadow-lg">
+          <i data-lucide="phone-off" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Tools -->
+      <div class="flex items-center gap-2">
+        <button onclick="copyInviteLink()" title="Copy Meeting Link" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="link-2" class="w-4 h-4"></i>
+        </button>
+
+        <button onclick="toggleDrawer('polls')" title="Quick Polls" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+        </button>
+
+        <button onclick="toggleDrawer('forms')" title="Push Production Form" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+        </button>
+
+        <button onclick="toggleDrawer('roster')" title="Role Delegations" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="users" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ================= PRE-JOIN LOBBY ================= -->
+  <div id="lobby-screen" class="fixed inset-0 bg-[#202124]/95 backdrop-blur-md z-40 flex items-center justify-center p-6">
     <div class="max-w-md w-full bg-[#282a2d] border border-white/10 p-8 rounded-3xl shadow-2xl space-y-6">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -78,102 +184,7 @@
     </div>
   </div>
 
-  <!-- ================= TOP HUD (ROOM INFO & RANKS) ================= -->
-  <header class="p-4 px-6 flex justify-between items-center z-10">
-    <div class="flex items-center gap-3">
-      <span class="text-sm font-medium tracking-wide text-zinc-200">Theater Production Stage</span>
-      <span class="text-zinc-600">|</span>
-      <span id="active-code-display" class="text-xs font-mono text-zinc-400">ID: --</span>
-      <span class="text-zinc-600">|</span>
-      <span id="clock" class="text-xs font-mono text-zinc-400">00:00 PM</span>
-    </div>
-
-    <!-- Live Ranks Display -->
-    <div class="flex items-center gap-2" id="authority-pills">
-      <span id="director-badge" class="hidden text-[11px] font-mono px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300">
-        Director: <strong id="director-name">Vacant</strong>
-      </span>
-      <span id="co-director-badge" class="hidden text-[11px] font-mono px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-300">
-        Co-Director: <strong id="co-director-name">Vacant</strong>
-      </span>
-      <span class="text-[11px] font-mono px-3 py-1 rounded-full bg-white/5 border border-white/10 text-zinc-300">
-        Guests: <strong id="guest-count">0/4</strong>
-      </span>
-    </div>
-  </header>
-
-  <!-- ================= MAIN STAGE / VIDEO GRID ================= -->
-  <main class="flex-1 px-6 pb-2 relative flex gap-4 overflow-hidden">
-    <div id="video-stage" class="flex-1 h-full rounded-2xl overflow-hidden bg-[#18191b] border border-white/5 relative flex items-center justify-center">
-      <div id="daily-container" class="w-full h-full"></div>
-    </div>
-
-    <!-- ================= RIGHT DRAWER (FORMS, POLLS, PEOPLE) ================= -->
-    <aside id="side-drawer" class="w-80 h-full bg-[#282a2d] border border-white/10 rounded-2xl flex flex-col justify-between hidden p-5 shadow-2xl transition-all">
-      <div class="flex items-center justify-between border-b border-white/10 pb-4">
-        <h3 id="drawer-title" class="text-sm font-semibold text-white tracking-wide">Activities</h3>
-        <button onclick="toggleDrawer(null)" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
-
-      <div id="drawer-body" class="flex-1 py-4 overflow-y-auto space-y-4">
-        <!-- Injected dynamically -->
-      </div>
-    </aside>
-  </main>
-
-  <!-- ================= BOTTOM GOOGLE MEET CONTROL BAR ================= -->
-  <footer class="h-20 px-6 flex items-center justify-between border-t border-white/5 bg-[#202124]">
-    <div class="hidden sm:flex items-center gap-2 text-xs font-mono text-zinc-400">
-      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-      <span id="current-user-role-label">Connecting...</span>
-    </div>
-
-    <!-- Main Pill Action Controls -->
-    <div class="flex items-center gap-3">
-      <button id="btn-mic" onclick="toggleAudio()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
-        <i data-lucide="mic" id="icon-mic" class="w-5 h-5"></i>
-      </button>
-
-      <button id="btn-cam" onclick="toggleVideo()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
-        <i data-lucide="video" id="icon-cam" class="w-5 h-5"></i>
-      </button>
-
-      <button id="btn-share" onclick="toggleScreenShare()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
-        <i data-lucide="screen-share" id="icon-share" class="w-5 h-5"></i>
-      </button>
-
-      <button onclick="leaveMeeting()" class="meet-btn px-6 h-12 rounded-full bg-red-600 hover:bg-red-500 text-white font-medium flex items-center justify-center gap-2 shadow-lg">
-        <i data-lucide="phone-off" class="w-5 h-5"></i>
-      </button>
-    </div>
-
-    <!-- Extra Action Buttons -->
-    <div class="flex items-center gap-2">
-      <!-- Copy Invite Link -->
-      <button onclick="copyInviteLink()" title="Copy Meeting Link" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
-        <i data-lucide="link-2" class="w-4 h-4"></i>
-      </button>
-
-      <!-- Quick Polls -->
-      <button onclick="toggleDrawer('polls')" title="Quick Polls" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
-        <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
-      </button>
-
-      <!-- Form Maker / Broadcaster -->
-      <button onclick="toggleDrawer('forms')" title="Push Production Form" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
-        <i data-lucide="clipboard-list" class="w-4 h-4"></i>
-      </button>
-
-      <!-- Roster & Authority Delegation -->
-      <button onclick="toggleDrawer('roster')" title="Role Delegations" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
-        <i data-lucide="users" class="w-4 h-4"></i>
-      </button>
-    </div>
-  </footer>
-
-  <!-- ================= INCOMING FORM / POLL MODAL POPUP ================= -->
+  <!-- ================= INCOMING BROADCAST POPUP ================= -->
   <div id="broadcast-popup" class="fixed bottom-24 left-8 max-w-sm w-full bg-[#282a2d] border border-sky-400/40 rounded-2xl p-5 shadow-2xl z-40 hidden animate-bounce">
     <div class="flex justify-between items-start mb-3">
       <span class="text-xs font-mono uppercase tracking-widest text-sky-400 font-semibold" id="popup-badge">Production Alert</span>
@@ -184,8 +195,12 @@
     <div id="popup-content" class="space-y-3"></div>
   </div>
 
+  <!-- Floating Return to Hub Button (Matches Theater Design) -->
+  <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-8 right-8 w-14 h-14 bg-[#282a2d] border border-white/10 shadow-xl rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#3c4043] hover:scale-105 transition-all z-50">
+    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+  </button>
+
   <script>
-    // --- STATE MANAGEMENT ---
     const DAILY_DOMAIN = 'chowaniec.daily.co';
     let callFrame = null;
     let localUserName = '';
@@ -216,13 +231,15 @@
 
     let activePoll = null;
 
-    // --- URL PARSING (?1234567890 or ?room=1234567890) ---
+    function returnToHub() {
+      window.location.href = window.location.pathname.includes('/src/meet') ? '../index.html' : '/';
+    }
+
     function parseMeetingCodeFromUrl() {
       const search = window.location.search.replace(/^\?/, '').trim();
       if (!search) return;
 
       let extractedCode = search;
-      // Handle standard queries like ?room=1234567890 or direct query strings like ?1234567890
       if (search.includes('=')) {
         const params = new URLSearchParams(window.location.search);
         extractedCode = params.get('room') || params.get('id') || search.split('=')[1];
@@ -241,13 +258,11 @@
       }
     }
 
-    // --- TIME TICKER ---
     setInterval(() => {
       const now = new Date();
       document.getElementById('clock').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }, 1000);
 
-    // --- JOIN MEETING ---
     async function joinMeeting() {
       const nameInput = document.getElementById('user-name-input').value.trim();
       const codeInput = document.getElementById('room-code-input').value.trim();
@@ -293,16 +308,14 @@
       });
     }
 
-    // --- COPY INVITE LINK ---
     function copyInviteLink() {
       const origin = window.location.origin;
-      const inviteUrl = `${origin}/meet/join?${currentMeetingCode}`;
+      const inviteUrl = `${origin}/meet?${currentMeetingCode}`;
       navigator.clipboard.writeText(inviteUrl).then(() => {
         alert(`Meeting link copied to clipboard:\n${inviteUrl}`);
       });
     }
 
-    // --- AUTHORITY SYSTEM ---
     function handleMeetingJoined() {
       const participants = callFrame.participants();
       const count = Object.keys(participants).length;
@@ -363,7 +376,6 @@
       document.getElementById('current-user-role-label').innerText = `${localUserName} (${myRole})`;
     }
 
-    // --- HARDWARE CONTROLS ---
     function toggleAudio() {
       isAudioMuted = !isAudioMuted;
       callFrame.setLocalAudio(!isAudioMuted);
@@ -410,10 +422,9 @@
 
     function leaveMeeting() {
       if (callFrame) callFrame.leave();
-      window.location.href = '../theater/index.html';
+      returnToHub();
     }
 
-    // --- FORMS & POLLS MESSAGING ---
     function handleAppMessage(evt) {
       const msg = evt.data;
 
@@ -461,7 +472,6 @@
       document.getElementById('broadcast-popup').classList.add('hidden');
     }
 
-    // --- DRAWER PANELS ---
     function toggleDrawer(tab) {
       const drawer = document.getElementById('side-drawer');
       if (!tab || currentDrawerTab === tab) {
@@ -559,9 +569,18 @@
       toggleDrawer(null);
     }
 
+    // Standard Auth Hook expected by auth-gate.js
+    window.initializeProtectedContent = function() {
+      parseMeetingCodeFromUrl();
+      if (window.lucide) lucide.createIcons();
+    };
+
     window.addEventListener('DOMContentLoaded', () => {
       parseMeetingCodeFromUrl();
-      lucide.createIcons();
+      if (window.lucide) lucide.createIcons();
+      if (window.isAppAuthorized && window.isAppAuthorized()) {
+        window.initializeProtectedContent();
+      }
     });
   </script>
 </body>
