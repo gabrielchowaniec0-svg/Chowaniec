@@ -3,38 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chowaniec Meet &bull; Production Studio</title>
+  <title>Chowaniec Meet</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Daily.co SDK -->
   <script src="https://unpkg.com/@daily-co/daily-js"></script>
-  <!-- Security Gate & Passcodes (Identical to Theater) -->
+  <!-- Security Gate & Passcodes -->
   <script src="../passwords.js"></script>
   <script src="../auth-gate.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
-
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     body {
       font-family: 'Outfit', sans-serif;
       background-color: #202124;
       color: #e8eaed;
       overflow: hidden;
     }
-    .font-serif { font-family: 'Playfair Display', serif; }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
-
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #3c4043; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #5f6368; }
-
+    
     .meet-btn {
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .meet-btn:hover {
-      transform: scale(1.05);
+      transform: scale(1.06);
     }
     .meet-btn:active {
       transform: scale(0.95);
@@ -43,18 +36,18 @@
 </head>
 <body class="h-screen w-screen flex flex-col justify-between selection:bg-sky-500/20 relative">
 
-  <!-- Main Root Container: TARGETED AND MANAGED BY AUTH-GATE.JS -->
+  <!-- Application Shell targeted by auth-gate.js -->
   <div id="app-root" class="flex-1 flex flex-col h-full w-full justify-between transition-all duration-500">
 
-    <!-- ================= TOP HUD ================= -->
-    <header class="p-4 px-6 flex justify-between items-center z-10 bg-[#202124] border-b border-white/5">
+    <!-- Top HUD Bar -->
+    <header class="h-16 px-6 flex justify-between items-center z-10 bg-[#202124] border-b border-white/5">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center text-black font-serif font-bold text-xs">
+        <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center text-black font-semibold text-xs">
           CM
         </div>
-        <span class="text-sm font-medium tracking-wide text-zinc-200">Theater Production Stage</span>
+        <span class="text-sm font-medium tracking-wide text-zinc-200">Production Call</span>
         <span class="text-zinc-600">|</span>
-        <span id="active-code-display" class="text-xs font-mono text-zinc-400">ID: --</span>
+        <span id="active-code-display" class="text-xs font-mono text-zinc-400">ID: production</span>
         <span class="text-zinc-600">|</span>
         <span id="clock" class="text-xs font-mono text-zinc-400">00:00 PM</span>
       </div>
@@ -73,14 +66,13 @@
       </div>
     </header>
 
-    <!-- ================= MAIN STAGE ================= -->
-    <main class="flex-1 px-6 py-4 relative flex gap-4 overflow-hidden">
-      <!-- Daily Video Frame -->
+    <!-- Main Stage / Video Area -->
+    <main class="flex-1 p-4 relative flex gap-4 overflow-hidden">
       <div id="video-stage" class="flex-1 h-full rounded-2xl overflow-hidden bg-[#18191b] border border-white/5 relative flex items-center justify-center">
         <div id="daily-container" class="w-full h-full"></div>
       </div>
 
-      <!-- Right Drawer (Activities: Forms, Polls, People) -->
+      <!-- Right Activities Drawer -->
       <aside id="side-drawer" class="w-80 h-full bg-[#282a2d] border border-white/10 rounded-2xl flex flex-col justify-between hidden p-5 shadow-2xl transition-all">
         <div class="flex items-center justify-between border-b border-white/10 pb-4">
           <h3 id="drawer-title" class="text-sm font-semibold text-white tracking-wide">Activities</h3>
@@ -89,20 +81,18 @@
           </button>
         </div>
 
-        <div id="drawer-body" class="flex-1 py-4 overflow-y-auto space-y-4">
-          <!-- Dynamic Form/Poll options -->
-        </div>
+        <div id="drawer-body" class="flex-1 py-4 overflow-y-auto space-y-4"></div>
       </aside>
     </main>
 
-    <!-- ================= BOTTOM CONTROLS ================= -->
+    <!-- Bottom Controls -->
     <footer class="h-20 px-6 flex items-center justify-between border-t border-white/5 bg-[#202124]">
       <div class="hidden sm:flex items-center gap-2 text-xs font-mono text-zinc-400">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span id="current-user-role-label">Studio Ready</span>
+        <span id="current-user-role-label">Ready</span>
       </div>
 
-      <!-- Action Pills -->
+      <!-- Meet Action Buttons -->
       <div class="flex items-center gap-3">
         <button id="btn-mic" onclick="toggleAudio()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
           <i data-lucide="mic" id="icon-mic" class="w-5 h-5"></i>
@@ -121,7 +111,7 @@
         </button>
       </div>
 
-      <!-- Tools -->
+      <!-- Activities Controls -->
       <div class="flex items-center gap-2">
         <button onclick="copyInviteLink()" title="Copy Meeting Link" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
           <i data-lucide="link-2" class="w-4 h-4"></i>
@@ -142,12 +132,12 @@
     </footer>
   </div>
 
-  <!-- ================= PRE-JOIN LOBBY ================= -->
+  <!-- Pre-Join Lobby -->
   <div id="lobby-screen" class="fixed inset-0 bg-[#202124]/95 backdrop-blur-md z-40 flex items-center justify-center p-6">
     <div class="max-w-md w-full bg-[#282a2d] border border-white/10 p-8 rounded-3xl shadow-2xl space-y-6">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black font-serif font-bold text-sm">
+          <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black font-semibold text-sm">
             CP
           </div>
           <div>
@@ -168,23 +158,22 @@
         </div>
 
         <div>
-          <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Meeting Code / Room Target</label>
+          <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Meeting Code</label>
           <div class="relative">
             <input type="text" id="room-code-input" placeholder="1234567890" value="production" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
-            <span class="absolute right-4 top-3 text-[10px] font-mono text-zinc-500 uppercase">Daily.co</span>
           </div>
-          <p id="room-subtext" class="text-[11px] text-zinc-500 mt-1">Connecting via chowaniec.daily.co/&lt;code&gt;</p>
+          <p id="room-subtext" class="text-[11px] text-zinc-500 mt-1">Room code will be appended to invite links.</p>
         </div>
       </div>
 
       <button onclick="joinMeeting()" class="w-full py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-medium text-sm transition-all shadow-lg flex items-center justify-center gap-2">
-        <span>Enter Production Studio</span>
+        <span>Enter Studio</span>
         <i data-lucide="arrow-right" class="w-4 h-4"></i>
       </button>
     </div>
   </div>
 
-  <!-- ================= INCOMING BROADCAST POPUP ================= -->
+  <!-- Real-time Popup for Broadcast Forms / Polls -->
   <div id="broadcast-popup" class="fixed bottom-24 left-8 max-w-sm w-full bg-[#282a2d] border border-sky-400/40 rounded-2xl p-5 shadow-2xl z-40 hidden animate-bounce">
     <div class="flex justify-between items-start mb-3">
       <span class="text-xs font-mono uppercase tracking-widest text-sky-400 font-semibold" id="popup-badge">Production Alert</span>
@@ -195,7 +184,7 @@
     <div id="popup-content" class="space-y-3"></div>
   </div>
 
-  <!-- Floating Return to Hub Button (Matches Theater Design) -->
+  <!-- Floating Return Button -->
   <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-8 right-8 w-14 h-14 bg-[#282a2d] border border-white/10 shadow-xl rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#3c4043] hover:scale-105 transition-all z-50">
     <i data-lucide="arrow-left" class="w-5 h-5"></i>
   </button>
@@ -235,6 +224,7 @@
       window.location.href = window.location.pathname.includes('/src/meet') ? '../index.html' : '/';
     }
 
+    // Direct parser: supports /meet?1234567890 or /meet?room=1234567890
     function parseMeetingCodeFromUrl() {
       const search = window.location.search.replace(/^\?/, '').trim();
       if (!search) return;
@@ -254,7 +244,8 @@
           codeInput.classList.add('opacity-75', 'bg-black/40');
         }
         document.getElementById('lobby-code-badge').classList.remove('hidden');
-        document.getElementById('room-subtext').innerText = `Joining meeting ID: ${extractedCode}`;
+        document.getElementById('active-code-display').innerText = `ID: ${extractedCode}`;
+        document.getElementById('room-subtext').innerText = `Direct join code detected: ${extractedCode}`;
       }
     }
 
@@ -268,11 +259,11 @@
       const codeInput = document.getElementById('room-code-input').value.trim();
 
       if (!nameInput) {
-        alert("Please specify your name.");
+        alert("Please enter your name.");
         return;
       }
       if (!codeInput) {
-        alert("Please enter a meeting code or room name.");
+        alert("Please enter a meeting code.");
         return;
       }
 
@@ -302,17 +293,22 @@
       callFrame.on('participant-left', handleParticipantChange);
       callFrame.on('app-message', handleAppMessage);
 
-      await callFrame.join({
-        url: targetUrl,
-        userName: localUserName
-      });
+      try {
+        await callFrame.join({
+          url: targetUrl,
+          userName: localUserName
+        });
+      } catch (err) {
+        console.warn("Daily room connection notice:", err);
+      }
     }
 
+    // Copies https://chowaniec.net/meet?<code> directly
     function copyInviteLink() {
       const origin = window.location.origin;
       const inviteUrl = `${origin}/meet?${currentMeetingCode}`;
       navigator.clipboard.writeText(inviteUrl).then(() => {
-        alert(`Meeting link copied to clipboard:\n${inviteUrl}`);
+        alert(`Meeting link copied:\n${inviteUrl}`);
       });
     }
 
@@ -333,7 +329,7 @@
         if (sessionRoles.guests.length < 4) {
           sessionRoles.guests.push(localUserName);
         } else {
-          alert("Maximum 4 guest limit reached for this session.");
+          alert("Maximum 4 guests reached for this session.");
         }
       }
 
@@ -463,7 +459,7 @@
     }
 
     function submitFormResponse() {
-      alert("Form answers submitted to the session records.");
+      alert("Form answers submitted.");
       document.getElementById('broadcast-popup').classList.add('hidden');
     }
 
@@ -490,7 +486,7 @@
         title.innerText = 'Pre-made Production Forms';
         body.innerHTML = `
           <div class="space-y-4">
-            <p class="text-xs text-zinc-400 font-light">Push forms instantly to all participant screens:</p>
+            <p class="text-xs text-zinc-400 font-light">Push forms directly to all participants:</p>
             ${productionForms.map((f, i) => `
               <div class="p-4 rounded-xl bg-white/5 border border-white/5 space-y-2">
                 <h4 class="text-xs font-semibold text-white">${f.title}</h4>
@@ -569,7 +565,7 @@
       toggleDrawer(null);
     }
 
-    // Standard Auth Hook expected by auth-gate.js
+    // Required hook for auth-gate.js
     window.initializeProtectedContent = function() {
       parseMeetingCodeFromUrl();
       if (window.lucide) lucide.createIcons();
