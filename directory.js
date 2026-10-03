@@ -1,4 +1,3 @@
-// Chowaniec Network Services Directory Configuration
 window.DIRECTORY_CONFIG = [
   {
     id: 'resort',
@@ -17,6 +16,15 @@ window.DIRECTORY_CONFIG = [
     icon: 'film',
     status: 'Active',
     description: 'Select and purchase seats for exclusive films in our theater.'
+  },
+  {
+    id: 'meet',
+    title: 'Chowaniec Meet',
+    path: '/meet',
+    localFallback: './meet/index.html',
+    icon: 'video', // 'video' or 'laptop' are both supported
+    status: 'Active',
+    description: 'Start meetings and coordinate with the team.'
   },
   {
     id: 'dining',
@@ -44,14 +52,5 @@ window.DIRECTORY_CONFIG = [
     icon: 'flower2',
     status: 'Active',
     description: 'Relax with our spa services, available to book in advance.'
-  },
-   {
-    id: 'meet',
-    title: 'Chowaniec Meet',
-    path: '/meet',
-    localFallback: './meet/index.html',
-    icon: 'laptop',
-    status: 'Active',
-    description: 'Start meetings and coordinate with the team.'
   }
 ];
