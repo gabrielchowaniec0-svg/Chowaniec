@@ -44,5 +44,14 @@ window.DIRECTORY_CONFIG = [
     icon: 'flower2',
     status: 'Active',
     description: 'Relax with our spa services, available to book in advance.'
+  },
+   {
+    id: 'meet',
+    title: 'Chowaniec Meet',
+    path: '/meet',
+    localFallback: './meet/index.html',
+    icon: 'laptop',
+    status: 'Active',
+    description: 'Start meetings and coordinate with the team.'
   }
 ];
