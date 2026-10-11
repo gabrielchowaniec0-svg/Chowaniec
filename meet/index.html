@@ -180,10 +180,10 @@
   </div>
 
   <!-- Real-time Popup for Broadcast Forms / Polls -->
-  <div id="broadcast-popup" class="fixed bottom-24 left-8 max-w-sm w-full bg-[#282a2d] border border-sky-400/40 rounded-2xl p-5 shadow-2xl z-40 hidden animate-bounce">
+  <div id="broadcast-popup" class="fixed bottom-24 left-8 max-w-sm w-full bg-[#282a2d] border border-sky-400/40 rounded-2xl p-5 shadow-2xl z-40 hidden">
     <div class="flex justify-between items-start mb-3">
       <span class="text-xs font-mono uppercase tracking-widest text-sky-400 font-semibold" id="popup-badge">Production Alert</span>
-      <button onclick="document.getElementById('broadcast-popup').classList.add('hidden')" class="text-zinc-400 hover:text-white">
+      <button onclick="hideBroadcastPopup()" class="text-zinc-400 hover:text-white">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -197,14 +197,20 @@
 
   <script>
     const DAILY_DOMAIN = 'chowaniec.daily.co';
+    const ROOM_NAME_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+    const MAX_GUESTS = 4;
+
     let callFrame = null;
+    let isLeaving = false;
     let localUserName = '';
     let currentMeetingCode = 'production';
     let currentDrawerTab = null;
     let isAudioMuted = false;
     let isVideoMuted = false;
     let isScreenSharing = false;
+    let warnedGuestLimit = false;
 
+    // Derived from the participant list on every change, so every client agrees.
     let sessionRoles = {
       director: null,
       coDirector: null,
@@ -224,10 +230,26 @@
       }
     ];
 
-    let activePoll = null;
+    let activePoll = null;      // poll received from the Director / Co-Director
+    let activeForm = null;      // form received from the Director / Co-Director
+    let myPoll = null;          // poll this user launched, with live votes
+    let formResponses = [];     // responses sent back to this user
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
     function returnToHub() {
-      window.location.href = window.location.pathname.includes('/src/meet') ? '../index.html' : '/';
+      const isLocal =
+        window.location.protocol === 'file:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+      window.location.href = isLocal ? '../index.html' : '/';
     }
 
     function parseMeetingCodeFromUrl() {
@@ -239,6 +261,7 @@
         const params = new URLSearchParams(window.location.search);
         extractedCode = params.get('room') || params.get('id') || search.split('=')[1];
       }
+      extractedCode = decodeURIComponent(extractedCode || '');
 
       if (extractedCode) {
         currentMeetingCode = extractedCode;
@@ -254,32 +277,105 @@
       }
     }
 
-    setInterval(() => {
+    function updateClock() {
       const now = new Date();
       document.getElementById('clock').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }, 1000);
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // --- Lobby ---
+
+    function setLobbyError(message) {
+      const errorEl = document.getElementById('new-meeting-error');
+      if (message) {
+        errorEl.innerText = message;
+        errorEl.classList.remove('hidden');
+      } else {
+        errorEl.classList.add('hidden');
+      }
+    }
+
+    function setLobbyBusy(busy) {
+      document.querySelectorAll('#lobby-screen button').forEach((btn) => { btn.disabled = busy; });
+    }
+
+    function showLobby(message) {
+      document.getElementById('lobby-screen').classList.remove('hidden');
+      setLobbyBusy(false);
+      setLobbyError(message);
+    }
+
+    function signedInKey() {
+      const user = window.getChowaniecUser();
+      return (user && user.key) || '';
+    }
+
+    function normalizeMeetingCode(raw) {
+      if (/^https?:\/\//i.test(raw)) {
+        try {
+          return new URL(raw).pathname.split('/').filter(Boolean).pop() || '';
+        } catch (e) {
+          return '';
+        }
+      }
+      return raw;
+    }
+
+    // Returns a Daily meeting token, null to try joining without one, or throws a user-facing error.
+    async function fetchMeetingToken(room) {
+      let res;
+      try {
+        res = await fetch('/.netlify/functions/meeting-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Chowaniec-Key': signedInKey() },
+          body: JSON.stringify({ room, userName: localUserName })
+        });
+      } catch (e) {
+        return null; // functions unavailable (e.g. opened locally); public rooms still work
+      }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) return data.token;
+      if (res.status === 400 || res.status === 401) throw new Error(data.error);
+      return null;
+    }
+
+    function describeJoinError(err, room) {
+      const msg = String((err && (err.errorMsg || err.message)) || err || '');
+      if (/does not exist|no such room|not found/i.test(msg)) return `No meeting found with code "${room}".`;
+      if (/not allowed|private|token|permission/i.test(msg)) return 'You are not authorized to join this meeting. Try signing in again.';
+      if (/full|max/i.test(msg)) return 'This meeting is full.';
+      return 'Could not join the meeting. Please check the code and try again.';
+    }
 
     async function joinMeeting() {
       const nameInput = document.getElementById('user-name-input').value.trim();
-      const codeInput = document.getElementById('room-code-input').value.trim();
+      const codeInput = normalizeMeetingCode(document.getElementById('room-code-input').value.trim());
 
       if (!nameInput) {
         alert("Please enter your name.");
         return;
       }
-      if (!codeInput) {
-        alert("Please enter a meeting code.");
+      if (!ROOM_NAME_PATTERN.test(codeInput)) {
+        alert("Please enter a valid meeting code (letters, numbers, dashes and underscores).");
         return;
       }
 
       localUserName = nameInput;
       currentMeetingCode = codeInput;
+      setLobbyError(null);
+      setLobbyBusy(true);
+
+      let token;
+      try {
+        token = await fetchMeetingToken(codeInput);
+      } catch (err) {
+        showLobby(err.message);
+        return;
+      }
+
       document.getElementById('active-code-display').innerText = `ID: ${currentMeetingCode}`;
       document.getElementById('lobby-screen').classList.add('hidden');
-
-      const targetUrl = codeInput.startsWith('http') 
-        ? codeInput 
-        : `https://${DAILY_DOMAIN}/${codeInput}`;
 
       callFrame = window.DailyIframe.createFrame(document.getElementById('daily-container'), {
         iframeStyle: {
@@ -294,17 +390,21 @@
       });
 
       callFrame.on('joined-meeting', handleMeetingJoined);
-      callFrame.on('participant-joined', handleParticipantChange);
-      callFrame.on('participant-left', handleParticipantChange);
+      callFrame.on('participant-joined', refreshRoles);
+      callFrame.on('participant-left', refreshRoles);
+      callFrame.on('participant-updated', handleParticipantUpdated);
       callFrame.on('app-message', handleAppMessage);
+      callFrame.on('left-meeting', handleLeftMeeting);
+      callFrame.on('error', (evt) => endCall(describeJoinError(evt, currentMeetingCode)));
+
+      const joinOptions = { url: `https://${DAILY_DOMAIN}/${codeInput}`, userName: localUserName };
+      if (token) joinOptions.token = token;
 
       try {
-        await callFrame.join({
-          url: targetUrl,
-          userName: localUserName
-        });
+        await callFrame.join(joinOptions);
+        history.replaceState(null, '', `${window.location.pathname}?${encodeURIComponent(currentMeetingCode)}`);
       } catch (err) {
-        console.warn("Daily room connection notice:", err);
+        endCall(describeJoinError(err, codeInput));
       }
     }
 
@@ -315,181 +415,248 @@
         return;
       }
 
-      const btn = document.getElementById('new-meeting-btn');
       const label = document.getElementById('new-meeting-label');
-      const errorEl = document.getElementById('new-meeting-error');
-      const user = window.getChowaniecUser();
-
-      errorEl.classList.add('hidden');
-      btn.disabled = true;
+      setLobbyError(null);
+      setLobbyBusy(true);
       label.innerText = 'Creating...';
 
       try {
         const res = await fetch('/.netlify/functions/create-meeting', {
           method: 'POST',
-          headers: { 'X-Chowaniec-Key': (user && user.key) || '' }
+          headers: { 'X-Chowaniec-Key': signedInKey() }
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.code) {
           throw new Error(data.error || 'Could not create a meeting. Please try again.');
         }
 
-        const codeInput = document.getElementById('room-code-input');
-        codeInput.value = data.code;
-        history.replaceState(null, '', `${window.location.pathname}?${data.code}`);
+        document.getElementById('room-code-input').value = data.code;
         await joinMeeting();
       } catch (err) {
-        errorEl.innerText = err.message;
-        errorEl.classList.remove('hidden');
+        showLobby(err.message);
       } finally {
-        btn.disabled = false;
         label.innerText = 'New Meeting';
       }
     }
 
+    // Tears down the call frame and returns to the lobby with a message.
+    function endCall(message) {
+      if (callFrame) {
+        const frame = callFrame;
+        callFrame = null;
+        frame.destroy().catch(() => {});
+      }
+      sessionRoles = { director: null, coDirector: null, guests: [] };
+      myPoll = null;
+      formResponses = [];
+      toggleDrawer(null);
+      updateAuthorityUI();
+      showLobby(message);
+    }
+
+    function handleLeftMeeting() {
+      if (isLeaving) return;
+      endCall('You were disconnected from the meeting.');
+    }
+
     function copyInviteLink() {
-      const origin = window.location.origin;
-      const inviteUrl = `${origin}/meet?${currentMeetingCode}`;
-      navigator.clipboard.writeText(inviteUrl).then(() => {
-        alert(`Meeting link copied:\n${inviteUrl}`);
-      });
+      const inviteUrl = `${window.location.origin}/meet?${encodeURIComponent(currentMeetingCode)}`;
+      if (!navigator.clipboard) {
+        prompt('Copy this meeting link:', inviteUrl);
+        return;
+      }
+      navigator.clipboard.writeText(inviteUrl).then(
+        () => alert(`Meeting link copied:\n${inviteUrl}`),
+        () => prompt('Copy this meeting link:', inviteUrl)
+      );
+    }
+
+    // --- Roles ---
+
+    function joinedTime(p) {
+      return p.joined_at ? new Date(p.joined_at).getTime() : Number.MAX_SAFE_INTEGER;
+    }
+
+    // Director: first host (room owner) to join, otherwise the first person to join.
+    // Co-Director: the next person to join. Everyone else is a guest.
+    function refreshRoles() {
+      if (!callFrame) return;
+      const people = Object.values(callFrame.participants()).sort(
+        (a, b) => joinedTime(a) - joinedTime(b) || a.session_id.localeCompare(b.session_id)
+      );
+      const director = people.find((p) => p.owner) || people[0] || null;
+      const others = people.filter((p) => p !== director);
+      const previousRoles = JSON.stringify(sessionRoles);
+
+      sessionRoles = {
+        director: director && { id: director.session_id, name: director.user_name || 'Guest' },
+        coDirector: others[0] ? { id: others[0].session_id, name: others[0].user_name || 'Guest' } : null,
+        guests: others.slice(1).map((p) => ({ id: p.session_id, name: p.user_name || 'Guest' }))
+      };
+
+      const myId = localSessionId();
+      const myGuestIndex = sessionRoles.guests.findIndex((g) => g.id === myId);
+      if (myGuestIndex >= MAX_GUESTS && !warnedGuestLimit) {
+        warnedGuestLimit = true;
+        alert(`Maximum ${MAX_GUESTS} guests reached for this session.`);
+      }
+
+      updateAuthorityUI();
+      // Re-render only on real changes so in-progress drawer input isn't wiped.
+      if (currentDrawerTab && JSON.stringify(sessionRoles) !== previousRoles) renderDrawer(currentDrawerTab);
+    }
+
+    function localSessionId() {
+      return callFrame ? callFrame.participants().local.session_id : null;
+    }
+
+    function myRole() {
+      const myId = localSessionId();
+      if (sessionRoles.director && sessionRoles.director.id === myId) return 'Director';
+      if (sessionRoles.coDirector && sessionRoles.coDirector.id === myId) return 'Co-Director';
+      return 'Guest';
+    }
+
+    function isPrivileged(sessionId) {
+      return (
+        (sessionRoles.director && sessionRoles.director.id === sessionId) ||
+        (sessionRoles.coDirector && sessionRoles.coDirector.id === sessionId)
+      );
+    }
+
+    function privilegedIds() {
+      return [sessionRoles.director, sessionRoles.coDirector].filter(Boolean).map((r) => r.id);
     }
 
     function handleMeetingJoined() {
-      const participants = callFrame.participants();
-      const count = Object.keys(participants).length;
-
-      const signedInUser = window.getChowaniecUser();
-      const isHost = !!(signedInUser && signedInUser.host);
-
-      if (count === 1 || isHost) {
-        if (!sessionRoles.director || isHost) {
-          sessionRoles.director = localUserName;
-        }
-      } else if (!sessionRoles.coDirector) {
-        sessionRoles.coDirector = localUserName;
-      } else {
-        if (sessionRoles.guests.length < 4) {
-          sessionRoles.guests.push(localUserName);
-        } else {
-          alert("Maximum 4 guests reached for this session.");
-        }
-      }
-
-      broadcastRoleSync();
-      updateAuthorityUI();
+      refreshRoles();
+      syncLocalMediaState();
     }
 
-    function handleParticipantChange() {
-      updateAuthorityUI();
-    }
-
-    function broadcastRoleSync() {
-      if (callFrame) {
-        callFrame.sendAppMessage({
-          type: 'ROLE_SYNC',
-          roles: sessionRoles
-        }, '*');
-      }
+    function handleParticipantUpdated(evt) {
+      refreshRoles();
+      if (evt && evt.participant && evt.participant.local) syncLocalMediaState();
     }
 
     function updateAuthorityUI() {
       const dirBadge = document.getElementById('director-badge');
       const coDirBadge = document.getElementById('co-director-badge');
 
-      if (sessionRoles.director) {
-        dirBadge.classList.remove('hidden');
-        document.getElementById('director-name').innerText = sessionRoles.director;
-      }
-      if (sessionRoles.coDirector) {
-        coDirBadge.classList.remove('hidden');
-        document.getElementById('co-director-name').innerText = sessionRoles.coDirector;
-      }
+      dirBadge.classList.toggle('hidden', !sessionRoles.director);
+      document.getElementById('director-name').innerText = sessionRoles.director ? sessionRoles.director.name : 'Vacant';
+      coDirBadge.classList.toggle('hidden', !sessionRoles.coDirector);
+      document.getElementById('co-director-name').innerText = sessionRoles.coDirector ? sessionRoles.coDirector.name : 'Vacant';
 
-      document.getElementById('guest-count').innerText = `${sessionRoles.guests.length}/4`;
+      document.getElementById('guest-count').innerText = `${Math.min(sessionRoles.guests.length, MAX_GUESTS)}/${MAX_GUESTS}`;
+      document.getElementById('current-user-role-label').innerText = callFrame
+        ? `${localUserName} (${myRole()})`
+        : 'Ready';
+    }
 
-      let myRole = 'Guest';
-      if (sessionRoles.director === localUserName) myRole = 'Director';
-      else if (sessionRoles.coDirector === localUserName) myRole = 'Co-Director';
+    // --- Media controls ---
 
-      document.getElementById('current-user-role-label').innerText = `${localUserName} (${myRole})`;
+    function setControlState(btnId, iconName, isAlert, alertClass) {
+      const btn = document.getElementById(btnId);
+      btn.classList.toggle(alertClass, isAlert);
+      btn.classList.toggle('bg-[#3c4043]', !isAlert);
+      btn.innerHTML = `<i data-lucide="${iconName}" class="w-5 h-5"></i>`;
+    }
+
+    function renderMediaButtons() {
+      setControlState('btn-mic', isAudioMuted ? 'mic-off' : 'mic', isAudioMuted, 'bg-red-600');
+      setControlState('btn-cam', isVideoMuted ? 'video-off' : 'video', isVideoMuted, 'bg-red-600');
+      setControlState('btn-share', 'screen-share', isScreenSharing, 'bg-sky-600');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    // Keeps our buttons in sync with changes made inside the Daily frame.
+    function syncLocalMediaState() {
+      if (!callFrame) return;
+      const local = callFrame.participants().local;
+      const screenState = local && local.tracks && local.tracks.screenVideo && local.tracks.screenVideo.state;
+      isAudioMuted = !callFrame.localAudio();
+      isVideoMuted = !callFrame.localVideo();
+      isScreenSharing = !!screenState && screenState !== 'off' && screenState !== 'blocked';
+      renderMediaButtons();
     }
 
     function toggleAudio() {
+      if (!callFrame) return;
       isAudioMuted = !isAudioMuted;
       callFrame.setLocalAudio(!isAudioMuted);
-      const btn = document.getElementById('btn-mic');
-      const icon = document.getElementById('icon-mic');
-
-      if (isAudioMuted) {
-        btn.classList.replace('bg-[#3c4043]', 'bg-red-600');
-        icon.setAttribute('data-lucide', 'mic-off');
-      } else {
-        btn.classList.replace('bg-red-600', 'bg-[#3c4043]');
-        icon.setAttribute('data-lucide', 'mic');
-      }
-      lucide.createIcons();
+      renderMediaButtons();
     }
 
     function toggleVideo() {
+      if (!callFrame) return;
       isVideoMuted = !isVideoMuted;
       callFrame.setLocalVideo(!isVideoMuted);
-      const btn = document.getElementById('btn-cam');
-      const icon = document.getElementById('icon-cam');
-
-      if (isVideoMuted) {
-        btn.classList.replace('bg-[#3c4043]', 'bg-red-600');
-        icon.setAttribute('data-lucide', 'video-off');
-      } else {
-        btn.classList.replace('bg-red-600', 'bg-[#3c4043]');
-        icon.setAttribute('data-lucide', 'video');
-      }
-      lucide.createIcons();
+      renderMediaButtons();
     }
 
-    async function toggleScreenShare() {
-      if (!isScreenSharing) {
-        await callFrame.startScreenShare();
-        isScreenSharing = true;
-        document.getElementById('btn-share').classList.replace('bg-[#3c4043]', 'bg-sky-600');
+    function toggleScreenShare() {
+      if (!callFrame) return;
+      // State updates arrive via participant-updated (the user may cancel the picker).
+      if (isScreenSharing) {
+        callFrame.stopScreenShare();
       } else {
-        await callFrame.stopScreenShare();
-        isScreenSharing = false;
-        document.getElementById('btn-share').classList.replace('bg-sky-600', 'bg-[#3c4043]');
+        callFrame.startScreenShare();
       }
     }
 
-    function leaveMeeting() {
-      if (callFrame) callFrame.leave();
+    async function leaveMeeting() {
+      isLeaving = true;
+      if (callFrame) {
+        try {
+          await callFrame.leave();
+        } catch (e) {
+          // leaving anyway
+        }
+      }
       returnToHub();
     }
 
-    function handleAppMessage(evt) {
-      const msg = evt.data;
+    // --- Forms & polls (app messages) ---
 
-      if (msg.type === 'ROLE_SYNC') {
-        sessionRoles = msg.roles;
-        updateAuthorityUI();
-      } else if (msg.type === 'PUSH_FORM') {
-        displayBroadcastPopup('Form Received: ' + msg.form.title, `
+    function handleAppMessage(evt) {
+      const msg = evt.data || {};
+      const fromId = evt.fromId;
+
+      if (msg.type === 'PUSH_FORM' && isPrivileged(fromId) && msg.form && Array.isArray(msg.form.fields)) {
+        activeForm = { title: String(msg.form.title), fields: msg.form.fields.map(String) };
+        displayBroadcastPopup('Form Received: ' + activeForm.title, `
           <p class="text-xs text-zinc-300 font-light mb-2">Fill out before continuing shoot:</p>
           <div class="space-y-2">
-            ${msg.form.fields.map(f => `<input type="text" placeholder="${f}" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2 text-xs text-white">`).join('')}
+            ${activeForm.fields.map((f, i) => `<input type="text" data-form-field="${i}" placeholder="${escapeHtml(f)}" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2 text-xs text-white">`).join('')}
             <button onclick="submitFormResponse()" class="w-full py-2 bg-sky-500 rounded-lg text-xs font-medium text-white">Submit to Director</button>
           </div>
         `);
-      } else if (msg.type === 'PUSH_POLL') {
-        activePoll = msg.poll;
+      } else if (msg.type === 'PUSH_POLL' && isPrivileged(fromId) && msg.poll && Array.isArray(msg.poll.options)) {
+        activePoll = { id: String(msg.poll.id), question: String(msg.poll.question), options: msg.poll.options.map(String) };
         displayBroadcastPopup('Live Poll', `
-          <p class="text-sm font-medium text-white mb-2">${msg.poll.question}</p>
+          <p class="text-sm font-medium text-white mb-2">${escapeHtml(activePoll.question)}</p>
           <div class="space-y-1.5">
-            ${msg.poll.options.map((opt, i) => `
+            ${activePoll.options.map((opt, i) => `
               <button onclick="votePoll(${i})" class="w-full text-left p-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-200 border border-white/5">
-                ${opt}
+                ${escapeHtml(opt)}
               </button>
             `).join('')}
           </div>
         `);
+      } else if (msg.type === 'FORM_RESPONSE' && isPrivileged(localSessionId()) && Array.isArray(msg.answers)) {
+        const sender = callFrame.participants()[fromId];
+        formResponses.push({
+          from: (sender && sender.user_name) || 'Guest',
+          title: String(msg.title),
+          answers: msg.answers.map((a) => ({ field: String(a.field), value: String(a.value) }))
+        });
+        if (currentDrawerTab === 'forms') renderDrawer('forms');
+      } else if (msg.type === 'POLL_VOTE' && myPoll && msg.pollId === myPoll.id) {
+        const index = Number(msg.optionIndex);
+        if (Number.isInteger(index) && index >= 0 && index < myPoll.options.length) {
+          myPoll.votes[fromId] = index;
+          if (currentDrawerTab === 'polls') renderDrawer('polls');
+        }
       }
     }
 
@@ -501,15 +668,38 @@
       lucide.createIcons();
     }
 
-    function submitFormResponse() {
-      alert("Form answers submitted.");
+    function hideBroadcastPopup() {
       document.getElementById('broadcast-popup').classList.add('hidden');
     }
 
-    function votePoll(optionIndex) {
-      alert(`Vote registered for: ${activePoll.options[optionIndex]}`);
-      document.getElementById('broadcast-popup').classList.add('hidden');
+    function submitFormResponse() {
+      if (!activeForm || !callFrame) return;
+      const answers = activeForm.fields.map((field, i) => ({
+        field,
+        value: document.querySelector(`[data-form-field="${i}"]`).value.trim()
+      }));
+      const recipients = privilegedIds().filter((id) => id !== localSessionId());
+      if (recipients.length) {
+        callFrame.sendAppMessage({ type: 'FORM_RESPONSE', title: activeForm.title, answers }, recipients);
+      }
+      activeForm = null;
+      hideBroadcastPopup();
+      alert("Form answers submitted.");
     }
+
+    function votePoll(optionIndex) {
+      if (!activePoll || !callFrame) return;
+      const recipients = privilegedIds().filter((id) => id !== localSessionId());
+      if (recipients.length) {
+        callFrame.sendAppMessage({ type: 'POLL_VOTE', pollId: activePoll.id, optionIndex }, recipients);
+      }
+      const choice = activePoll.options[optionIndex];
+      activePoll = null;
+      hideBroadcastPopup();
+      alert(`Vote registered for: ${choice}`);
+    }
+
+    // --- Side drawer ---
 
     function toggleDrawer(tab) {
       const drawer = document.getElementById('side-drawer');
@@ -521,39 +711,57 @@
 
       currentDrawerTab = tab;
       drawer.classList.remove('hidden');
+      renderDrawer(tab);
+    }
 
+    function restrictedNotice(what) {
+      return `<p class="text-xs text-zinc-400 font-light">Only the Director or Co-Director can ${what}.</p>`;
+    }
+
+    function renderDrawer(tab) {
       const title = document.getElementById('drawer-title');
       const body = document.getElementById('drawer-body');
+      const canManage = !!callFrame && isPrivileged(localSessionId());
 
       if (tab === 'forms') {
         title.innerText = 'Pre-made Production Forms';
-        body.innerHTML = `
+        body.innerHTML = !canManage ? restrictedNotice('push forms') : `
           <div class="space-y-4">
             <p class="text-xs text-zinc-400 font-light">Push forms directly to all participants:</p>
             ${productionForms.map((f, i) => `
               <div class="p-4 rounded-xl bg-white/5 border border-white/5 space-y-2">
-                <h4 class="text-xs font-semibold text-white">${f.title}</h4>
+                <h4 class="text-xs font-semibold text-white">${escapeHtml(f.title)}</h4>
                 <p class="text-[11px] text-zinc-400">${f.fields.length} checklist fields</p>
                 <button onclick="broadcastForm(${i})" class="w-full py-1.5 bg-white text-black text-xs rounded-lg font-medium hover:bg-zinc-200 transition-colors">
                   Push Form to Team
                 </button>
               </div>
             `).join('')}
+            <div class="pt-2 border-t border-white/10 space-y-2">
+              <span class="block text-xs font-mono text-zinc-400">RESPONSES (${formResponses.length})</span>
+              ${formResponses.length ? formResponses.map((r) => `
+                <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1">
+                  <p class="text-xs text-white font-medium">${escapeHtml(r.from)} <span class="text-zinc-500 font-light">· ${escapeHtml(r.title)}</span></p>
+                  ${r.answers.map((a) => `<p class="text-[11px] text-zinc-400"><span class="text-zinc-500">${escapeHtml(a.field)}:</span> ${escapeHtml(a.value || '-')}</p>`).join('')}
+                </div>
+              `).join('') : '<p class="text-[11px] text-zinc-500">No responses yet.</p>'}
+            </div>
           </div>
         `;
       } else if (tab === 'polls') {
         title.innerText = 'Launch Quick Poll';
-        body.innerHTML = `
+        body.innerHTML = !canManage ? restrictedNotice('launch polls') : `
           <div class="space-y-3">
             <label class="block text-xs font-mono text-zinc-400">POLL QUESTION</label>
             <input type="text" id="poll-q" placeholder="e.g., Approve Take 4?" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
-            
+
             <label class="block text-xs font-mono text-zinc-400 mt-2">OPTIONS (COMMA-SEPARATED)</label>
             <input type="text" id="poll-opts" placeholder="Yes, No, Needs Recut" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
-            
+
             <button onclick="broadcastQuickPoll()" class="w-full mt-4 py-2.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-medium transition-colors">
               Broadcast Poll Now
             </button>
+            ${myPoll ? renderPollResults() : ''}
           </div>
         `;
       } else if (tab === 'roster') {
@@ -562,15 +770,15 @@
           <div class="space-y-3 text-xs">
             <div class="p-3 bg-white/5 rounded-xl border border-white/5">
               <span class="text-zinc-500 font-mono block text-[10px]">DIRECTOR (MAX 1)</span>
-              <span class="text-white font-medium">${sessionRoles.director || 'None'}</span>
+              <span class="text-white font-medium">${sessionRoles.director ? escapeHtml(sessionRoles.director.name) : 'None'}</span>
             </div>
             <div class="p-3 bg-white/5 rounded-xl border border-white/5">
               <span class="text-zinc-500 font-mono block text-[10px]">CO-DIRECTOR (MAX 1)</span>
-              <span class="text-white font-medium">${sessionRoles.coDirector || 'None'}</span>
+              <span class="text-white font-medium">${sessionRoles.coDirector ? escapeHtml(sessionRoles.coDirector.name) : 'None'}</span>
             </div>
             <div class="p-3 bg-white/5 rounded-xl border border-white/5">
-              <span class="text-zinc-500 font-mono block text-[10px]">GUESTS (MAX 4)</span>
-              <span class="text-white font-medium">${sessionRoles.guests.join(', ') || 'No guests present'}</span>
+              <span class="text-zinc-500 font-mono block text-[10px]">GUESTS (MAX ${MAX_GUESTS})</span>
+              <span class="text-white font-medium">${escapeHtml(sessionRoles.guests.map((g) => g.name).join(', ')) || 'No guests present'}</span>
             </div>
           </div>
         `;
@@ -578,18 +786,36 @@
       lucide.createIcons();
     }
 
+    function renderPollResults() {
+      const counts = myPoll.options.map(() => 0);
+      Object.values(myPoll.votes).forEach((i) => { counts[i]++; });
+      const total = counts.reduce((a, b) => a + b, 0);
+      return `
+        <div class="pt-4 mt-2 border-t border-white/10 space-y-2">
+          <span class="block text-xs font-mono text-zinc-400">LIVE RESULTS (${total} ${total === 1 ? 'vote' : 'votes'})</span>
+          <p class="text-xs text-white font-medium">${escapeHtml(myPoll.question)}</p>
+          ${myPoll.options.map((opt, i) => {
+            const pct = total ? Math.round((counts[i] / total) * 100) : 0;
+            return `
+              <div class="space-y-1">
+                <div class="flex justify-between text-[11px] text-zinc-300"><span>${escapeHtml(opt)}</span><span>${counts[i]}</span></div>
+                <div class="h-1.5 rounded-full bg-white/10 overflow-hidden"><div class="h-full bg-sky-500" style="width: ${pct}%"></div></div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
     function broadcastForm(index) {
+      if (!callFrame || !isPrivileged(localSessionId())) return;
       const selectedForm = productionForms[index];
-      if (callFrame) {
-        callFrame.sendAppMessage({
-          type: 'PUSH_FORM',
-          form: selectedForm
-        }, '*');
-      }
+      callFrame.sendAppMessage({ type: 'PUSH_FORM', form: selectedForm }, '*');
       alert(`Broadcasting '${selectedForm.title}' to everyone in call!`);
     }
 
     function broadcastQuickPoll() {
+      if (!callFrame || !isPrivileged(localSessionId())) return;
       const q = document.getElementById('poll-q').value.trim();
       const opts = document.getElementById('poll-opts').value.split(',').map(s => s.trim()).filter(Boolean);
 
@@ -598,14 +824,12 @@
         return;
       }
 
-      if (callFrame) {
-        callFrame.sendAppMessage({
-          type: 'PUSH_POLL',
-          poll: { question: q, options: opts }
-        }, '*');
-      }
-      alert("Poll dispatched live to the theater crew!");
-      toggleDrawer(null);
+      myPoll = { id: Date.now().toString(36), question: q, options: opts, votes: {} };
+      callFrame.sendAppMessage({
+        type: 'PUSH_POLL',
+        poll: { id: myPoll.id, question: q, options: opts }
+      }, '*');
+      renderDrawer('polls');
     }
 
     function prefillUserName() {
