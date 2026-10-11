@@ -41,7 +41,7 @@ window.DIRECTORY_CONFIG = [
     path: "/cleaning/",
     localFallback: "./cleaning/index.html",
     icon: "sparkles",
-    status: "Coming Soon",
+    status: "Active",
     description: "Navigate through accommodative cleaning packages for your home."
   },
   {
@@ -50,7 +50,7 @@ window.DIRECTORY_CONFIG = [
     path: "/spa/",
     localFallback: "./spa/index.html",
     icon: "flower2",
-    status: "Coming Soon",
+    status: "Active",
     description: "Relax with our spa services, available to book in advance."
   }
 ];
