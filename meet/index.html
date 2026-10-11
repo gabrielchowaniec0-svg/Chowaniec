@@ -196,6 +196,7 @@
   </button>
 
   <script>
+    // Fallback only; the meeting-token function returns each room's real URL.
     const DAILY_DOMAIN = 'chowaniec.daily.co';
     const ROOM_NAME_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
     const MAX_GUESTS = 4;
@@ -322,7 +323,7 @@
       return raw;
     }
 
-    // Returns a Daily meeting token, null to try joining without one, or throws a user-facing error.
+    // Returns { token, url }, null to try joining without a token, or throws a user-facing error.
     async function fetchMeetingToken(room) {
       let res;
       try {
@@ -335,8 +336,8 @@
         return null; // functions unavailable (e.g. opened locally); public rooms still work
       }
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.token) return data.token;
-      if (res.status === 400 || res.status === 401) throw new Error(data.error);
+      if (res.ok && data.token) return data;
+      if (res.status === 400 || res.status === 401 || res.status === 404) throw new Error(data.error);
       return null;
     }
 
@@ -345,7 +346,7 @@
       if (/does not exist|no such room|not found/i.test(msg)) return `No meeting found with code "${room}".`;
       if (/not allowed|private|token|permission/i.test(msg)) return 'You are not authorized to join this meeting. Try signing in again.';
       if (/full|max/i.test(msg)) return 'This meeting is full.';
-      return 'Could not join the meeting. Please check the code and try again.';
+      return msg ? `Could not join the meeting: ${msg}` : 'Could not join the meeting. Please check the code and try again.';
     }
 
     async function joinMeeting() {
@@ -366,9 +367,9 @@
       setLobbyError(null);
       setLobbyBusy(true);
 
-      let token;
+      let access;
       try {
-        token = await fetchMeetingToken(codeInput);
+        access = await fetchMeetingToken(codeInput);
       } catch (err) {
         showLobby(err.message);
         return;
@@ -397,8 +398,11 @@
       callFrame.on('left-meeting', handleLeftMeeting);
       callFrame.on('error', (evt) => endCall(describeJoinError(evt, currentMeetingCode)));
 
-      const joinOptions = { url: `https://${DAILY_DOMAIN}/${codeInput}`, userName: localUserName };
-      if (token) joinOptions.token = token;
+      const joinOptions = {
+        url: (access && access.url) || `https://${DAILY_DOMAIN}/${codeInput}`,
+        userName: localUserName
+      };
+      if (access) joinOptions.token = access.token;
 
       try {
         await callFrame.join(joinOptions);
