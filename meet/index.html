@@ -152,23 +152,30 @@
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Your Name</label>
-          <input type="text" id="user-name-input" placeholder="e.g. Gabriel, Vicky, or Guest" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none transition-all">
+          <input type="text" id="user-name-input" placeholder="Your name" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none transition-all">
           <p id="host-hint" class="text-[11px] text-zinc-500 mt-1">Host priority is based on the passcode you signed in with.</p>
         </div>
 
         <div>
           <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Meeting Code</label>
           <div class="relative">
-            <input type="text" id="room-code-input" placeholder="1234567890" value="production" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
+            <input type="text" id="room-code-input" placeholder="abc-defg-hij" value="production" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
           </div>
           <p id="room-subtext" class="text-[11px] text-zinc-500 mt-1">Room code will be appended to invite links.</p>
         </div>
       </div>
 
-      <button onclick="joinMeeting()" class="w-full py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-medium text-sm transition-all shadow-lg flex items-center justify-center gap-2">
-        <span>Enter Studio</span>
-        <i data-lucide="arrow-right" class="w-4 h-4"></i>
-      </button>
+      <div class="space-y-3">
+        <button onclick="joinMeeting()" class="w-full py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-medium text-sm transition-all shadow-lg flex items-center justify-center gap-2">
+          <span>Enter Studio</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+        <button id="new-meeting-btn" onclick="createNewMeeting()" class="w-full py-3.5 rounded-full bg-transparent border border-white/15 hover:bg-white/5 text-white font-medium text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-wait">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span id="new-meeting-label">New Meeting</span>
+        </button>
+        <p id="new-meeting-error" class="hidden text-[11px] text-red-400 text-center"></p>
+      </div>
     </div>
   </div>
 
@@ -298,6 +305,45 @@
         });
       } catch (err) {
         console.warn("Daily room connection notice:", err);
+      }
+    }
+
+    async function createNewMeeting() {
+      const nameInput = document.getElementById('user-name-input').value.trim();
+      if (!nameInput) {
+        alert("Please enter your name.");
+        return;
+      }
+
+      const btn = document.getElementById('new-meeting-btn');
+      const label = document.getElementById('new-meeting-label');
+      const errorEl = document.getElementById('new-meeting-error');
+      const user = window.getChowaniecUser();
+
+      errorEl.classList.add('hidden');
+      btn.disabled = true;
+      label.innerText = 'Creating...';
+
+      try {
+        const res = await fetch('/.netlify/functions/create-meeting', {
+          method: 'POST',
+          headers: { 'X-Chowaniec-Key': (user && user.key) || '' }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.code) {
+          throw new Error(data.error || 'Could not create a meeting. Please try again.');
+        }
+
+        const codeInput = document.getElementById('room-code-input');
+        codeInput.value = data.code;
+        history.replaceState(null, '', `${window.location.pathname}?${data.code}`);
+        await joinMeeting();
+      } catch (err) {
+        errorEl.innerText = err.message;
+        errorEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        label.innerText = 'New Meeting';
       }
     }
 
