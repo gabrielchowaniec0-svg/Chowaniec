@@ -5,7 +5,7 @@ window.DIRECTORY_CONFIG = [
     path: "/resort/",
     localFallback: "./resort/index.html",
     icon: "palmtree",
-    status: "Coming Soon",
+    status: "Active",
     description: "Book a room or sign in to your visit with our kiosk."
   },
   {
@@ -32,7 +32,7 @@ window.DIRECTORY_CONFIG = [
     path: "/dining/",
     localFallback: "./dining/index.html",
     icon: "utensils",
-    status: "Coming Soon",
+    status: "Active",
     description: "View our curated menu and book a reservation in advance."
   },
   {
