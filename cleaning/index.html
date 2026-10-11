@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chowaniec Cleaning Service</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
+    <!-- Security Gate & Passcodes -->
+    <script src="../passwords.js"></script>
+    <script src="../auth-gate.js"></script>
+    <!-- Config Data -->
+    <script src="config.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #fafafa;
+            color: #111827;
+        }
+
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+
+        .fade-in { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .no-scrollbar { scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+
+        input[type="date"] { min-height: 46px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-gray-200 relative overflow-x-hidden">
+
+    <div id="app-root" class="flex-1 flex flex-col transition-all duration-500">
+
+        <!-- Header -->
+        <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-0 sm:h-20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+                <div class="flex items-center gap-3 cursor-pointer min-h-[40px]" onclick="navigate('packages')">
+                    <div class="w-8 h-8 shrink-0 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans">
+                        CC
+                    </div>
+                    <div class="font-serif tracking-wide text-xl whitespace-nowrap">
+                        Chowaniec <span class="text-gray-400 italic font-light text-base">Cleaning</span>
+                    </div>
+                </div>
+
+                <nav class="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+                    <button onclick="navigate('packages')" class="nav-tab shrink-0 whitespace-nowrap min-h-[40px] px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-medium rounded-full transition-colors text-black bg-gray-100" data-view="packages">Packages</button>
+                    <button onclick="navigate('book')" class="nav-tab shrink-0 whitespace-nowrap min-h-[40px] px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-medium rounded-full transition-colors text-gray-500 hover:text-black" data-view="book">Book a Clean</button>
+                    <button onclick="navigate('appointments')" class="nav-tab shrink-0 whitespace-nowrap min-h-[40px] px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-medium rounded-full transition-colors text-gray-500 hover:text-black" data-view="appointments">My Appointments</button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main Container -->
+        <main class="flex-1 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 pb-28 w-full">
+
+            <!-- 1. PACKAGES VIEW -->
+            <section id="view-packages" class="clean-view space-y-12 fade-in">
+                <div class="max-w-2xl">
+                    <p class="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2 font-medium">Residential Care Hub</p>
+                    <h1 class="text-3xl sm:text-4xl font-serif text-black mb-3">Cleaning Packages</h1>
+                    <p class="text-gray-400 font-light text-base">Navigate through accommodative cleaning packages for your home.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8" id="packages-grid">
+                    <!-- Populated by JS -->
+                </div>
+
+                <div class="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                    <div>
+                        <h3 class="text-lg font-medium text-black">Optional Add-Ons</h3>
+                        <p class="text-xs text-gray-400 font-light">Add any extras to a package while booking.</p>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="addons-catalog"></div>
+                    <div class="flex flex-wrap gap-2 border-t border-gray-100 pt-6" id="frequency-catalog"></div>
+                </div>
+            </section>
+
+            <!-- 2. BOOKING VIEW -->
+            <section id="view-book" class="clean-view hidden space-y-8 fade-in">
+                <div class="max-w-2xl">
+                    <p class="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2 font-medium">Schedule a Visit</p>
+                    <h1 class="text-3xl sm:text-4xl font-serif text-black mb-3">Book a Cleaning</h1>
+                    <p class="text-gray-400 font-light text-base">Tailor your package, pick a time, and we will handle the rest.</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                    <div class="lg:col-span-2 space-y-6 sm:space-y-8 min-w-0">
+
+                        <!-- Step 1: Package -->
+                        <div class="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                            <div>
+                                <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">Step 1</span>
+                                <h3 class="text-lg font-medium text-black">Choose a Package</h3>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="package-picker"></div>
+                        </div>
+
+                        <!-- Step 2: Home Size -->
+                        <div class="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                            <div class="flex flex-wrap justify-between items-end gap-2">
+                                <div>
+                                    <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">Step 2</span>
+                                    <h3 class="text-lg font-medium text-black">Home Size</h3>
+                                    <p class="text-xs text-gray-400 font-light">Price adjusts for each additional bedroom.</p>
+                                </div>
+                                <span id="bedroom-rate" class="text-xs font-mono text-gray-500"></span>
+                            </div>
+                            <div class="flex flex-wrap gap-2" id="bedroom-picker"></div>
+                        </div>
+
+                        <!-- Step 3: Add-ons -->
+                        <div class="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                            <div>
+                                <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">Step 3</span>
+                                <h3 class="text-lg font-medium text-black">Add-Ons</h3>
+                                <p class="text-xs text-gray-400 font-light">Optional extras for a more thorough finish.</p>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="addon-picker"></div>
+                        </div>
+
+                        <!-- Step 4: Schedule -->
+                        <div class="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                            <div>
+                                <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">Step 4</span>
+                                <h3 class="text-lg font-medium text-black">Date, Arrival & Frequency</h3>
+                            </div>
+                            <div class="space-y-5 text-xs font-mono">
+                                <div>
+                                    <label for="book-date" class="block text-gray-400 uppercase tracking-widest mb-1.5">Service Date</label>
+                                    <input type="date" id="book-date" onchange="handleDateChange()" class="w-full sm:w-64 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-mono text-sm">
+                                </div>
+                                <div>
+                                    <span class="block text-gray-400 uppercase tracking-widest mb-1.5">Arrival Window</span>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 font-sans" id="window-picker"></div>
+                                </div>
+                                <div>
+                                    <span class="block text-gray-400 uppercase tracking-widest mb-1.5">Frequency</span>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 font-sans" id="frequency-picker"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 5: Details -->
+                        <div class="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                            <div>
+                                <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">Step 5</span>
+                                <h3 class="text-lg font-medium text-black">Your Details</h3>
+                            </div>
+                            <div class="space-y-4 text-xs font-mono">
+                                <div>
+                                    <label for="book-name" class="block text-gray-400 uppercase tracking-widest mb-1.5">Full Name</label>
+                                    <input type="text" id="book-name" maxlength="60" placeholder="Johnathan Doe" autocomplete="name" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light text-sm">
+                                </div>
+                                <div>
+                                    <label for="book-address" class="block text-gray-400 uppercase tracking-widest mb-1.5">Service Address</label>
+                                    <input type="text" id="book-address" maxlength="160" placeholder="123 Main Street, Apt 4" autocomplete="street-address" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light text-sm">
+                                </div>
+                                <div>
+                                    <label for="book-notes" class="block text-gray-400 uppercase tracking-widest mb-1.5">Notes <span class="normal-case tracking-normal text-gray-300">(optional)</span></label>
+                                    <textarea id="book-notes" rows="3" maxlength="500" placeholder="Gate code, pets, areas to focus on..." class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light text-sm resize-none"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Summary -->
+                    <aside class="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6 lg:sticky lg:top-28 min-w-0">
+                        <div>
+                            <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block mb-1">Price Summary</span>
+                            <h2 id="summary-package" class="text-2xl font-serif text-black">No package selected</h2>
+                            <p id="summary-meta" class="text-xs font-mono text-gray-500 mt-1 font-light">Choose a package to begin</p>
+                        </div>
+                        <div id="summary-lines" class="space-y-2 text-xs font-mono text-gray-500"></div>
+                        <div class="pt-4 border-t border-gray-100 flex justify-between items-end gap-4">
+                            <div>
+                                <span class="text-xs font-mono text-gray-400 uppercase tracking-widest block">Total</span>
+                                <span id="summary-per" class="text-[10px] font-mono text-gray-400"></span>
+                            </div>
+                            <span id="summary-total" class="text-2xl font-semibold font-serif text-black">$0.00</span>
+                        </div>
+                        <div id="booking-errors" class="hidden bg-red-50 border border-red-100 text-red-600 rounded-2xl p-4 text-xs space-y-1"></div>
+                        <button id="btn-confirm" onclick="confirmBooking()" class="w-full bg-black text-white px-8 py-3.5 rounded-full font-medium hover:bg-gray-800 disabled:opacity-30 transition-all shadow-md">
+                            Confirm Booking
+                        </button>
+                    </aside>
+                </div>
+            </section>
+
+            <!-- 3. MY APPOINTMENTS VIEW -->
+            <section id="view-appointments" class="clean-view hidden max-w-3xl mx-auto space-y-10 fade-in">
+                <div class="flex justify-between items-end border-b border-gray-100 pb-4">
+                    <div>
+                        <h1 class="text-3xl font-serif text-black">My Appointments</h1>
+                        <p class="text-gray-400 font-light text-sm">Your scheduled visits and service history.</p>
+                    </div>
+                </div>
+                <div id="appointments-container" class="space-y-6"></div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="mt-auto border-t border-gray-100 py-8 text-xs font-mono text-gray-400">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-center">
+                <span>&copy; Chowaniec Cleaning Service &bull; All Rights Reserved</span>
+                <div class="flex items-center gap-6">
+                    <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Eco-Certified Products</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Floating Return Button -->
+    <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full flex items-center justify-center text-gray-600 hover:text-black hover:bg-gray-50 hover:scale-105 transition-all z-50">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    </button>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-gray-100 space-y-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="text-xl font-serif text-black">Booking Confirmed</h3>
+                    <p class="text-xs text-gray-400 font-light">Our team will arrive within your window.</p>
+                </div>
+                <button onclick="closeConfirmModal()" title="Close" class="w-10 h-10 -mr-2 -mt-2 flex items-center justify-center text-gray-400 hover:text-black">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex justify-between items-center text-sm">
+                <span class="text-gray-500 font-light">Confirmation Code</span>
+                <span id="confirm-code" class="font-mono font-bold text-black">--</span>
+            </div>
+            <div id="confirm-details" class="space-y-2 text-xs font-mono text-gray-500"></div>
+            <div class="pt-2 flex gap-3">
+                <button type="button" onclick="closeConfirmModal()" class="flex-1 py-3 text-xs font-medium text-gray-500 hover:bg-gray-50 rounded-xl transition-colors">
+                    Done
+                </button>
+                <button type="button" onclick="closeConfirmModal(); navigate('appointments')" class="flex-1 py-3 text-xs font-medium bg-black text-white rounded-xl hover:bg-gray-800 transition-all shadow-md">
+                    View Appointments
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CONFIG = window.CLEANING_CONFIG || {
+            serviceSettings: { maxBedrooms: 5 },
+            packages: [],
+            addOns: [],
+            arrivalWindows: [],
+            frequencies: [{ id: 'one-time', name: 'One-Time', discount: 0 }]
+        };
+        const STORAGE_KEY = 'chowaniec_cleaning_appointments';
+
+        let selectedPackage = null;
+        let selectedBedrooms = 1;
+        let selectedAddOns = [];
+        let selectedWindow = null;
+        let selectedFrequency = (CONFIG.frequencies[0] || {}).id || 'one-time';
+
+        // --- HELPERS ---
+        function escapeHtml(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function money(n) {
+            return '$' + (Number(n) || 0).toFixed(2);
+        }
+
+        function round2(n) {
+            return Math.round(n * 100) / 100;
+        }
+
+        function formatHours(h) {
+            const whole = Math.floor(h);
+            const mins = Math.round((h - whole) * 60);
+            if (mins === 0) return `${whole} hr${whole === 1 ? '' : 's'}`;
+            return `${whole} hr ${mins} min`;
+        }
+
+        function todayISO() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function formatDate(iso) {
+            const parts = String(iso || '').split('-').map(Number);
+            if (parts.length !== 3 || parts.some(isNaN)) return String(iso || '');
+            return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        function loadAppointments() {
+            try {
+                const list = JSON.parse(localStorage.getItem(STORAGE_KEY));
+                return Array.isArray(list) ? list : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveAppointments(list) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+            } catch (e) { /* storage unavailable */ }
+        }
+
+        function getSignedInName() {
+            const user = typeof window.getChowaniecUser === 'function' ? window.getChowaniecUser() : null;
+            return user && user.name && user.name !== 'Guest' ? user.name : '';
+        }
+
+        function prefillName() {
+            const input = document.getElementById('book-name');
+            const name = getSignedInName();
+            if (input && name && !input.value) input.value = name;
+        }
+
+        function returnToHub() {
+            const isLocal =
+                window.location.protocol === 'file:' ||
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1';
+            window.location.href = isLocal ? '../index.html' : '/';
+        }
+
+        function navigate(viewName) {
+            document.querySelectorAll('.clean-view').forEach(v => v.classList.add('hidden'));
+            const target = document.getElementById(`view-${viewName}`);
+            if (target) target.classList.remove('hidden');
+
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                if (tab.dataset.view === viewName) {
+                    tab.classList.add('text-black', 'bg-gray-100');
+                    tab.classList.remove('text-gray-500');
+                } else {
+                    tab.classList.remove('text-black', 'bg-gray-100');
+                    tab.classList.add('text-gray-500');
+                }
+            });
+
+            if (viewName === 'appointments') renderAppointments();
+            if (viewName === 'book') {
+                prefillName();
+                renderBookingPickers();
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // --- PRICING ---
+        function computeQuote() {
+            if (!selectedPackage) return null;
+            const extraBeds = Math.max(0, selectedBedrooms - 1);
+            const bedroomCharge = round2(extraBeds * selectedPackage.perBedroom);
+            const addOns = CONFIG.addOns.filter(a => selectedAddOns.includes(a.id));
+            const addOnTotal = round2(addOns.reduce((sum, a) => sum + a.price, 0));
+            const subtotal = round2(selectedPackage.basePrice + bedroomCharge + addOnTotal);
+            const freq = CONFIG.frequencies.find(f => f.id === selectedFrequency) || CONFIG.frequencies[0];
+            const discount = round2(subtotal * (freq ? freq.discount : 0));
+            const total = round2(subtotal - discount);
+            const hours = selectedPackage.baseHours + extraBeds * selectedPackage.perBedroomHours;
+            return { extraBeds, bedroomCharge, addOns, addOnTotal, subtotal, freq, discount, total, hours };
+        }
+
+        // --- PACKAGES VIEW ---
+        function renderPackages() {
+            const grid = document.getElementById('packages-grid');
+            if (!grid) return;
+
+            grid.innerHTML = CONFIG.packages.map(p => `
+                <div class="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between space-y-6">
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black">
+                                <i data-lucide="${escapeHtml(p.icon || 'sparkles')}" class="w-5 h-5"></i>
+                            </div>
+                            <span class="text-xs font-mono font-medium text-gray-500">from ${money(p.basePrice)}</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">${escapeHtml(formatHours(p.baseHours))}+ &bull; +${money(p.perBedroom)} / extra bedroom</span>
+                            <h3 class="text-xl font-serif text-black mt-0.5">${escapeHtml(p.name)}</h3>
+                            <p class="text-gray-500 font-light text-sm leading-relaxed mt-1">${escapeHtml(p.tagline)}</p>
+                        </div>
+                        <ul class="space-y-2">
+                            ${p.includes.map(item => `
+                                <li class="flex items-start gap-2 text-sm text-gray-600 font-light">
+                                    <i data-lucide="check" class="w-4 h-4 text-black shrink-0 mt-0.5"></i>
+                                    <span>${escapeHtml(item)}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                    <div class="pt-6 border-t border-gray-100">
+                        <button onclick="startBooking('${escapeHtml(p.id)}')" class="w-full min-h-[44px] px-6 py-3 rounded-full bg-black text-white text-xs font-medium hover:bg-gray-800 transition-colors shadow-md">
+                            Book ${escapeHtml(p.name)}
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('addons-catalog').innerHTML = CONFIG.addOns.map(a => `
+                <div class="p-5 rounded-2xl border border-gray-100 flex items-center gap-4 hover:border-gray-300 transition-colors">
+                    <div class="w-10 h-10 shrink-0 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black">
+                        <i data-lucide="${escapeHtml(a.icon || 'plus')}" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-black">${escapeHtml(a.name)}</h4>
+                        <span class="text-xs font-mono text-gray-400">+${money(a.price)}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('frequency-catalog').innerHTML = `
+                <span class="w-full text-[10px] font-mono uppercase tracking-widest text-gray-400 block mb-1">Recurring Savings</span>
+                ${CONFIG.frequencies.map(f => `
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-50 border border-gray-200/60 text-xs font-mono text-gray-600">
+                        <i data-lucide="${f.discount > 0 ? 'repeat' : 'calendar'}" class="w-3.5 h-3.5"></i>
+                        ${escapeHtml(f.name)}${f.discount > 0 ? ` &bull; ${Math.round(f.discount * 100)}% off` : ''}
+                    </span>
+                `).join('')}
+            `;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function startBooking(packageId) {
+            selectedPackage = CONFIG.packages.find(p => p.id === packageId) || null;
+            hideErrors();
+            navigate('book');
+        }
+
+        // --- BOOKING VIEW ---
+        function optionClass(active) {
+            return active
+                ? 'bg-black text-white border-black shadow-md'
+                : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-black';
+        }
+
+        function renderBookingPickers() {
+            const dateInput = document.getElementById('book-date');
+            dateInput.min = todayISO();
+
+            // Packages
+            document.getElementById('package-picker').innerHTML = CONFIG.packages.map(p => {
+                const active = selectedPackage && selectedPackage.id === p.id;
+                return `
+                    <button type="button" onclick="selectPackage('${escapeHtml(p.id)}')" aria-pressed="${active}" class="text-left p-4 rounded-2xl border transition-all flex items-center gap-3 min-h-[56px] ${optionClass(active)}">
+                        <i data-lucide="${escapeHtml(p.icon || 'sparkles')}" class="w-5 h-5 shrink-0"></i>
+                        <span class="flex-1 min-w-0">
+                            <span class="block text-sm font-medium">${escapeHtml(p.name)}</span>
+                            <span class="block text-[11px] font-mono ${active ? 'text-gray-300' : 'text-gray-400'}">${money(p.basePrice)} &bull; ${escapeHtml(formatHours(p.baseHours))}</span>
+                        </span>
+                    </button>
+                `;
+            }).join('');
+
+            // Bedrooms
+            const max = (CONFIG.serviceSettings && CONFIG.serviceSettings.maxBedrooms) || 5;
+            document.getElementById('bedroom-picker').innerHTML = Array.from({ length: max }, (_, i) => i + 1).map(n => `
+                <button type="button" onclick="selectBedrooms(${n})" aria-pressed="${n === selectedBedrooms}" class="min-w-[56px] h-12 px-3 rounded-2xl border font-mono text-sm transition-all flex items-center justify-center gap-1.5 ${optionClass(n === selectedBedrooms)}">
+                    <i data-lucide="bed-double" class="w-4 h-4"></i>${n}
+                </button>
+            `).join('');
+            document.getElementById('bedroom-rate').innerText = selectedPackage
+                ? `+${money(selectedPackage.perBedroom)} per extra bedroom`
+                : '';
+
+            // Add-ons
+            document.getElementById('addon-picker').innerHTML = CONFIG.addOns.map(a => {
+                const checked = selectedAddOns.includes(a.id);
+                return `
+                    <label class="p-4 rounded-2xl border flex items-center justify-between gap-3 cursor-pointer transition-colors min-h-[56px] ${checked ? 'border-black bg-gray-50' : 'border-gray-100 hover:border-gray-300'}">
+                        <span class="flex items-center gap-3 min-w-0">
+                            <i data-lucide="${escapeHtml(a.icon || 'plus')}" class="w-4 h-4 text-black shrink-0"></i>
+                            <span>
+                                <span class="block text-sm font-medium text-black">${escapeHtml(a.name)}</span>
+                                <span class="block text-xs font-mono text-gray-400">+${money(a.price)}</span>
+                            </span>
+                        </span>
+                        <input type="checkbox" data-addon="${escapeHtml(a.id)}" ${checked ? 'checked' : ''} onchange="toggleAddOn(this.dataset.addon, this.checked)" class="w-5 h-5 accent-black rounded cursor-pointer shrink-0">
+                    </label>
+                `;
+            }).join('');
+
+            renderWindowPicker();
+
+            // Frequency
+            document.getElementById('frequency-picker').innerHTML = CONFIG.frequencies.map(f => {
+                const active = f.id === selectedFrequency;
+                return `
+                    <button type="button" onclick="selectFrequency('${escapeHtml(f.id)}')" aria-pressed="${active}" class="p-3 rounded-2xl border text-left transition-all min-h-[56px] ${optionClass(active)}">
+                        <span class="block text-sm font-medium">${escapeHtml(f.name)}</span>
+                        <span class="block text-[11px] font-mono ${active ? 'text-gray-300' : 'text-gray-400'}">${f.discount > 0 ? `Save ${Math.round(f.discount * 100)}% per visit` : 'No commitment'}</span>
+                    </button>
+                `;
+            }).join('');
+
+            updateSummary();
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function isWindowPassed(w) {
+            const date = document.getElementById('book-date').value;
+            return date === todayISO() && new Date().getHours() >= w.startHour;
+        }
+
+        function renderWindowPicker() {
+            if (selectedWindow) {
+                const w = CONFIG.arrivalWindows.find(x => x.id === selectedWindow);
+                if (!w || isWindowPassed(w)) selectedWindow = null;
+            }
+            document.getElementById('window-picker').innerHTML = CONFIG.arrivalWindows.map(w => {
+                const passed = isWindowPassed(w);
+                const active = w.id === selectedWindow;
+                return `
+                    <button type="button" ${passed ? 'disabled' : ''} onclick="selectWindow('${escapeHtml(w.id)}')" aria-pressed="${active}" class="p-3 rounded-2xl border text-left transition-all min-h-[56px] flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed ${optionClass(active)}">
+                        <i data-lucide="${escapeHtml(w.icon || 'clock')}" class="w-4 h-4 shrink-0"></i>
+                        <span>
+                            <span class="block text-sm font-medium">${escapeHtml(w.name)}</span>
+                            <span class="block text-[11px] font-mono ${active ? 'text-gray-300' : 'text-gray-400'}">${passed ? 'Unavailable today' : escapeHtml(w.range)}</span>
+                        </span>
+                    </button>
+                `;
+            }).join('');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function selectPackage(id) {
+            selectedPackage = CONFIG.packages.find(p => p.id === id) || null;
+            renderBookingPickers();
+        }
+
+        function selectBedrooms(n) {
+            selectedBedrooms = n;
+            renderBookingPickers();
+        }
+
+        function toggleAddOn(id, checked) {
+            selectedAddOns = selectedAddOns.filter(a => a !== id);
+            if (checked) selectedAddOns.push(id);
+            renderBookingPickers();
+        }
+
+        function selectWindow(id) {
+            selectedWindow = id;
+            renderWindowPicker();
+            updateSummary();
+        }
+
+        function selectFrequency(id) {
+            selectedFrequency = id;
+            renderBookingPickers();
+        }
+
+        function handleDateChange() {
+            renderWindowPicker();
+            updateSummary();
+        }
+
+        function updateSummary() {
+            hideErrors();
+            const quote = computeQuote();
+            const lines = document.getElementById('summary-lines');
+
+            if (!quote) {
+                document.getElementById('summary-package').innerText = 'No package selected';
+                document.getElementById('summary-meta').innerText = 'Choose a package to begin';
+                lines.innerHTML = '';
+                document.getElementById('summary-total').innerText = money(0);
+                document.getElementById('summary-per').innerText = '';
+                return;
+            }
+
+            const win = CONFIG.arrivalWindows.find(w => w.id === selectedWindow);
+            const date = document.getElementById('book-date').value;
+            document.getElementById('summary-package').innerText = selectedPackage.name;
+            document.getElementById('summary-meta').innerText =
+                `${selectedBedrooms} bedroom${selectedBedrooms === 1 ? '' : 's'} • est. ${formatHours(quote.hours)}`;
+
+            const row = (label, value, extra = '') => `
+                <div class="flex justify-between gap-4 ${extra}">
+                    <span class="min-w-0">${label}</span>
+                    <span class="text-black font-medium shrink-0">${value}</span>
+                </div>`;
+
+            let html = row(escapeHtml(selectedPackage.name), money(selectedPackage.basePrice));
+            if (quote.extraBeds > 0) {
+                html += row(`Extra bedrooms (${quote.extraBeds} &times; ${money(selectedPackage.perBedroom)})`, money(quote.bedroomCharge));
+            }
+            quote.addOns.forEach(a => { html += row(escapeHtml(a.name), money(a.price)); });
+            html += row('Subtotal', money(quote.subtotal), 'pt-2 border-t border-gray-100');
+            if (quote.discount > 0) {
+                html += row(`${escapeHtml(quote.freq.name)} discount (${Math.round(quote.freq.discount * 100)}%)`, `&minus;${money(quote.discount)}`, 'text-emerald-600');
+            }
+            html += `
+                <div class="pt-2 border-t border-gray-100 space-y-1 text-[11px]">
+                    <div class="flex items-center gap-2"><i data-lucide="calendar" class="w-3.5 h-3.5 shrink-0"></i>${date ? escapeHtml(formatDate(date)) : 'Date not chosen'}</div>
+                    <div class="flex items-center gap-2"><i data-lucide="clock" class="w-3.5 h-3.5 shrink-0"></i>${win ? `${escapeHtml(win.name)} (${escapeHtml(win.range)})` : 'Arrival window not chosen'}</div>
+                    <div class="flex items-center gap-2"><i data-lucide="repeat" class="w-3.5 h-3.5 shrink-0"></i>${escapeHtml(quote.freq ? quote.freq.name : 'One-Time')}</div>
+                </div>`;
+            lines.innerHTML = html;
+
+            document.getElementById('summary-total').innerText = money(quote.total);
+            document.getElementById('summary-per').innerText = quote.freq && quote.freq.discount > 0 ? 'per visit' : '';
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function hideErrors() {
+            const box = document.getElementById('booking-errors');
+            if (box) {
+                box.classList.add('hidden');
+                box.innerHTML = '';
+            }
+        }
+
+        function showErrors(errors) {
+            const box = document.getElementById('booking-errors');
+            box.innerHTML = errors.map(e => `<div class="flex items-start gap-2"><i data-lucide="triangle-alert" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i><span>${escapeHtml(e)}</span></div>`).join('');
+            box.classList.remove('hidden');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function confirmBooking() {
+            const date = document.getElementById('book-date').value;
+            const name = document.getElementById('book-name').value.trim();
+            const address = document.getElementById('book-address').value.trim();
+            const notes = document.getElementById('book-notes').value.trim();
+            const win = CONFIG.arrivalWindows.find(w => w.id === selectedWindow);
+
+            const errors = [];
+            if (!selectedPackage) errors.push('Please choose a cleaning package.');
+            if (!date) errors.push('Please choose a service date.');
+            else if (date < todayISO()) errors.push('The service date cannot be in the past.');
+            if (!win) errors.push('Please choose an arrival window.');
+            else if (isWindowPassed(win)) errors.push('That arrival window has already started today.');
+            if (!name) errors.push('Please enter your name.');
+            if (address.length < 5) errors.push('Please enter the service address.');
+
+            if (errors.length) {
+                showErrors(errors);
+                return;
+            }
+            hideErrors();
+
+            const quote = computeQuote();
+            const appointment = {
+                id: 'CC-' + Math.floor(100000 + Math.random() * 900000),
+                packageId: selectedPackage.id,
+                packageName: selectedPackage.name,
+                bedrooms: selectedBedrooms,
+                addOns: quote.addOns.map(a => a.name),
+                date,
+                window: win.name,
+                windowRange: win.range,
+                frequency: quote.freq ? quote.freq.name : 'One-Time',
+                discount: quote.discount,
+                total: quote.total,
+                hours: quote.hours,
+                name,
+                address,
+                notes,
+                status: 'scheduled',
+                createdAt: new Date().toISOString()
+            };
+
+            const list = loadAppointments();
+            list.unshift(appointment);
+            saveAppointments(list);
+
+            openConfirmModal(appointment);
+            resetBookingForm();
+        }
+
+        function resetBookingForm() {
+            selectedPackage = null;
+            selectedBedrooms = 1;
+            selectedAddOns = [];
+            selectedWindow = null;
+            selectedFrequency = (CONFIG.frequencies[0] || {}).id || 'one-time';
+            document.getElementById('book-date').value = '';
+            document.getElementById('book-address').value = '';
+            document.getElementById('book-notes').value = '';
+            renderBookingPickers();
+        }
+
+        function openConfirmModal(a) {
+            document.getElementById('confirm-code').innerText = a.id;
+            const row = (label, value) => `
+                <div class="flex justify-between gap-4">
+                    <span class="text-gray-400">${label}</span>
+                    <span class="text-black font-medium text-right">${value}</span>
+                </div>`;
+            document.getElementById('confirm-details').innerHTML =
+                row('PACKAGE', escapeHtml(a.packageName)) +
+                row('DATE', escapeHtml(formatDate(a.date))) +
+                row('ARRIVAL', `${escapeHtml(a.window)} &bull; ${escapeHtml(a.windowRange)}`) +
+                row('FREQUENCY', escapeHtml(a.frequency)) +
+                row('TOTAL', money(a.total));
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // --- MY APPOINTMENTS ---
+        function getStatus(a) {
+            if (a.status === 'cancelled') return { key: 'cancelled', label: 'Cancelled', cls: 'bg-red-50 text-red-600 border-red-100' };
+            if (String(a.date) < todayISO()) return { key: 'completed', label: 'Completed', cls: 'bg-gray-50 text-gray-500 border-gray-100' };
+            return { key: 'scheduled', label: 'Scheduled', cls: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
+        }
+
+        function cancelAppointment(id) {
+            if (!confirm(`Are you sure you want to cancel appointment ${id}?`)) return;
+            const list = loadAppointments().map(a => (a.id === id ? Object.assign({}, a, { status: 'cancelled' }) : a));
+            saveAppointments(list);
+            renderAppointments();
+        }
+
+        function removeAppointment(id) {
+            if (!confirm(`Remove appointment ${id} from your history?`)) return;
+            saveAppointments(loadAppointments().filter(a => a.id !== id));
+            renderAppointments();
+        }
+
+        function renderAppointments() {
+            const container = document.getElementById('appointments-container');
+            const list = loadAppointments();
+
+            if (list.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white p-8 sm:p-12 rounded-3xl border border-gray-100 text-center space-y-4">
+                        <i data-lucide="calendar-x" class="w-8 h-8 text-gray-300 mx-auto"></i>
+                        <h3 class="text-lg font-medium text-black">No Appointments Yet</h3>
+                        <p class="text-xs text-gray-400 font-light">Choose a cleaning package to schedule your first visit.</p>
+                        <button onclick="navigate('packages')" class="mt-2 min-h-[40px] px-6 py-2.5 rounded-full bg-black text-white text-xs font-medium hover:bg-gray-800 transition-colors">
+                            Explore Packages
+                        </button>
+                    </div>
+                `;
+                if (window.lucide) lucide.createIcons();
+                return;
+            }
+
+            container.innerHTML = list.map(a => {
+                const status = getStatus(a);
+                const addOns = Array.isArray(a.addOns) ? a.addOns : [];
+                return `
+                <div class="appointment-card bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col sm:flex-row justify-between ${status.key === 'cancelled' ? 'opacity-70' : ''}" data-id="${escapeHtml(a.id)}">
+                    <div class="p-6 sm:p-8 flex-1 space-y-4 min-w-0">
+                        <div class="flex justify-between items-start gap-3">
+                            <div class="min-w-0">
+                                <span class="text-[10px] font-mono text-gray-400 uppercase tracking-widest block">Cleaning Visit</span>
+                                <h3 class="text-2xl font-serif text-black mt-0.5 break-words">${escapeHtml(a.packageName)}</h3>
+                            </div>
+                            <span class="appointment-status shrink-0 font-mono text-[10px] uppercase tracking-widest font-medium px-3 py-1 rounded-full border ${status.cls}">${status.label}</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2 font-mono text-xs">
+                            <div>
+                                <span class="text-gray-400 block text-[10px]">DATE</span>
+                                <span class="font-medium text-black">${escapeHtml(formatDate(a.date))}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400 block text-[10px]">ARRIVAL</span>
+                                <span class="font-medium text-black">${escapeHtml(a.window)}<span class="block text-gray-400 font-normal text-[10px]">${escapeHtml(a.windowRange)}</span></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400 block text-[10px]">HOME</span>
+                                <span class="font-medium text-black">${escapeHtml(a.bedrooms)} bedroom${Number(a.bedrooms) === 1 ? '' : 's'}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400 block text-[10px]">FREQUENCY</span>
+                                <span class="font-medium text-black">${escapeHtml(a.frequency)}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400 block text-[10px]">TOTAL</span>
+                                <span class="font-medium text-black">${money(a.total)}${Number(a.discount) > 0 ? ' <span class="text-gray-400 font-normal">/ visit</span>' : ''}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400 block text-[10px]">GUEST</span>
+                                <span class="font-medium text-black break-words">${escapeHtml(a.name)}</span>
+                            </div>
+                        </div>
+
+                        <div class="font-mono text-xs">
+                            <span class="text-gray-400 block text-[10px]">ADDRESS</span>
+                            <span class="font-medium text-black break-words">${escapeHtml(a.address)}</span>
+                        </div>
+
+                        ${addOns.length > 0 ? `
+                            <div>
+                                <span class="text-[10px] font-mono text-gray-400 block mb-1">ADD-ONS</span>
+                                <div class="flex flex-wrap gap-1.5">
+                                    ${addOns.map(x => `<span class="px-2.5 py-1 bg-gray-50 border border-gray-100 rounded-lg text-[10px] font-mono text-gray-600">${escapeHtml(x)}</span>`).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        ${a.notes ? `
+                            <div class="font-mono text-xs">
+                                <span class="text-gray-400 block text-[10px]">NOTES</span>
+                                <p class="font-sans font-light text-gray-600 text-sm break-words whitespace-pre-line">${escapeHtml(a.notes)}</p>
+                            </div>
+                        ` : ''}
+
+                        <div class="pt-1">
+                            ${status.key === 'scheduled' ? `
+                                <button data-id="${escapeHtml(a.id)}" onclick="cancelAppointment(this.dataset.id)" class="btn-cancel min-h-[40px] text-xs font-mono text-gray-400 hover:text-red-600 transition-colors flex items-center gap-1.5">
+                                    <i data-lucide="calendar-x" class="w-3.5 h-3.5"></i> Cancel Appointment
+                                </button>
+                            ` : `
+                                <button data-id="${escapeHtml(a.id)}" onclick="removeAppointment(this.dataset.id)" class="btn-remove min-h-[40px] text-xs font-mono text-gray-400 hover:text-red-600 transition-colors flex items-center gap-1.5">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove from History
+                                </button>
+                            `}
+                        </div>
+                    </div>
+
+                    <div class="border-t sm:border-t-0 sm:border-l border-dashed border-gray-200 p-6 sm:p-8 sm:w-48 bg-gray-50/50 flex flex-col items-center justify-center text-center space-y-2">
+                        <i data-lucide="${status.key === 'cancelled' ? 'calendar-x' : 'calendar-check'}" class="w-10 h-10 text-black"></i>
+                        <span class="font-mono text-xs font-bold text-black">${escapeHtml(a.id)}</span>
+                        <span class="text-[9px] font-mono uppercase tracking-widest text-gray-400">Confirmation Code</span>
+                    </div>
+                </div>
+            `;
+            }).join('');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        window.initializeProtectedContent = function() {
+            renderPackages();
+            prefillName();
+            if (window.lucide) lucide.createIcons();
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderPackages();
+            if (window.isAppAuthorized && window.isAppAuthorized()) {
+                window.initializeProtectedContent();
+            }
+        });
+    </script>
+</body>
+</html>
