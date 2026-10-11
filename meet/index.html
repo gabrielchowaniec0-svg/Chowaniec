@@ -33,26 +33,26 @@
     }
   </style>
 </head>
-<body class="h-screen w-screen flex flex-col justify-between selection:bg-sky-500/20 relative">
+<body class="h-[100dvh] w-screen overflow-hidden flex flex-col justify-between selection:bg-sky-500/20 relative">
 
   <!-- Application Shell targeted by auth-gate.js -->
-  <div id="app-root" class="flex-1 flex flex-col h-full w-full justify-between transition-all duration-500">
+  <div id="app-root" class="flex-1 min-h-0 flex flex-col h-full w-full justify-between transition-all duration-500">
 
     <!-- Top HUD Bar -->
-    <header class="h-16 px-6 flex justify-between items-center z-10 bg-[#202124] border-b border-white/5">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center text-black font-semibold text-xs">
+    <header class="h-14 sm:h-16 px-3 sm:px-6 flex justify-between items-center gap-3 z-10 bg-[#202124] border-b border-white/5">
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div class="w-8 h-8 shrink-0 bg-white rounded-full flex items-center justify-center text-black font-semibold text-xs">
           CM
         </div>
-        <span class="text-sm font-medium tracking-wide text-zinc-200">Production Call</span>
-        <span class="text-zinc-600">|</span>
-        <span id="active-code-display" class="text-xs font-mono text-zinc-400">ID: production</span>
-        <span class="text-zinc-600">|</span>
-        <span id="clock" class="text-xs font-mono text-zinc-400">00:00 PM</span>
+        <span class="hidden sm:inline text-sm font-medium tracking-wide text-zinc-200">Production Call</span>
+        <span class="hidden sm:inline text-zinc-600">|</span>
+        <span id="active-code-display" class="text-xs font-mono text-zinc-400 truncate">ID: production</span>
+        <span class="hidden sm:inline text-zinc-600">|</span>
+        <span id="clock" class="hidden sm:inline text-xs font-mono text-zinc-400">00:00 PM</span>
       </div>
 
       <!-- Live Ranks Display -->
-      <div class="flex items-center gap-2" id="authority-pills">
+      <div class="hidden md:flex items-center gap-2" id="authority-pills">
         <span id="director-badge" class="hidden text-[11px] font-mono px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300">
           Director: <strong id="director-name">Vacant</strong>
         </span>
@@ -63,55 +63,66 @@
           Guests: <strong id="guest-count">0/4</strong>
         </span>
       </div>
+
+      <!-- Compact role chip on small screens -->
+      <button onclick="toggleDrawer('roster')" id="mobile-role-chip" class="md:hidden shrink-0 text-[11px] font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-zinc-300">
+        Ready
+      </button>
     </header>
 
     <!-- Main Stage / Video Area -->
-    <main class="flex-1 p-4 relative flex gap-4 overflow-hidden">
+    <main class="flex-1 min-h-0 p-2 sm:p-4 relative flex gap-4 overflow-hidden">
       <div id="video-stage" class="flex-1 h-full rounded-2xl overflow-hidden bg-[#18191b] border border-white/5 relative flex items-center justify-center">
         <div id="daily-container" class="w-full h-full"></div>
       </div>
 
-      <!-- Right Activities Drawer -->
-      <aside id="side-drawer" class="w-80 h-full bg-[#282a2d] border border-white/10 rounded-2xl flex flex-col justify-between hidden p-5 shadow-2xl transition-all">
+      <!-- Activities Drawer: bottom sheet on phones, side panel on larger screens -->
+      <div id="drawer-backdrop" onclick="toggleDrawer(null)" class="hidden md:hidden fixed inset-0 bg-black/50 z-30"></div>
+      <aside id="side-drawer" class="hidden fixed inset-x-0 bottom-0 max-h-[80dvh] rounded-t-3xl z-40 md:static md:z-auto md:w-80 md:h-full md:max-h-none md:rounded-2xl bg-[#282a2d] border border-white/10 flex-col p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl">
         <div class="flex items-center justify-between border-b border-white/10 pb-4">
           <h3 id="drawer-title" class="text-sm font-semibold text-white tracking-wide">Activities</h3>
-          <button onclick="toggleDrawer(null)" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white">
+          <button onclick="toggleDrawer(null)" class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
 
-        <div id="drawer-body" class="flex-1 py-4 overflow-y-auto space-y-4"></div>
+        <div id="drawer-body" class="flex-1 min-h-0 py-4 overflow-y-auto space-y-4"></div>
       </aside>
     </main>
 
     <!-- Bottom Controls -->
-    <footer class="h-20 px-6 flex items-center justify-between border-t border-white/5 bg-[#202124]">
-      <div class="hidden sm:flex items-center gap-2 text-xs font-mono text-zinc-400">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span id="current-user-role-label">Ready</span>
+    <footer class="px-3 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:h-20 sm:py-0 flex items-center justify-center sm:justify-between gap-2 border-t border-white/5 bg-[#202124]">
+      <div class="hidden sm:flex items-center gap-2 text-xs font-mono text-zinc-400 min-w-0">
+        <span class="w-2 h-2 shrink-0 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="current-user-role-label" class="truncate">Ready</span>
       </div>
 
       <!-- Action Buttons -->
-      <div class="flex items-center gap-3">
-        <button id="btn-mic" onclick="toggleAudio()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
-          <i data-lucide="mic" id="icon-mic" class="w-5 h-5"></i>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button id="btn-mic" onclick="toggleAudio()" title="Microphone" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
+          <i data-lucide="mic" class="w-5 h-5"></i>
         </button>
 
-        <button id="btn-cam" onclick="toggleVideo()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
-          <i data-lucide="video" id="icon-cam" class="w-5 h-5"></i>
+        <button id="btn-cam" onclick="toggleVideo()" title="Camera" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
+          <i data-lucide="video" class="w-5 h-5"></i>
         </button>
 
-        <button id="btn-share" onclick="toggleScreenShare()" class="meet-btn w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
-          <i data-lucide="screen-share" id="icon-share" class="w-5 h-5"></i>
+        <!-- Screen sharing isn't supported by mobile browsers -->
+        <button id="btn-share" onclick="toggleScreenShare()" title="Share Screen" class="meet-btn hidden sm:flex w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] items-center justify-center text-white shadow-md">
+          <i data-lucide="screen-share" class="w-5 h-5"></i>
         </button>
 
-        <button onclick="leaveMeeting()" class="meet-btn px-6 h-12 rounded-full bg-red-600 hover:bg-red-500 text-white font-medium flex items-center justify-center gap-2 shadow-lg">
+        <button onclick="leaveMeeting()" title="Leave" class="meet-btn px-6 h-12 rounded-full bg-red-600 hover:bg-red-500 text-white font-medium flex items-center justify-center gap-2 shadow-lg">
           <i data-lucide="phone-off" class="w-5 h-5"></i>
+        </button>
+
+        <button onclick="toggleDrawer('menu')" title="More" class="meet-btn sm:hidden w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white shadow-md">
+          <i data-lucide="ellipsis" class="w-5 h-5"></i>
         </button>
       </div>
 
       <!-- Activities Controls -->
-      <div class="flex items-center gap-2">
+      <div class="hidden sm:flex items-center gap-2">
         <button onclick="copyInviteLink()" title="Copy Meeting Link" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
           <i data-lucide="link-2" class="w-4 h-4"></i>
         </button>
@@ -120,20 +131,23 @@
           <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
         </button>
 
-        <button onclick="toggleDrawer('forms')" title="Push Production Form" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+        <button onclick="toggleDrawer('forms')" title="Production Forms" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
           <i data-lucide="clipboard-list" class="w-4 h-4"></i>
         </button>
 
-        <button onclick="toggleDrawer('roster')" title="Role Delegations" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+        <button onclick="toggleDrawer('roster')" title="People & Director Controls" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
           <i data-lucide="users" class="w-4 h-4"></i>
         </button>
       </div>
     </footer>
   </div>
 
+  <!-- Toast notifications -->
+  <div id="toast" class="hidden fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-full bg-white text-black text-xs font-medium shadow-2xl max-w-[90vw] text-center"></div>
+
   <!-- Pre-Join Lobby -->
-  <div id="lobby-screen" class="fixed inset-0 bg-[#202124]/95 backdrop-blur-md z-40 flex items-center justify-center p-6">
-    <div class="max-w-md w-full bg-[#282a2d] border border-white/10 p-8 rounded-3xl shadow-2xl space-y-6">
+  <div id="lobby-screen" class="fixed inset-0 bg-[#202124]/95 backdrop-blur-md z-40 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <div class="max-w-md w-full bg-[#282a2d] border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black font-semibold text-sm">
@@ -180,7 +194,7 @@
   </div>
 
   <!-- Real-time Popup for Broadcast Forms / Polls -->
-  <div id="broadcast-popup" class="fixed bottom-24 left-8 max-w-sm w-full bg-[#282a2d] border border-sky-400/40 rounded-2xl p-5 shadow-2xl z-40 hidden">
+  <div id="broadcast-popup" class="fixed bottom-24 left-3 right-3 sm:left-8 sm:right-auto sm:w-full max-w-sm max-h-[60dvh] overflow-y-auto bg-[#282a2d] border border-sky-400/40 rounded-2xl p-5 shadow-2xl z-40 hidden">
     <div class="flex justify-between items-start mb-3">
       <span class="text-xs font-mono uppercase tracking-widest text-sky-400 font-semibold" id="popup-badge">Production Alert</span>
       <button onclick="hideBroadcastPopup()" class="text-zinc-400 hover:text-white">
@@ -191,7 +205,7 @@
   </div>
 
   <!-- Floating Return Button -->
-  <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-8 right-8 w-14 h-14 bg-[#282a2d] border border-white/10 shadow-xl rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#3c4043] hover:scale-105 transition-all z-50">
+  <button id="hub-btn" onclick="returnToHub()" title="Return to Hub" class="fixed bottom-8 right-8 w-14 h-14 bg-[#282a2d] border border-white/10 shadow-xl rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#3c4043] hover:scale-105 transition-all z-50">
     <i data-lucide="arrow-left" class="w-5 h-5"></i>
   </button>
 
@@ -218,18 +232,63 @@
       guests: []
     };
 
-    let productionForms = [
+    // Role hand-overs made by the Director; they take priority over join order.
+    let roleOverride = { directorId: null, coDirectorId: null };
+
+    // Production forms are editable by Directors and saved on this device.
+    const FORMS_STORAGE_KEY = 'chowaniec_meet_forms';
+    const FIELD_TYPES = { text: 'Short answer', yesno: 'Yes / No', rating: 'Rating 1-10' };
+    const MAX_FORM_FIELDS = 12;
+    const DEFAULT_FORMS = [
       {
-        id: 'scene-review',
         title: 'Episode 1 Scene 3 Approval',
-        fields: ['Lighting Quality (1-10)', 'Audio Sync Status', 'Director Notes']
+        fields: [
+          { label: 'Lighting Quality', type: 'rating' },
+          { label: 'Audio Sync Status', type: 'text' },
+          { label: 'Director Notes', type: 'text' }
+        ]
       },
       {
-        id: 'gear-check',
         title: 'Stage Gear Checklist',
-        fields: ['Boom Mic Position', 'Lens Aperture Set', 'SD Card Backed Up']
+        fields: [
+          { label: 'Boom Mic Position', type: 'text' },
+          { label: 'Lens Aperture Set', type: 'yesno' },
+          { label: 'SD Card Backed Up', type: 'yesno' }
+        ]
       }
     ];
+
+    function sanitizeForm(form) {
+      const fields = (Array.isArray(form && form.fields) ? form.fields : [])
+        .map((f) => ({
+          label: String((f && f.label) || '').trim().slice(0, 80),
+          type: Object.prototype.hasOwnProperty.call(FIELD_TYPES, f && f.type) ? f.type : 'text'
+        }))
+        .filter((f) => f.label)
+        .slice(0, MAX_FORM_FIELDS);
+      return { title: String((form && form.title) || '').trim().slice(0, 80), fields };
+    }
+
+    function loadForms() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(FORMS_STORAGE_KEY));
+        if (Array.isArray(stored)) return stored.map(sanitizeForm).filter((f) => f.title && f.fields.length);
+      } catch (e) {
+        // fall back to defaults
+      }
+      return DEFAULT_FORMS.map(sanitizeForm);
+    }
+
+    function saveForms() {
+      try {
+        localStorage.setItem(FORMS_STORAGE_KEY, JSON.stringify(productionForms));
+      } catch (e) {
+        toast('Could not save forms on this device.');
+      }
+    }
+
+    let productionForms = loadForms();
+    let formDraft = null;       // form being created/edited: { index, title, fields }
 
     let activePoll = null;      // poll received from the Director / Co-Director
     let activeForm = null;      // form received from the Director / Co-Director
@@ -303,6 +362,7 @@
 
     function showLobby(message) {
       document.getElementById('lobby-screen').classList.remove('hidden');
+      document.getElementById('hub-btn').classList.remove('hidden');
       setLobbyBusy(false);
       setLobbyError(message);
     }
@@ -364,6 +424,7 @@
 
       localUserName = nameInput;
       currentMeetingCode = codeInput;
+      isLeaving = false;
       setLobbyError(null);
       setLobbyBusy(true);
 
@@ -377,6 +438,7 @@
 
       document.getElementById('active-code-display').innerText = `ID: ${currentMeetingCode}`;
       document.getElementById('lobby-screen').classList.add('hidden');
+      document.getElementById('hub-btn').classList.add('hidden');
 
       callFrame = window.DailyIframe.createFrame(document.getElementById('daily-container'), {
         iframeStyle: {
@@ -391,7 +453,7 @@
       });
 
       callFrame.on('joined-meeting', handleMeetingJoined);
-      callFrame.on('participant-joined', refreshRoles);
+      callFrame.on('participant-joined', handleParticipantJoined);
       callFrame.on('participant-left', refreshRoles);
       callFrame.on('participant-updated', handleParticipantUpdated);
       callFrame.on('app-message', handleAppMessage);
@@ -451,6 +513,8 @@
         frame.destroy().catch(() => {});
       }
       sessionRoles = { director: null, coDirector: null, guests: [] };
+      roleOverride = { directorId: null, coDirectorId: null };
+      warnedGuestLimit = false;
       myPoll = null;
       formResponses = [];
       toggleDrawer(null);
@@ -481,21 +545,25 @@
       return p.joined_at ? new Date(p.joined_at).getTime() : Number.MAX_SAFE_INTEGER;
     }
 
-    // Director: first host (room owner) to join, otherwise the first person to join.
-    // Co-Director: the next person to join. Everyone else is a guest.
+    // Director: whoever the Director handed the role to, else the first host (room
+    // owner) to join, else the first person to join. Co-Director: the hand-over
+    // pick, else the next person to join. Everyone else is a guest.
     function refreshRoles() {
       if (!callFrame) return;
       const people = Object.values(callFrame.participants()).sort(
         (a, b) => joinedTime(a) - joinedTime(b) || a.session_id.localeCompare(b.session_id)
       );
-      const director = people.find((p) => p.owner) || people[0] || null;
+      const byId = (id) => people.find((p) => p.session_id === id);
+      const director = byId(roleOverride.directorId) || people.find((p) => p.owner) || people[0] || null;
       const others = people.filter((p) => p !== director);
+      const coDirector = others.find((p) => p.session_id === roleOverride.coDirectorId) || others[0] || null;
       const previousRoles = JSON.stringify(sessionRoles);
+      const entry = (p) => ({ id: p.session_id, name: p.user_name || 'Guest' });
 
       sessionRoles = {
-        director: director && { id: director.session_id, name: director.user_name || 'Guest' },
-        coDirector: others[0] ? { id: others[0].session_id, name: others[0].user_name || 'Guest' } : null,
-        guests: others.slice(1).map((p) => ({ id: p.session_id, name: p.user_name || 'Guest' }))
+        director: director && entry(director),
+        coDirector: coDirector && entry(coDirector),
+        guests: others.filter((p) => p !== coDirector).map(entry)
       };
 
       const myId = localSessionId();
@@ -532,6 +600,15 @@
       return [sessionRoles.director, sessionRoles.coDirector].filter(Boolean).map((r) => r.id);
     }
 
+    function handleParticipantJoined(evt) {
+      refreshRoles();
+      // Bring newcomers up to date with any role hand-overs.
+      const newcomer = evt && evt.participant && evt.participant.session_id;
+      if (newcomer && myRole() === 'Director' && (roleOverride.directorId || roleOverride.coDirectorId)) {
+        callFrame.sendAppMessage({ type: 'ROLE_STATE', ...roleOverride }, newcomer);
+      }
+    }
+
     function handleMeetingJoined() {
       refreshRoles();
       syncLocalMediaState();
@@ -540,6 +617,8 @@
     function handleParticipantUpdated(evt) {
       refreshRoles();
       if (evt && evt.participant && evt.participant.local) syncLocalMediaState();
+      // Keep mic indicators current (the roster has no inputs to lose).
+      if (currentDrawerTab === 'roster') renderDrawer('roster');
     }
 
     function updateAuthorityUI() {
@@ -555,6 +634,7 @@
       document.getElementById('current-user-role-label').innerText = callFrame
         ? `${localUserName} (${myRole()})`
         : 'Ready';
+      document.getElementById('mobile-role-chip').innerText = callFrame ? myRole() : 'Ready';
     }
 
     // --- Media controls ---
@@ -626,13 +706,19 @@
       const msg = evt.data || {};
       const fromId = evt.fromId;
 
-      if (msg.type === 'PUSH_FORM' && isPrivileged(fromId) && msg.form && Array.isArray(msg.form.fields)) {
-        activeForm = { title: String(msg.form.title), fields: msg.form.fields.map(String) };
+      if (msg.type === 'PUSH_FORM' && isPrivileged(fromId) && msg.form) {
+        activeForm = sanitizeForm(msg.form);
+        if (!activeForm.fields.length) return;
         displayBroadcastPopup('Form Received: ' + activeForm.title, `
           <p class="text-xs text-zinc-300 font-light mb-2">Fill out before continuing shoot:</p>
-          <div class="space-y-2">
-            ${activeForm.fields.map((f, i) => `<input type="text" data-form-field="${i}" placeholder="${escapeHtml(f)}" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2 text-xs text-white">`).join('')}
-            <button onclick="submitFormResponse()" class="w-full py-2 bg-sky-500 rounded-lg text-xs font-medium text-white">Submit to Director</button>
+          <div class="space-y-3">
+            ${activeForm.fields.map((f, i) => `
+              <label class="block space-y-1">
+                <span class="block text-[11px] text-zinc-400">${escapeHtml(f.label)}</span>
+                ${renderFieldInput(f, i)}
+              </label>
+            `).join('')}
+            <button onclick="submitFormResponse()" class="w-full py-2.5 bg-sky-500 rounded-lg text-xs font-medium text-white">Submit to Director</button>
           </div>
         `);
       } else if (msg.type === 'PUSH_POLL' && isPrivileged(fromId) && msg.poll && Array.isArray(msg.poll.options)) {
@@ -655,6 +741,23 @@
           answers: msg.answers.map((a) => ({ field: String(a.field), value: String(a.value) }))
         });
         if (currentDrawerTab === 'forms') renderDrawer('forms');
+      } else if (msg.type === 'ROLE_STATE' && (isPrivileged(fromId) || msg.directorId === fromId)) {
+        roleOverride = {
+          directorId: typeof msg.directorId === 'string' ? msg.directorId : null,
+          coDirectorId: typeof msg.coDirectorId === 'string' ? msg.coDirectorId : null
+        };
+        refreshRoles();
+        toast(`${sessionRoles.director ? sessionRoles.director.name : 'Someone'} is now the Director.`);
+      } else if (msg.type === 'MUTE' && isPrivileged(fromId)) {
+        if (!isAudioMuted) {
+          isAudioMuted = true;
+          callFrame.setLocalAudio(false);
+          renderMediaButtons();
+        }
+        toast(`${participantName(fromId)} muted you.`);
+      } else if (msg.type === 'REMOVE' && sessionRoles.director && sessionRoles.director.id === fromId) {
+        isLeaving = true;
+        endCall('You were removed from the meeting by the Director.');
       } else if (msg.type === 'POLL_VOTE' && myPoll && msg.pollId === myPoll.id) {
         const index = Number(msg.optionIndex);
         if (Number.isInteger(index) && index >= 0 && index < myPoll.options.length) {
@@ -662,6 +765,38 @@
           if (currentDrawerTab === 'polls') renderDrawer('polls');
         }
       }
+    }
+
+    function renderFieldInput(field, i) {
+      const base = 'w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white';
+      if (field.type === 'yesno') {
+        return `<select data-form-field="${i}" class="${base}"><option value="">Select...</option><option>Yes</option><option>No</option></select>`;
+      }
+      if (field.type === 'rating') {
+        const options = Array.from({ length: 10 }, (_, n) => `<option>${n + 1}</option>`).join('');
+        return `<select data-form-field="${i}" class="${base}"><option value="">Select...</option>${options}</select>`;
+      }
+      return `<input type="text" data-form-field="${i}" maxlength="500" class="${base}">`;
+    }
+
+    function participantName(sessionId) {
+      const p = getParticipant(sessionId);
+      return (p && p.user_name) || 'The Director';
+    }
+
+    function getParticipant(sessionId) {
+      if (!callFrame) return null;
+      const all = callFrame.participants();
+      return all[sessionId] || (all.local.session_id === sessionId ? all.local : null);
+    }
+
+    let toastTimer = null;
+    function toast(message) {
+      const el = document.getElementById('toast');
+      el.innerText = message;
+      el.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.add('hidden'), 3500);
     }
 
     function displayBroadcastPopup(badge, innerHtml) {
@@ -679,7 +814,7 @@
     function submitFormResponse() {
       if (!activeForm || !callFrame) return;
       const answers = activeForm.fields.map((field, i) => ({
-        field,
+        field: field.label,
         value: document.querySelector(`[data-form-field="${i}"]`).value.trim()
       }));
       const recipients = privilegedIds().filter((id) => id !== localSessionId());
@@ -707,15 +842,15 @@
 
     function toggleDrawer(tab) {
       const drawer = document.getElementById('side-drawer');
-      if (!tab || currentDrawerTab === tab) {
-        drawer.classList.add('hidden');
-        currentDrawerTab = null;
-        return;
-      }
+      const backdrop = document.getElementById('drawer-backdrop');
+      const open = !!tab && currentDrawerTab !== tab;
 
-      currentDrawerTab = tab;
-      drawer.classList.remove('hidden');
-      renderDrawer(tab);
+      currentDrawerTab = open ? tab : null;
+      drawer.classList.toggle('hidden', !open);
+      drawer.classList.toggle('flex', open);
+      backdrop.classList.toggle('hidden', !open);
+      if (!open) formDraft = null;
+      if (open) renderDrawer(tab);
     }
 
     function restrictedNotice(what) {
@@ -727,26 +862,53 @@
       const body = document.getElementById('drawer-body');
       const canManage = !!callFrame && isPrivileged(localSessionId());
 
-      if (tab === 'forms') {
-        title.innerText = 'Pre-made Production Forms';
-        body.innerHTML = !canManage ? restrictedNotice('push forms') : `
+      if (tab === 'menu') {
+        title.innerText = 'Meeting Tools';
+        const item = (action, icon, label) => `
+          <button onclick="${action}" class="w-full flex items-center gap-3 p-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-sm text-white text-left">
+            <i data-lucide="${icon}" class="w-4 h-4 text-zinc-400"></i><span>${label}</span>
+          </button>`;
+        body.innerHTML = `
+          <div class="space-y-2">
+            ${item("copyInviteLink(); toggleDrawer(null)", 'link-2', 'Copy Meeting Link')}
+            ${item("toggleDrawer('roster')", 'users', 'People & Director Controls')}
+            ${item("toggleDrawer('polls')", 'bar-chart-2', 'Quick Polls')}
+            ${item("toggleDrawer('forms')", 'clipboard-list', 'Production Forms')}
+          </div>
+        `;
+      } else if (tab === 'forms') {
+        title.innerText = formDraft ? (formDraft.index === null ? 'New Form' : 'Edit Form') : 'Production Forms';
+        body.innerHTML = !canManage ? restrictedNotice('push forms') : formDraft ? renderFormEditor() : `
           <div class="space-y-4">
-            <p class="text-xs text-zinc-400 font-light">Push forms directly to all participants:</p>
-            ${productionForms.map((f, i) => `
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs text-zinc-400 font-light">Push forms directly to all participants:</p>
+              <button onclick="startFormEdit(null)" class="shrink-0 flex items-center gap-1 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-xs text-white">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> New
+              </button>
+            </div>
+            ${productionForms.length ? productionForms.map((f, i) => `
               <div class="p-4 rounded-xl bg-white/5 border border-white/5 space-y-2">
-                <h4 class="text-xs font-semibold text-white">${escapeHtml(f.title)}</h4>
-                <p class="text-[11px] text-zinc-400">${f.fields.length} checklist fields</p>
-                <button onclick="broadcastForm(${i})" class="w-full py-1.5 bg-white text-black text-xs rounded-lg font-medium hover:bg-zinc-200 transition-colors">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <h4 class="text-xs font-semibold text-white break-words">${escapeHtml(f.title)}</h4>
+                    <p class="text-[11px] text-zinc-400">${f.fields.length} ${f.fields.length === 1 ? 'field' : 'fields'}</p>
+                  </div>
+                  <div class="flex gap-1 shrink-0">
+                    <button onclick="startFormEdit(${i})" title="Edit" class="w-9 h-9 rounded-lg hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                    <button onclick="deleteForm(${i})" title="Delete" class="w-9 h-9 rounded-lg hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                  </div>
+                </div>
+                <button onclick="broadcastForm(${i})" class="w-full py-2 bg-white text-black text-xs rounded-lg font-medium hover:bg-zinc-200 transition-colors">
                   Push Form to Team
                 </button>
               </div>
-            `).join('')}
+            `).join('') : '<p class="text-[11px] text-zinc-500">No forms yet. Create one with "New".</p>'}
             <div class="pt-2 border-t border-white/10 space-y-2">
               <span class="block text-xs font-mono text-zinc-400">RESPONSES (${formResponses.length})</span>
               ${formResponses.length ? formResponses.map((r) => `
                 <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1">
                   <p class="text-xs text-white font-medium">${escapeHtml(r.from)} <span class="text-zinc-500 font-light">· ${escapeHtml(r.title)}</span></p>
-                  ${r.answers.map((a) => `<p class="text-[11px] text-zinc-400"><span class="text-zinc-500">${escapeHtml(a.field)}:</span> ${escapeHtml(a.value || '-')}</p>`).join('')}
+                  ${r.answers.map((a) => `<p class="text-[11px] text-zinc-400 break-words"><span class="text-zinc-500">${escapeHtml(a.field)}:</span> ${escapeHtml(a.value || '-')}</p>`).join('')}
                 </div>
               `).join('') : '<p class="text-[11px] text-zinc-500">No responses yet.</p>'}
             </div>
@@ -769,25 +931,207 @@
           </div>
         `;
       } else if (tab === 'roster') {
-        title.innerText = 'Role Management';
-        body.innerHTML = `
-          <div class="space-y-3 text-xs">
-            <div class="p-3 bg-white/5 rounded-xl border border-white/5">
-              <span class="text-zinc-500 font-mono block text-[10px]">DIRECTOR (MAX 1)</span>
-              <span class="text-white font-medium">${sessionRoles.director ? escapeHtml(sessionRoles.director.name) : 'None'}</span>
-            </div>
-            <div class="p-3 bg-white/5 rounded-xl border border-white/5">
-              <span class="text-zinc-500 font-mono block text-[10px]">CO-DIRECTOR (MAX 1)</span>
-              <span class="text-white font-medium">${sessionRoles.coDirector ? escapeHtml(sessionRoles.coDirector.name) : 'None'}</span>
-            </div>
-            <div class="p-3 bg-white/5 rounded-xl border border-white/5">
-              <span class="text-zinc-500 font-mono block text-[10px]">GUESTS (MAX ${MAX_GUESTS})</span>
-              <span class="text-white font-medium">${escapeHtml(sessionRoles.guests.map((g) => g.name).join(', ')) || 'No guests present'}</span>
-            </div>
-          </div>
-        `;
+        title.innerText = 'People & Roles';
+        body.innerHTML = renderRoster();
       }
       lucide.createIcons();
+    }
+
+    // --- People & Director controls ---
+
+    function renderRoster() {
+      const myId = localSessionId();
+      const amDirector = myRole() === 'Director';
+      const canMute = !!callFrame && isPrivileged(myId);
+      const people = [
+        ...(sessionRoles.director ? [{ ...sessionRoles.director, role: 'Director' }] : []),
+        ...(sessionRoles.coDirector ? [{ ...sessionRoles.coDirector, role: 'Co-Director' }] : []),
+        ...sessionRoles.guests.map((g) => ({ ...g, role: 'Guest' }))
+      ];
+      if (!people.length) return '<p class="text-xs text-zinc-400 font-light">Join a meeting to see who is here.</p>';
+
+      const roleStyle = {
+        'Director': 'bg-amber-500/10 border-amber-500/20 text-amber-300',
+        'Co-Director': 'bg-sky-500/10 border-sky-500/20 text-sky-300',
+        'Guest': 'bg-white/5 border-white/10 text-zinc-400'
+      };
+      const action = (fn, icon, label, danger) => `
+        <button onclick="${fn}" class="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] ${danger ? 'text-red-300' : 'text-zinc-200'}">
+          <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>${label}
+        </button>`;
+
+      return `
+        <div class="space-y-3">
+          ${canMute ? `
+            <button onclick="muteEveryone()" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-white text-black text-xs font-medium hover:bg-zinc-200">
+              <i data-lucide="mic-off" class="w-4 h-4"></i> Mute Everyone
+            </button>` : ''}
+          ${people.map((p) => {
+            const isMe = p.id === myId;
+            const participant = getParticipant(p.id);
+            const audioState = participant && participant.tracks && participant.tracks.audio && participant.tracks.audio.state;
+            const micOff = audioState === 'off' || audioState === 'blocked';
+            const controls = isMe ? [] : [
+              canMute && !micOff ? action(`muteParticipant('${p.id}')`, 'mic-off', 'Mute') : '',
+              amDirector ? action(`makeDirector('${p.id}')`, 'crown', 'Make Director') : '',
+              amDirector && p.role === 'Guest' ? action(`makeCoDirector('${p.id}')`, 'shield-check', 'Make Co-Director') : '',
+              amDirector ? action(`removeParticipant('${p.id}')`, 'user-x', 'Remove', true) : ''
+            ].filter(Boolean);
+            return `
+              <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-2.5">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <i data-lucide="${micOff ? 'mic-off' : 'mic'}" class="w-3.5 h-3.5 shrink-0 ${micOff ? 'text-red-400' : 'text-zinc-500'}"></i>
+                    <span class="text-sm text-white truncate">${escapeHtml(p.name)}${isMe ? ' <span class="text-zinc-500 text-xs">(You)</span>' : ''}</span>
+                  </div>
+                  <span class="shrink-0 text-[10px] font-mono px-2 py-0.5 rounded-full border ${roleStyle[p.role]}">${p.role}</span>
+                </div>
+                ${controls.length ? `<div class="flex flex-wrap gap-1.5">${controls.join('')}</div>` : ''}
+              </div>
+            `;
+          }).join('')}
+          <p class="text-[11px] text-zinc-500">Guests: ${Math.min(sessionRoles.guests.length, MAX_GUESTS)}/${MAX_GUESTS}</p>
+        </div>
+      `;
+    }
+
+    function isLocalOwner() {
+      return !!(callFrame && callFrame.participants().local.owner);
+    }
+
+    function muteParticipant(sessionId) {
+      if (!callFrame || !isPrivileged(localSessionId())) return;
+      callFrame.sendAppMessage({ type: 'MUTE' }, sessionId);
+      // Room owners can also enforce it through Daily.
+      if (isLocalOwner()) callFrame.updateParticipant(sessionId, { setAudio: false });
+      toast(`Muted ${participantName(sessionId)}.`);
+    }
+
+    function muteEveryone() {
+      if (!callFrame || !isPrivileged(localSessionId())) return;
+      callFrame.sendAppMessage({ type: 'MUTE' }, '*');
+      if (isLocalOwner()) callFrame.updateParticipants({ '*': { setAudio: false } });
+      toast('Muted everyone.');
+    }
+
+    function removeParticipant(sessionId) {
+      if (!callFrame || myRole() !== 'Director') return;
+      const name = participantName(sessionId);
+      if (!confirm(`Remove ${name} from the meeting?`)) return;
+      callFrame.sendAppMessage({ type: 'REMOVE' }, sessionId);
+      if (isLocalOwner()) callFrame.updateParticipant(sessionId, { eject: true });
+      toast(`Removed ${name}.`);
+    }
+
+    function applyRoleOverride(directorId, coDirectorId) {
+      roleOverride = { directorId, coDirectorId };
+      callFrame.sendAppMessage({ type: 'ROLE_STATE', ...roleOverride }, '*');
+      refreshRoles();
+    }
+
+    // Hands the Director role over; the current Director becomes Co-Director.
+    function makeDirector(sessionId) {
+      if (!callFrame || myRole() !== 'Director') return;
+      if (!confirm(`Make ${participantName(sessionId)} the Director? You will become Co-Director.`)) return;
+      applyRoleOverride(sessionId, localSessionId());
+      toast(`${participantName(sessionId)} is now the Director.`);
+    }
+
+    function makeCoDirector(sessionId) {
+      if (!callFrame || myRole() !== 'Director') return;
+      applyRoleOverride(localSessionId(), sessionId);
+      toast(`${participantName(sessionId)} is now the Co-Director.`);
+    }
+
+    // --- Form builder ---
+
+    function renderFormEditor() {
+      const typeOptions = (selected) => Object.entries(FIELD_TYPES)
+        .map(([value, label]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('');
+      return `
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-mono text-zinc-400 mb-1.5">FORM TITLE</label>
+            <input type="text" maxlength="80" value="${escapeHtml(formDraft.title)}" oninput="formDraft.title = this.value" placeholder="e.g. Scene 4 Sign-off" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
+          </div>
+          <div class="space-y-2">
+            <span class="block text-xs font-mono text-zinc-400">FIELDS (${formDraft.fields.length}/${MAX_FORM_FIELDS})</span>
+            ${formDraft.fields.map((f, i) => `
+              <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-2">
+                <input type="text" maxlength="80" value="${escapeHtml(f.label)}" oninput="formDraft.fields[${i}].label = this.value" placeholder="Question" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
+                <div class="flex items-center gap-1.5">
+                  <select onchange="formDraft.fields[${i}].type = this.value" class="flex-1 min-w-0 bg-[#1e1f22] border border-white/10 rounded-lg p-2 text-xs text-white">${typeOptions(f.type)}</select>
+                  <button onclick="moveDraftField(${i}, -1)" title="Move up" class="w-9 h-9 shrink-0 rounded-lg hover:bg-white/10 flex items-center justify-center text-zinc-400 disabled:opacity-30" ${i === 0 ? 'disabled' : ''}><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i></button>
+                  <button onclick="moveDraftField(${i}, 1)" title="Move down" class="w-9 h-9 shrink-0 rounded-lg hover:bg-white/10 flex items-center justify-center text-zinc-400 disabled:opacity-30" ${i === formDraft.fields.length - 1 ? 'disabled' : ''}><i data-lucide="arrow-down" class="w-3.5 h-3.5"></i></button>
+                  <button onclick="removeDraftField(${i})" title="Remove field" class="w-9 h-9 shrink-0 rounded-lg hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                </div>
+              </div>
+            `).join('')}
+            ${formDraft.fields.length < MAX_FORM_FIELDS ? `
+              <button onclick="addDraftField()" class="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-dashed border-white/15 text-xs text-zinc-300 hover:bg-white/5">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Field
+              </button>` : ''}
+          </div>
+          <p id="form-editor-error" class="hidden text-[11px] text-red-400"></p>
+          <div class="flex gap-2">
+            <button onclick="cancelFormEdit()" class="flex-1 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-300">Cancel</button>
+            <button onclick="saveFormDraft()" class="flex-1 py-2.5 rounded-lg bg-white hover:bg-zinc-200 text-xs font-medium text-black">Save Form</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function startFormEdit(index) {
+      const source = index === null ? { title: '', fields: [{ label: '', type: 'text' }] } : productionForms[index];
+      formDraft = { index, title: source.title, fields: source.fields.map((f) => ({ ...f })) };
+      renderDrawer('forms');
+    }
+
+    function cancelFormEdit() {
+      formDraft = null;
+      renderDrawer('forms');
+    }
+
+    function addDraftField() {
+      if (formDraft.fields.length >= MAX_FORM_FIELDS) return;
+      formDraft.fields.push({ label: '', type: 'text' });
+      renderDrawer('forms');
+    }
+
+    function removeDraftField(i) {
+      formDraft.fields.splice(i, 1);
+      renderDrawer('forms');
+    }
+
+    function moveDraftField(i, direction) {
+      const j = i + direction;
+      if (j < 0 || j >= formDraft.fields.length) return;
+      [formDraft.fields[i], formDraft.fields[j]] = [formDraft.fields[j], formDraft.fields[i]];
+      renderDrawer('forms');
+    }
+
+    function saveFormDraft() {
+      const form = sanitizeForm(formDraft);
+      const error = !form.title ? 'Please give the form a title.' : !form.fields.length ? 'Please add at least one question.' : null;
+      if (error) {
+        const el = document.getElementById('form-editor-error');
+        el.innerText = error;
+        el.classList.remove('hidden');
+        return;
+      }
+      if (formDraft.index === null) productionForms.push(form);
+      else productionForms[formDraft.index] = form;
+      saveForms();
+      formDraft = null;
+      renderDrawer('forms');
+      toast('Form saved.');
+    }
+
+    function deleteForm(index) {
+      if (!confirm(`Delete "${productionForms[index].title}"?`)) return;
+      productionForms.splice(index, 1);
+      saveForms();
+      renderDrawer('forms');
     }
 
     function renderPollResults() {
@@ -815,7 +1159,7 @@
       if (!callFrame || !isPrivileged(localSessionId())) return;
       const selectedForm = productionForms[index];
       callFrame.sendAppMessage({ type: 'PUSH_FORM', form: selectedForm }, '*');
-      alert(`Broadcasting '${selectedForm.title}' to everyone in call!`);
+      toast(`Sent "${selectedForm.title}" to everyone in the call.`);
     }
 
     function broadcastQuickPoll() {
