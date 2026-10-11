@@ -5,7 +5,7 @@ window.DIRECTORY_CONFIG = [
     path: "/resort/",
     localFallback: "./resort/index.html",
     icon: "palmtree",
-    status: "Active",
+    status: "Coming Soon",
     description: "Book a room or sign in to your visit with our kiosk."
   },
   {
@@ -32,7 +32,7 @@ window.DIRECTORY_CONFIG = [
     path: "/dining/",
     localFallback: "./dining/index.html",
     icon: "utensils",
-    status: "Active",
+    status: "Coming Soon",
     description: "View our curated menu and book a reservation in advance."
   },
   {
@@ -41,7 +41,7 @@ window.DIRECTORY_CONFIG = [
     path: "/cleaning/",
     localFallback: "./cleaning/index.html",
     icon: "sparkles",
-    status: "Active",
+    status: "Coming Soon",
     description: "Navigate through accommodative cleaning packages for your home."
   },
   {
@@ -50,7 +50,7 @@ window.DIRECTORY_CONFIG = [
     path: "/spa/",
     localFallback: "./spa/index.html",
     icon: "flower2",
-    status: "Active",
+    status: "Coming Soon",
     description: "Relax with our spa services, available to book in advance."
   }
 ];
