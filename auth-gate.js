@@ -1,12 +1,6 @@
 (function () {
-  const DEFAULT_PASSCODES = ['chowaniec2026'];
-
   function isAuthorized() {
     return sessionStorage.getItem('chowaniec_authenticated') === 'true';
-  }
-
-  function setAuthorized() {
-    sessionStorage.setItem('chowaniec_authenticated', 'true');
   }
 
   function getHubUrl() {
@@ -54,19 +48,16 @@
     }
   }
 
-  function verifyInputPasscode() {
+  async function verifyInputPasscode() {
     const input = document.getElementById('gate-passcode-input');
     const error = document.getElementById('gate-passcode-error');
     const box = document.getElementById('gate-passcode-box');
     const entered = input.value.trim();
 
-    const authorizedList =
-      window.CHOWANIEC_CONFIG && window.CHOWANIEC_CONFIG.AUTHORIZED_PASSCODES
-        ? window.CHOWANIEC_CONFIG.AUTHORIZED_PASSCODES
-        : DEFAULT_PASSCODES;
+    const user = await window.checkChowaniecPasscode(entered);
 
-    if (authorizedList.includes(entered)) {
-      setAuthorized();
+    if (user) {
+      window.setChowaniecSession(user);
       unlockApplication();
     } else {
       error.classList.remove('hidden');

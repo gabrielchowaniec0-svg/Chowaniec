@@ -7,7 +7,7 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
     <!-- External Passcode Configuration File -->
     <script src="passwords.js"></script>
     <!-- External Directory Grid Configuration File -->
@@ -439,15 +439,17 @@
         const grid = document.getElementById('directory-grid');
         const items = window.DIRECTORY_CONFIG || [];
 
-        grid.innerHTML = items.map(item => `
-          <div class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex flex-col justify-between group">
+        grid.innerHTML = items.map(item => {
+          const isActive = item.status === 'Active';
+          return `
+          <div class="bg-white p-8 rounded-3xl border border-gray-100 ${isActive ? 'hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50' : 'opacity-60'} transition-all flex flex-col justify-between group">
             <div class="space-y-4">
               <div class="flex items-center justify-between">
                 <div class="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black">
                   <i data-lucide="${item.icon}" class="w-5 h-5"></i>
                 </div>
                 <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-600">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span class="w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-gray-300'}"></span>
                   ${item.status}
                 </span>
               </div>
@@ -458,15 +460,20 @@
               <p class="text-gray-400 font-light text-sm leading-relaxed">${item.description}</p>
             </div>
             <div class="pt-6 mt-6 border-t border-gray-100 flex justify-end">
+              ${isActive ? `
               <button
                 onclick="requestAccess({ type: 'redirect', target: '${item.path}', localFallback: '${item.localFallback}' })"
                 class="w-10 h-10 rounded-full bg-gray-50 hover:bg-black hover:text-white text-black flex items-center justify-center transition-colors"
               >
                 <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-              </button>
+              </button>` : `
+              <span class="w-10 h-10 rounded-full bg-gray-50 text-gray-300 flex items-center justify-center cursor-not-allowed" title="Coming soon">
+                <i data-lucide="lock" class="w-4 h-4"></i>
+              </span>`}
             </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
 
         lucide.createIcons();
       }
@@ -475,13 +482,14 @@
         return sessionStorage.getItem('chowaniec_authenticated') === 'true';
       }
 
-      function setAuthenticated() {
-        sessionStorage.setItem('chowaniec_authenticated', 'true');
+      function setAuthenticated(user) {
+        window.setChowaniecSession(user);
         updateLockBtn();
       }
 
       function clearSession() {
         sessionStorage.removeItem('chowaniec_authenticated');
+        sessionStorage.removeItem('chowaniec_user');
         updateLockBtn();
         executeTabSwitch('directory');
       }
@@ -550,20 +558,16 @@
         }
       }
 
-      function submitPasscode() {
+      async function submitPasscode() {
         const input = document.getElementById('passcode-input');
         const error = document.getElementById('passcode-error');
         const box = document.getElementById('passcode-box');
         const entered = input.value.trim();
 
-        const authorized =
-          window.CHOWANIEC_CONFIG &&
-          window.CHOWANIEC_CONFIG.AUTHORIZED_PASSCODES
-            ? window.CHOWANIEC_CONFIG.AUTHORIZED_PASSCODES
-            : ['chowaniec2026'];
+        const user = await window.checkChowaniecPasscode(entered);
 
-        if (authorized.includes(entered)) {
-          setAuthenticated();
+        if (user) {
+          setAuthenticated(user);
           const action = pendingAction;
           closePasscodeModal();
           executeAction(action);

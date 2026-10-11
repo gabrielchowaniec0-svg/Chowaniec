@@ -7,9 +7,9 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
   <!-- Daily.co SDK -->
-  <script src="https://unpkg.com/@daily-co/daily-js"></script>
+  <script src="https://unpkg.com/@daily-co/daily-js@0.93.0/dist/daily.js"></script>
   <!-- Security Gate & Passcodes -->
   <script src="../passwords.js"></script>
   <script src="../auth-gate.js"></script>
@@ -153,7 +153,7 @@
         <div>
           <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Your Name</label>
           <input type="text" id="user-name-input" placeholder="e.g. Gabriel, Vicky, or Guest" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none transition-all">
-          <p class="text-[11px] text-zinc-500 mt-1">Naming yourself 'Vicky' or 'Gabriel' grants automatic Host priority.</p>
+          <p id="host-hint" class="text-[11px] text-zinc-500 mt-1">Host priority is based on the passcode you signed in with.</p>
         </div>
 
         <div>
@@ -313,11 +313,11 @@
       const participants = callFrame.participants();
       const count = Object.keys(participants).length;
 
-      const normalizedName = localUserName.toLowerCase();
-      const isPriorityName = normalizedName.includes('gabriel') || normalizedName.includes('vicky');
+      const signedInUser = window.getChowaniecUser();
+      const isHost = !!(signedInUser && signedInUser.host);
 
-      if (count === 1 || isPriorityName) {
-        if (!sessionRoles.director || isPriorityName) {
+      if (count === 1 || isHost) {
+        if (!sessionRoles.director || isHost) {
           sessionRoles.director = localUserName;
         }
       } else if (!sessionRoles.coDirector) {
@@ -562,9 +562,18 @@
       toggleDrawer(null);
     }
 
+    function prefillUserName() {
+      const user = window.getChowaniecUser();
+      const nameInput = document.getElementById('user-name-input');
+      if (user && user.name !== 'Guest' && !nameInput.value) {
+        nameInput.value = user.name;
+      }
+    }
+
     // Required hook for auth-gate.js
     window.initializeProtectedContent = function() {
       parseMeetingCodeFromUrl();
+      prefillUserName();
       if (window.lucide) lucide.createIcons();
     };
 
