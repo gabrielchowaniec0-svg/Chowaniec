@@ -19,15 +19,15 @@ function getUser(event) {
   return PASSCODE_HASHES[key];
 }
 
+// POSTs `body` to the Daily REST API, or GETs when no body is given.
 function dailyRequest(path, body) {
-  return fetch(`${DAILY_API}${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.DAILY_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
+  const options = { headers: { Authorization: `Bearer ${process.env.DAILY_API_KEY}` } };
+  if (body !== undefined) {
+    options.method = 'POST';
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
+  return fetch(`${DAILY_API}${path}`, options);
 }
 
 // Common checks for every function; returns an error response, or null to continue.
