@@ -119,11 +119,11 @@
                         </div>
                         <div>
                             <label for="book-name" class="block text-gray-400 uppercase tracking-widest mb-1.5">Guest Name</label>
-                            <input type="text" id="book-name" maxlength="60" placeholder="Full name" required oninput="updateBookingSummary()" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light text-sm">
+                            <input type="text" id="book-name" maxlength="60" required oninput="updateBookingSummary()" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light text-sm">
                         </div>
                         <div class="sm:col-span-2">
                             <label for="book-requests" class="block text-gray-400 uppercase tracking-widest mb-1.5">Special Requests <span class="normal-case tracking-normal text-gray-300">(optional)</span></label>
-                            <textarea id="book-requests" rows="3" maxlength="300" placeholder="Late arrival, crib, anniversary..." class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light text-sm resize-none"></textarea>
+                            <textarea id="book-requests" rows="3" maxlength="300" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light text-sm resize-none"></textarea>
                         </div>
                     </div>
 
@@ -164,7 +164,7 @@
                         <label for="kiosk-code" class="block text-gray-400 uppercase tracking-widest mb-1.5">Confirmation Code</label>
                         <div class="flex flex-col sm:flex-row gap-3">
                             <div class="relative flex-1">
-                                <input type="text" id="kiosk-code" placeholder="CH-000000" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pl-11 outline-none focus:border-black font-mono text-sm uppercase tracking-widest">
+                                <input type="text" id="kiosk-code" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pl-11 outline-none focus:border-black font-mono text-sm uppercase tracking-widest">
                                 <i data-lucide="key-round" class="w-4 h-4 text-gray-400 absolute left-4 top-3.5"></i>
                             </div>
                             <button type="submit" class="bg-black text-white px-8 py-3 rounded-xl font-sans font-medium text-xs hover:bg-gray-800 transition-all shadow-md flex items-center justify-center gap-2">
