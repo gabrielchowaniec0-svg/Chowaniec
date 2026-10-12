@@ -79,6 +79,8 @@
     <main class="flex-1 min-h-0 p-2 sm:p-4 relative flex gap-4 overflow-hidden">
       <div id="video-stage" class="flex-1 h-full rounded-2xl overflow-hidden bg-[#18191b] border border-white/5 relative flex items-center justify-center">
         <div id="daily-container" class="w-full h-full"></div>
+        <!-- Live captions (while the Meeting Agent is listening) -->
+        <div id="captions" class="pointer-events-none absolute left-3 right-3 bottom-3 sm:bottom-5 flex flex-col items-center gap-1.5"></div>
       </div>
 
       <!-- Activities Drawer: bottom sheet on phones, side panel on larger screens -->
@@ -140,6 +142,14 @@
           <i data-lucide="clipboard-list" class="w-4 h-4"></i>
         </button>
 
+        <button id="btn-captions" onclick="toggleCaptions()" title="Captions" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="captions" class="w-4 h-4"></i>
+        </button>
+
+        <button onclick="toggleDrawer('info')" title="Meeting Info" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="info" class="w-4 h-4"></i>
+        </button>
+
         <button onclick="toggleDrawer('agent')" title="Meeting Agent" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
           <i data-lucide="bot" class="w-4 h-4"></i>
         </button>
@@ -155,8 +165,8 @@
   <div id="toast" class="hidden fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-full bg-white text-black text-xs font-medium shadow-2xl max-w-[90vw] text-center"></div>
 
   <!-- Pre-Join Lobby -->
-  <div id="lobby-screen" class="fixed inset-0 bg-[#202124]/95 backdrop-blur-md z-40 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-    <div class="max-w-md w-full bg-[#282a2d] border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
+  <div id="lobby-screen" class="fixed inset-0 bg-[#202124]/95 backdrop-blur-md z-40 flex p-4 pb-24 sm:p-6 overflow-y-auto">
+    <div class="m-auto max-w-md w-full bg-[#282a2d] border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black font-semibold text-sm">
@@ -172,6 +182,9 @@
         </span>
       </div>
 
+      <!-- Host's briefing, shown to everyone waiting to join -->
+      <div id="lobby-brief" class="hidden"></div>
+
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Your Name</label>
@@ -182,7 +195,7 @@
         <div>
           <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Meeting Code</label>
           <div class="relative">
-            <input type="text" id="room-code-input" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
+            <input type="text" id="room-code-input" oninput="scheduleBriefLookup()" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
           </div>
           <p id="room-subtext" class="text-[11px] text-zinc-500 mt-1">Room code will be appended to invite links.</p>
         </div>
@@ -202,6 +215,35 @@
     </div>
   </div>
 
+  <!-- New meeting briefing (onboarding) -->
+  <div id="brief-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[55] flex p-4 sm:p-6 overflow-y-auto">
+    <div class="m-auto max-w-md w-full bg-[#282a2d] border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-5">
+      <div>
+        <h2 class="text-lg font-medium text-white">Before we start</h2>
+        <p class="text-xs text-zinc-400 font-light mt-1">Guests will see this while they wait to join. Every field is optional.</p>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label for="brief-start" class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">When does it start?</label>
+          <input type="datetime-local" id="brief-start" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none [color-scheme:dark]">
+        </div>
+        <div>
+          <label for="brief-topics" class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">What will be discussed?</label>
+          <textarea id="brief-topics" rows="3" maxlength="1500" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none resize-y"></textarea>
+        </div>
+        <div>
+          <label for="brief-important" class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Anything important?</label>
+          <textarea id="brief-important" rows="2" maxlength="1000" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none resize-y"></textarea>
+        </div>
+      </div>
+      <p id="brief-error" class="hidden text-[11px] text-red-400"></p>
+      <div class="flex gap-3">
+        <button onclick="closeBriefModal()" class="flex-1 py-3 rounded-full bg-white/5 hover:bg-white/10 text-sm text-zinc-300">Cancel</button>
+        <button id="brief-submit" onclick="submitNewMeeting()" class="flex-1 py-3 rounded-full bg-white hover:bg-zinc-200 text-sm font-medium text-black disabled:opacity-50 disabled:cursor-wait">Create Meeting</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Real-time Popup for Broadcast Forms / Polls -->
   <div id="broadcast-popup" class="fixed bottom-24 left-3 right-3 sm:left-8 sm:right-auto sm:w-full max-w-sm max-h-[60dvh] overflow-y-auto bg-[#282a2d] border border-sky-400/40 rounded-2xl p-5 shadow-2xl z-40 hidden">
     <div class="flex justify-between items-start mb-3">
@@ -214,7 +256,7 @@
   </div>
 
   <!-- Floating Return Button -->
-  <button id="hub-btn" onclick="returnToHub()" title="Return to Hub" class="fixed bottom-8 right-8 w-14 h-14 bg-[#282a2d] border border-white/10 shadow-xl rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#3c4043] hover:scale-105 transition-all z-50">
+  <button id="hub-btn" onclick="returnToHub()" title="Return to Hub" class="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 w-12 h-12 sm:w-14 sm:h-14 bg-[#282a2d] border border-white/10 shadow-xl rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#3c4043] hover:scale-105 transition-all z-50">
     <i data-lucide="arrow-left" class="w-5 h-5"></i>
   </button>
 
@@ -343,6 +385,7 @@
         document.getElementById('lobby-code-badge').classList.remove('hidden');
         document.getElementById('active-code-display').innerText = `ID: ${extractedCode}`;
         document.getElementById('room-subtext').innerText = `Direct join code detected: ${extractedCode}`;
+        loadBrief(normalizeMeetingCode(extractedCode));
       }
     }
 
@@ -484,17 +527,36 @@
       }
     }
 
-    async function createNewMeeting() {
+    // --- New meeting + briefing ---
+
+    function createNewMeeting() {
       const nameInput = document.getElementById('user-name-input').value.trim();
       if (!nameInput) {
         alert("Please enter your name.");
         return;
       }
+      ['brief-start', 'brief-topics', 'brief-important'].forEach((id) => { document.getElementById(id).value = ''; });
+      document.getElementById('brief-error').classList.add('hidden');
+      document.getElementById('brief-modal').classList.remove('hidden');
+      document.getElementById('brief-start').focus();
+    }
 
-      const label = document.getElementById('new-meeting-label');
-      setLobbyError(null);
-      setLobbyBusy(true);
-      label.innerText = 'Creating...';
+    function closeBriefModal() {
+      document.getElementById('brief-modal').classList.add('hidden');
+    }
+
+    async function submitNewMeeting() {
+      const startValue = document.getElementById('brief-start').value;
+      const briefInput = {
+        startsAt: startValue ? new Date(startValue).toISOString() : '',
+        topics: document.getElementById('brief-topics').value.trim(),
+        important: document.getElementById('brief-important').value.trim()
+      };
+      const submit = document.getElementById('brief-submit');
+      const errorEl = document.getElementById('brief-error');
+      errorEl.classList.add('hidden');
+      submit.disabled = true;
+      submit.innerText = 'Creating...';
 
       try {
         const res = await fetch('/.netlify/functions/create-meeting', {
@@ -506,13 +568,166 @@
           throw new Error(data.error || 'Could not create a meeting. Please try again.');
         }
 
+        currentBrief = null;
+        if (briefInput.startsAt || briefInput.topics || briefInput.important) {
+          currentBrief = await saveBrief({ code: data.code, ...briefInput });
+          if (!currentBrief) toast('The meeting was created, but its briefing could not be saved.');
+        }
+
+        closeBriefModal();
         document.getElementById('room-code-input').value = data.code;
         await joinMeeting();
       } catch (err) {
-        showLobby(err.message);
+        errorEl.innerText = err.message;
+        errorEl.classList.remove('hidden');
       } finally {
-        label.innerText = 'New Meeting';
+        submit.disabled = false;
+        submit.innerText = 'Create Meeting';
       }
+    }
+
+    let currentBrief = null;
+    let briefLookupTimer = null;
+
+    async function saveBrief(brief) {
+      try {
+        const res = await fetch('/.netlify/functions/meeting-brief', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Chowaniec-Key': signedInKey() },
+          body: JSON.stringify(brief)
+        });
+        const data = await res.json().catch(() => ({}));
+        return res.ok ? data.brief : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function loadBrief(code) {
+      if (!ROOM_NAME_PATTERN.test(code || '')) {
+        currentBrief = null;
+        renderLobbyBrief();
+        return;
+      }
+      try {
+        const res = await fetch(`/.netlify/functions/meeting-brief?code=${encodeURIComponent(code)}`, {
+          headers: { 'X-Chowaniec-Key': signedInKey() }
+        });
+        const data = await res.json().catch(() => ({}));
+        // Ignore stale answers if the code changed while loading.
+        if (normalizeMeetingCode(document.getElementById('room-code-input').value.trim()) !== code) return;
+        currentBrief = res.ok ? data.brief : null;
+      } catch (e) {
+        currentBrief = null;
+      }
+      renderLobbyBrief();
+    }
+
+    function describeStart(iso) {
+      const start = new Date(iso);
+      const when = start.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const minutes = Math.round((start.getTime() - Date.now()) / 60000);
+      let relative;
+      if (minutes > 0) {
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        relative = `Starts in ${h ? `${h}h ` : ''}${m}m`;
+        if (h >= 48) relative = `Starts in ${Math.round(h / 24)} days`;
+      } else if (minutes > -5) {
+        relative = 'Starting now';
+      } else {
+        relative = 'In progress';
+      }
+      return { when, relative, upcoming: minutes > 0 };
+    }
+
+    function renderBrief(brief, forLobby) {
+      const start = brief.startsAt ? describeStart(brief.startsAt) : null;
+      return `
+        <div class="${forLobby ? 'p-4 rounded-2xl bg-white/5 border border-white/10' : ''} space-y-3">
+          ${forLobby ? '<span class="block text-[10px] font-mono uppercase tracking-widest text-sky-400">Meeting Briefing</span>' : ''}
+          ${start ? `
+            <div class="flex items-center gap-2.5">
+              <i data-lucide="calendar-clock" class="w-4 h-4 text-zinc-400 shrink-0"></i>
+              <div>
+                <p class="text-sm text-white">${escapeHtml(start.when)}</p>
+                <p class="text-[11px] ${start.upcoming ? 'text-sky-300' : 'text-emerald-300'}">${start.relative}</p>
+              </div>
+            </div>` : ''}
+          ${brief.topics ? `
+            <div>
+              <span class="block text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1">What we'll discuss</span>
+              <p class="text-xs text-zinc-200 leading-relaxed whitespace-pre-line break-words">${escapeHtml(brief.topics)}</p>
+            </div>` : ''}
+          ${brief.important ? `
+            <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <span class="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-amber-300 mb-1"><i data-lucide="triangle-alert" class="w-3 h-3"></i>Important</span>
+              <p class="text-xs text-amber-100 leading-relaxed whitespace-pre-line break-words">${escapeHtml(brief.important)}</p>
+            </div>` : ''}
+          ${brief.createdBy ? `<p class="text-[10px] text-zinc-500">Set up by ${escapeHtml(brief.createdBy)}</p>` : ''}
+        </div>
+      `;
+    }
+
+    function renderLobbyBrief() {
+      const el = document.getElementById('lobby-brief');
+      el.classList.toggle('hidden', !currentBrief);
+      el.innerHTML = currentBrief ? renderBrief(currentBrief, true) : '';
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function scheduleBriefLookup() {
+      clearTimeout(briefLookupTimer);
+      briefLookupTimer = setTimeout(() => {
+        loadBrief(normalizeMeetingCode(document.getElementById('room-code-input').value.trim()));
+      }, 600);
+    }
+
+    // Keep the countdown fresh while people wait.
+    setInterval(() => {
+      if (currentBrief && !document.getElementById('lobby-screen').classList.contains('hidden')) renderLobbyBrief();
+    }, 30000);
+
+    // --- Live captions ---
+
+    let captionsOn = true;
+    try {
+      captionsOn = localStorage.getItem('chowaniec_meet_captions') !== 'off';
+    } catch (e) {
+      // default on
+    }
+
+    function renderCaptionsButton() {
+      const btn = document.getElementById('btn-captions');
+      btn.classList.toggle('bg-sky-600', captionsOn);
+      btn.classList.toggle('bg-[#3c4043]', !captionsOn);
+    }
+
+    function toggleCaptions() {
+      captionsOn = !captionsOn;
+      try {
+        localStorage.setItem('chowaniec_meet_captions', captionsOn ? 'on' : 'off');
+      } catch (e) {
+        // preference just isn't remembered
+      }
+      if (!captionsOn) document.getElementById('captions').innerHTML = '';
+      renderCaptionsButton();
+      toast(captionsOn ? 'Captions on. They appear while the Meeting Agent is listening.' : 'Captions off.');
+    }
+
+    // Shows one spoken line for a few seconds; keeps at most two on screen.
+    function showCaption(speaker, text) {
+      if (!captionsOn || !text) return;
+      const box = document.getElementById('captions');
+      const line = document.createElement('div');
+      line.className = 'max-w-full sm:max-w-2xl px-3 py-1.5 rounded-lg bg-black/75 text-white text-xs sm:text-sm leading-snug text-center transition-opacity duration-500';
+      line.innerHTML = `<span class="text-sky-300 font-medium">${escapeHtml(speaker)}:</span> ${escapeHtml(text)}`;
+      box.appendChild(line);
+      while (box.children.length > 2) box.removeChild(box.firstChild);
+      setTimeout(() => {
+        line.style.opacity = '0';
+        setTimeout(() => line.remove(), 500);
+      }, 7000);
     }
 
     // Tears down the call frame and returns to the lobby with a message.
@@ -889,6 +1104,8 @@
         body.innerHTML = `
           <div class="space-y-2">
             ${item("copyInviteLink(); toggleDrawer(null)", 'link-2', 'Copy Meeting Link')}
+            ${item("toggleDrawer('info')", 'info', 'Meeting Info')}
+            ${item("toggleCaptions(); toggleDrawer(null)", 'captions', captionsOn ? 'Turn Captions Off' : 'Turn Captions On')}
             ${item("toggleDrawer('agent')", 'bot', 'Meeting Agent & Notes')}
             ${item("toggleDrawer('roster')", 'users', 'People & Director Controls')}
             ${item("toggleDrawer('polls')", 'bar-chart-2', 'Quick Polls')}
@@ -952,6 +1169,9 @@
       } else if (tab === 'roster') {
         title.innerText = 'People & Roles';
         body.innerHTML = renderRoster();
+      } else if (tab === 'info') {
+        title.innerText = 'Meeting Info';
+        body.innerHTML = currentBrief ? renderBrief(currentBrief, false) : '<p class="text-xs text-zinc-400 font-light">No briefing was added for this meeting.</p>';
       } else if (tab === 'agent') {
         title.innerText = 'Meeting Agent';
         body.innerHTML = renderAgentPanel();
@@ -1215,6 +1435,7 @@
     window.initializeProtectedContent = function() {
       parseMeetingCodeFromUrl();
       prefillUserName();
+      renderCaptionsButton();
       if (window.lucide) lucide.createIcons();
     };
 
