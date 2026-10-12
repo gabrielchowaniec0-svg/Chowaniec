@@ -27,6 +27,15 @@ window.DIRECTORY_CONFIG = [
     description: "Start meetings and coordinate with the production team."
   },
   {
+    id: "notes",
+    title: "Chowaniec Notes",
+    path: "/notes/",
+    localFallback: "./notes/index.html",
+    icon: "notebook-pen",
+    status: "Active",
+    description: "Write, organize and share notes, with AI summaries and meeting notes from the Agent."
+  },
+  {
     id: "dining",
     title: "Chowaniec Restaurants",
     path: "/dining/",
