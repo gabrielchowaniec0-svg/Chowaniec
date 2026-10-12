@@ -142,6 +142,10 @@
           <i data-lucide="clipboard-list" class="w-4 h-4"></i>
         </button>
 
+        <button onclick="openAudioPanel()" title="Audio Output" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="volume-2" class="w-4 h-4"></i>
+        </button>
+
         <button id="btn-captions" onclick="toggleCaptions()" title="Captions" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
           <i data-lucide="captions" class="w-4 h-4"></i>
         </button>
@@ -688,6 +692,86 @@
       if (currentBrief && !document.getElementById('lobby-screen').classList.contains('hidden')) renderLobbyBrief();
     }, 30000);
 
+    // --- Audio output (speakerphone on phones) ---
+
+    let audioOutputs = [];
+    let currentOutputId = null;
+
+    function isTouchDevice() {
+      return window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    }
+
+    async function refreshAudioOutputs() {
+      if (!callFrame) return [];
+      try {
+        const { devices } = await callFrame.enumerateDevices();
+        audioOutputs = devices.filter((d) => d.kind === 'audiooutput' && d.deviceId);
+      } catch (e) {
+        audioOutputs = [];
+      }
+      return audioOutputs;
+    }
+
+    // Phones can route call audio to the quiet earpiece; prefer the loudspeaker when the browser offers it.
+    async function preferSpeakerOutput() {
+      if (!isTouchDevice()) return;
+      const outputs = await refreshAudioOutputs();
+      const speaker = outputs.find((d) => /speaker/i.test(d.label));
+      if (speaker) await setAudioOutput(speaker.deviceId, false);
+    }
+
+    async function setAudioOutput(deviceId, announce) {
+      if (!callFrame) return;
+      try {
+        await callFrame.setOutputDeviceAsync({ outputDeviceId: deviceId });
+        currentOutputId = deviceId;
+        if (announce) {
+          const device = audioOutputs.find((d) => d.deviceId === deviceId);
+          toast(`Audio now plays through ${device && device.label ? device.label : 'the selected output'}.`);
+        }
+      } catch (e) {
+        if (announce) toast("This browser doesn't allow switching the audio output.");
+      }
+      if (currentDrawerTab === 'audio') renderDrawer('audio');
+    }
+
+    async function openAudioPanel() {
+      toggleDrawer('audio');
+      await refreshAudioOutputs();
+      if (currentDrawerTab === 'audio') renderDrawer('audio');
+    }
+
+    function renderAudioPanel() {
+      const tips = `
+        <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
+          <p class="text-xs text-white font-medium">Still too quiet?</p>
+          <p class="text-[11px] text-zinc-400 leading-relaxed">Press your phone's volume-up button <span class="text-zinc-200">during the call</span>. Phones keep a separate volume for calls, which is often set low.</p>
+          <p class="text-[11px] text-zinc-400 leading-relaxed">On iPhone, open Control Center, press and hold the audio card, then tap the output button to choose the speaker.</p>
+        </div>`;
+      if (!audioOutputs.length) {
+        return `
+          <div class="space-y-3">
+            <p class="text-xs text-zinc-400 font-light leading-relaxed">This browser doesn't let websites choose where call audio plays, so the phone decides.</p>
+            ${tips}
+          </div>`;
+      }
+      return `
+        <div class="space-y-3">
+          <p class="text-xs text-zinc-400 font-light">Choose where call audio plays:</p>
+          <div class="space-y-2">
+            ${audioOutputs.map((d) => {
+              const active = d.deviceId === currentOutputId;
+              return `
+                <button onclick="setAudioOutput('${escapeHtml(d.deviceId)}', true)" class="w-full flex items-center justify-between gap-3 p-3.5 rounded-xl border text-left text-sm ${active ? 'bg-sky-500/15 border-sky-400/40 text-white' : 'bg-white/5 border-white/5 text-zinc-200 hover:bg-white/10'}">
+                  <span class="flex items-center gap-3 min-w-0"><i data-lucide="volume-2" class="w-4 h-4 shrink-0 text-zinc-400"></i><span class="truncate">${escapeHtml(d.label || 'Audio output')}</span></span>
+                  ${active ? '<i data-lucide="check" class="w-4 h-4 shrink-0 text-sky-300"></i>' : ''}
+                </button>`;
+            }).join('')}
+          </div>
+          ${tips}
+        </div>`;
+    }
+
     // --- Live captions ---
 
     let captionsOn = true;
@@ -838,6 +922,7 @@
     function handleMeetingJoined() {
       refreshRoles();
       syncLocalMediaState();
+      preferSpeakerOutput();
     }
 
     function handleParticipantUpdated(evt) {
@@ -1104,6 +1189,7 @@
         body.innerHTML = `
           <div class="space-y-2">
             ${item("copyInviteLink(); toggleDrawer(null)", 'link-2', 'Copy Meeting Link')}
+            ${item("openAudioPanel()", 'volume-2', 'Audio Output (Speaker)')}
             ${item("toggleDrawer('info')", 'info', 'Meeting Info')}
             ${item("toggleCaptions(); toggleDrawer(null)", 'captions', captionsOn ? 'Turn Captions Off' : 'Turn Captions On')}
             ${item("toggleDrawer('agent')", 'bot', 'Meeting Agent & Notes')}
@@ -1169,6 +1255,9 @@
       } else if (tab === 'roster') {
         title.innerText = 'People & Roles';
         body.innerHTML = renderRoster();
+      } else if (tab === 'audio') {
+        title.innerText = 'Audio Output';
+        body.innerHTML = renderAudioPanel();
       } else if (tab === 'info') {
         title.innerText = 'Meeting Info';
         body.innerHTML = currentBrief ? renderBrief(currentBrief, false) : '<p class="text-xs text-zinc-400 font-light">No briefing was added for this meeting.</p>';
