@@ -2,7 +2,8 @@
 // A host starts the Agent, which turns on Daily's live transcription. The host's
 // browser collects the speaker-labelled transcript, keeps AI meeting notes up to
 // date via /.netlify/functions/meeting-agent, and listens for "Hey Agent" commands
-// from the Director or Co-Director. Relies on globals from meet/index.html.
+// from the Director or Co-Director. Everyone in the call sees live captions.
+// Relies on globals from meet/index.html.
 
 const AGENT_ENDPOINT = '/.netlify/functions/meeting-agent';
 const AGENT_NOTES_INTERVAL_MS = 60 * 1000;
@@ -148,7 +149,10 @@ function speakerName(sessionId) {
 function handleTranscriptionMessage(evt) {
   agentListeningRemotely = true;
   updateAgentChip();
-  if (!agent.running || !evt || !evt.text || !evt.text.trim()) return;
+  if (!evt || !evt.text || !evt.text.trim()) return;
+  // Everyone in the call gets captions; only the host running the Agent keeps the transcript.
+  showCaption(speakerName(evt.participantId), evt.text.trim());
+  if (!agent.running) return;
 
   const line = {
     time: new Date(evt.timestamp || Date.now()).toISOString(),
@@ -231,6 +235,11 @@ async function runAgentCommand(pending) {
       command: pending.text,
       speaker: pending.speaker,
       participants: participantNames(),
+      // Whole-meeting context so questions about earlier discussion can be answered.
+      notes: agent.notes,
+      pinned: agent.pinned.map((p) => p.text),
+      polls: agent.polls.map(pollSummary),
+      brief: currentBrief,
       context: linesForAgent(agent.transcript.slice(Math.max(0, pending.contextEnd - 80), pending.contextEnd + 1))
     });
     executeAgentAction(result);
@@ -300,6 +309,7 @@ async function updateAgentNotes(manual) {
       mode: 'notes',
       meetingDate: new Date(agent.startedAt || Date.now()).toDateString(),
       participants: participantNames(),
+      brief: currentBrief,
       previousNotes: agent.notes,
       newLines: linesForAgent(agent.transcript.slice(agent.notesUpdatedIndex, end)),
       polls: agent.polls.map(pollSummary),
