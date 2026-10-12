@@ -1,0 +1,9 @@
+{
+  "name": "chowaniec",
+  "private": true,
+  "description": "Chowaniec family portal (static site + Netlify Functions)",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
+    "zod": "^4.6.6"
+  }
+}
