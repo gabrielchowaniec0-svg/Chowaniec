@@ -195,6 +195,10 @@
                                 </div>
                             </div>
 
+                            <button id="btn-live" type="button" title="Live Notes: take notes while you talk" class="shrink-0 min-h-[40px] min-w-[40px] px-2.5 sm:px-4 rounded-full border border-gray-200 bg-white text-gray-700 hover:border-black hover:text-black ring-red-400 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
+                                <i data-lucide="mic" class="w-4 h-4"></i><span class="hidden sm:inline">Live</span>
+                            </button>
+
                             <div class="relative shrink-0">
                                 <button id="btn-ai" type="button" aria-haspopup="menu" aria-expanded="false" class="min-h-[40px] px-3.5 sm:px-4 rounded-full bg-black text-white hover:bg-gray-800 text-xs font-medium flex items-center gap-1.5 shadow-md transition-colors disabled:opacity-50">
                                     <i data-lucide="sparkles" class="w-4 h-4"></i><span>AI</span>
@@ -378,6 +382,20 @@
         </div>
     </div>
 
+    <!-- Live Notes panel (notes/live.js) -->
+    <div id="live-panel" class="hidden fixed z-[55] inset-x-0 bottom-0 max-h-[85dvh] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[26rem] sm:max-h-[80vh] flex-col bg-white border border-gray-100 rounded-t-3xl sm:rounded-3xl shadow-2xl">
+        <div class="flex items-center justify-between px-5 sm:px-6 pt-5 pb-3 border-b border-gray-100">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center"><i data-lucide="mic" class="w-4 h-4"></i></div>
+                <h3 class="text-lg font-serif text-black">Live Notes</h3>
+            </div>
+            <button id="live-close" type="button" title="Close" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50 hover:text-black"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+        <div id="live-body" class="flex-1 overflow-y-auto px-5 sm:px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4"></div>
+    </div>
+
+    <script src="https://unpkg.com/@daily-co/daily-js@0.93.0/dist/daily.js"></script>
     <script src="notes.js"></script>
+    <script src="live.js"></script>
 </body>
 </html>

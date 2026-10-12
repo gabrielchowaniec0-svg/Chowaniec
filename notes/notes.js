@@ -38,7 +38,8 @@
         view: 'edit',
         pane: 'list',
         openSeq: 0,
-        ai: null            // { mode, status: 'loading'|'done'|'error', markdown, truncated, error, controller }
+        ai: null,           // { mode, status: 'loading'|'done'|'error', markdown, truncated, error, controller }
+        liveLock: false     // Live Notes (live.js) is writing this note
     };
 
     const $ = (id) => document.getElementById(id);
@@ -495,7 +496,7 @@
         if (title.value !== n.title) title.value = n.title;
         if (body.value !== n.markdown) body.value = n.markdown;
         title.readOnly = !editable;
-        body.readOnly = !editable;
+        body.readOnly = !editable || state.liveLock;
         $('readonly-banner').classList.toggle('hidden', editable);
         $('readonly-banner').classList.toggle('flex', !editable);
 
@@ -535,6 +536,10 @@
 
     // Saves pending changes before switching away. Resolves to true when it is safe to leave.
     async function flushBeforeLeaving() {
+        if (state.liveLock) {
+            toast('Stop Live Notes before switching notes.');
+            return false;
+        }
         if (state.conflict) {
             return confirm('This note has a conflict that is not resolved. Leave it and lose your unsaved changes?');
         }
@@ -1016,6 +1021,10 @@
         $('btn-new').addEventListener('click', newNote);
         $('btn-refresh').addEventListener('click', () => loadList());
         $('btn-back').addEventListener('click', async () => {
+            if (state.liveLock) {
+                toast('Stop Live Notes before leaving this note.');
+                return;
+            }
             if (state.dirty || state.saving) {
                 clearTimeout(state.saveTimer);
                 saveNow();
@@ -1237,6 +1246,27 @@
         if (deepId) await openNote(deepId);
         await listPromise;
     }
+
+    // Bridge for Live Notes (notes/live.js).
+    window.NotesBridge = {
+        user: () => state.user,
+        current: () => state.current,
+        canEditCurrent: () => !!state.current && canEdit(state.current),
+        toast,
+        newNote,
+        // Replaces the note body without moving focus, then auto-saves.
+        setBodyQuiet(markdown) {
+            const ta = $('note-body');
+            ta.value = markdown;
+            markDirty();
+            renderPreview();
+        },
+        setLocked(locked) {
+            state.liveLock = locked;
+            renderEditor();
+        },
+        saveNow: () => saveNow({ force: true })
+    };
 
     window.returnToHub = function () {
         const isLocal =
