@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chowaniec Notes</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
+    <!-- Markdown rendering (always sanitized with DOMPurify) -->
+    <script src="https://unpkg.com/marked@18.1.1/lib/marked.umd.js"></script>
+    <script src="https://unpkg.com/dompurify@3.4.17/dist/purify.min.js"></script>
+    <!-- Security Gate & Passcodes -->
+    <script src="../passwords.js"></script>
+    <script src="../auth-gate.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #fafafa;
+            color: #111827;
+        }
+
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+
+        .fade-in { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .no-scrollbar { scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+
+        .clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #note-body {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            tab-size: 4;
+        }
+
+        /* Rendered Markdown (Tailwind preflight strips default element styles) */
+        .md-preview { font-size: 15px; line-height: 1.7; color: #1f2937; overflow-wrap: anywhere; }
+        .md-preview > *:first-child { margin-top: 0; }
+        .md-preview > *:last-child { margin-bottom: 0; }
+        .md-preview h1, .md-preview h2, .md-preview h3 { font-family: 'Playfair Display', serif; color: #000; line-height: 1.3; }
+        .md-preview h1 { font-size: 1.75rem; margin: 1.6rem 0 0.8rem; }
+        .md-preview h2 { font-size: 1.35rem; margin: 1.5rem 0 0.6rem; padding-bottom: 0.35rem; border-bottom: 1px solid #f3f4f6; }
+        .md-preview h3 { font-size: 1.12rem; margin: 1.3rem 0 0.5rem; }
+        .md-preview h4, .md-preview h5, .md-preview h6 { font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280; margin: 1.2rem 0 0.4rem; }
+        .md-preview p { margin: 0.7rem 0; }
+        .md-preview a { color: #000; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #d1d5db; }
+        .md-preview a:hover { text-decoration-color: #000; }
+        .md-preview strong { font-weight: 600; color: #000; }
+        .md-preview em { font-style: italic; }
+        .md-preview ul, .md-preview ol { margin: 0.7rem 0; padding-left: 1.5rem; }
+        .md-preview ul { list-style: disc; }
+        .md-preview ol { list-style: decimal; }
+        .md-preview ul ul { list-style: circle; }
+        .md-preview li { margin: 0.25rem 0; }
+        .md-preview li::marker { color: #9ca3af; }
+        .md-preview li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.4rem; }
+        .md-preview input[type="checkbox"] { width: 1rem; height: 1rem; margin-right: 0.5rem; vertical-align: -0.15rem; accent-color: #000; }
+        .md-preview blockquote { margin: 1rem 0; padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid #e5e7eb; color: #6b7280; font-style: italic; }
+        .md-preview code { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.1rem 0.35rem; }
+        .md-preview pre { margin: 1rem 0; background: #111827; color: #f9fafb; border-radius: 16px; padding: 1rem 1.25rem; overflow-x: auto; }
+        .md-preview pre code { background: transparent; border: 0; padding: 0; color: inherit; font-size: 0.82rem; }
+        .md-preview hr { border: 0; border-top: 1px dashed #e5e7eb; margin: 1.5rem 0; }
+        .md-preview img { max-width: 100%; border-radius: 12px; }
+        .md-preview .table-wrap { overflow-x: auto; margin: 1rem 0; border: 1px solid #e5e7eb; border-radius: 14px; }
+        .md-preview table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .md-preview th, .md-preview td { border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
+        .md-preview th:last-child, .md-preview td:last-child { border-right: 0; }
+        .md-preview tbody tr:last-child td { border-bottom: 0; }
+        .md-preview th { background: #f9fafb; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; font-weight: 500; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-gray-200 relative overflow-x-hidden">
+
+    <div id="app-root" class="flex-1 flex flex-col transition-all duration-500">
+
+        <!-- Header -->
+        <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3 min-h-[40px] min-w-0">
+                    <div class="w-8 h-8 shrink-0 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans">
+                        CN
+                    </div>
+                    <div class="font-serif tracking-wide text-xl whitespace-nowrap">
+                        Chowaniec <span class="text-gray-400 italic font-light text-base">Notes</span>
+                    </div>
+                </div>
+                <div id="user-chip" class="hidden items-center gap-2 min-w-0 text-[11px] font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-full pl-1.5 pr-3 py-1.5"></div>
+            </div>
+        </header>
+
+        <!-- Main Container -->
+        <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-28 w-full">
+            <div class="lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-8 items-start">
+
+                <!-- LIST PANE -->
+                <aside id="list-pane" class="lg:block space-y-6 min-w-0 lg:sticky lg:top-28 fade-in">
+                    <div class="flex items-end justify-between gap-4">
+                        <div class="min-w-0">
+                            <p class="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2 font-medium">Family Notebook</p>
+                            <h1 class="text-3xl sm:text-4xl font-serif text-black">Notes</h1>
+                        </div>
+                        <button id="btn-new" type="button" class="shrink-0 min-h-[44px] px-5 py-2.5 rounded-full bg-black text-white text-xs font-medium hover:bg-gray-800 transition-colors shadow-md flex items-center gap-2">
+                            <i data-lucide="plus" class="w-4 h-4"></i> New Note
+                        </button>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div class="text-xs font-mono">
+                            <label for="search" class="block text-gray-400 uppercase tracking-widest mb-1.5">Search</label>
+                            <div class="relative">
+                                <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                <input type="search" id="search" autocomplete="off" class="w-full min-h-[46px] bg-white border border-gray-200 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-black font-sans text-sm">
+                            </div>
+                        </div>
+                        <div id="filter-chips" class="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap" role="group" aria-label="Filter notes"></div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-gray-400 -mb-2">
+                        <span id="list-count">Loading&hellip;</span>
+                        <button id="btn-refresh" type="button" title="Refresh list" class="min-h-[40px] min-w-[40px] -mr-2 flex items-center justify-center gap-1.5 hover:text-black transition-colors">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+
+                    <div id="notes-list" class="space-y-3 lg:max-h-[calc(100vh-24rem)] lg:overflow-y-auto lg:pr-1 lg:-mr-1"></div>
+                </aside>
+
+                <!-- EDITOR PANE -->
+                <section id="editor-pane" class="hidden lg:block min-w-0 mt-0">
+                    <!-- Nothing selected (desktop) -->
+                    <div id="editor-empty" class="bg-white p-8 sm:p-12 rounded-3xl border border-gray-100 shadow-sm text-center space-y-4 min-h-[420px] flex flex-col items-center justify-center">
+                        <div class="w-14 h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-black">
+                            <i data-lucide="notebook-pen" class="w-6 h-6"></i>
+                        </div>
+                        <h3 class="text-xl font-serif text-black">Pick a note to start</h3>
+                        <p class="text-sm text-gray-400 font-light max-w-xs">Open a note from the list, or start a fresh one. Everything saves automatically as you type.</p>
+                        <button type="button" data-action="new-note" class="mt-2 min-h-[44px] px-6 py-2.5 rounded-full bg-black text-white text-xs font-medium hover:bg-gray-800 transition-colors shadow-md flex items-center gap-2">
+                            <i data-lucide="plus" class="w-4 h-4"></i> New Note
+                        </button>
+                    </div>
+
+                    <!-- Loading -->
+                    <div id="editor-loading" class="hidden bg-white p-8 rounded-3xl border border-gray-100 shadow-sm min-h-[420px] flex-col items-center justify-center gap-3 text-xs font-mono text-gray-400">
+                        <i data-lucide="loader-circle" class="w-6 h-6 spin text-gray-300"></i>
+                        Opening note&hellip;
+                    </div>
+
+                    <!-- Editor card -->
+                    <div id="editor" class="hidden bg-white rounded-3xl border border-gray-100 shadow-sm fade-in">
+                        <!-- Top bar -->
+                        <div class="flex items-center gap-2 px-3 sm:px-6 py-3 border-b border-gray-100">
+                            <button id="btn-back" type="button" title="Back to notes" class="lg:hidden shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:text-black">
+                                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                            </button>
+                            <button id="save-status" type="button" class="min-w-0 flex-1 min-h-[40px] flex items-center gap-2 text-[11px] font-mono text-gray-400 text-left" title="Save now"></button>
+
+                            <div class="relative shrink-0">
+                                <button id="btn-share" type="button" aria-haspopup="menu" aria-expanded="false" title="Share" class="min-h-[40px] min-w-[40px] px-2.5 sm:px-4 rounded-full border border-gray-200 bg-white text-gray-700 hover:border-black hover:text-black text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
+                                    <i data-lucide="share-2" class="w-4 h-4"></i><span class="hidden sm:inline">Share</span>
+                                </button>
+                                <div id="menu-share" role="menu" class="hidden absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl border border-gray-100 shadow-xl p-1.5 z-40">
+                                    <button type="button" role="menuitem" data-action="copy-link" class="menu-item w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-black disabled:opacity-40 disabled:pointer-events-none">
+                                        <i data-lucide="link" class="w-4 h-4 text-gray-400"></i> Copy link
+                                    </button>
+                                    <button type="button" role="menuitem" data-action="copy-markdown" class="menu-item w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-black">
+                                        <i data-lucide="copy" class="w-4 h-4 text-gray-400"></i> Copy Markdown
+                                    </button>
+                                    <button type="button" role="menuitem" data-action="download" class="menu-item w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-black">
+                                        <i data-lucide="download" class="w-4 h-4 text-gray-400"></i> Download .md
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="relative shrink-0">
+                                <button id="btn-ai" type="button" aria-haspopup="menu" aria-expanded="false" class="min-h-[40px] px-3.5 sm:px-4 rounded-full bg-black text-white hover:bg-gray-800 text-xs font-medium flex items-center gap-1.5 shadow-md transition-colors disabled:opacity-50">
+                                    <i data-lucide="sparkles" class="w-4 h-4"></i><span>AI</span>
+                                </button>
+                                <div id="menu-ai" role="menu" class="hidden absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl border border-gray-100 shadow-xl p-1.5 z-40">
+                                    <p class="px-3 pt-2 pb-1 text-[10px] font-mono uppercase tracking-widest text-gray-400">AI Assistant</p>
+                                    <button type="button" role="menuitem" data-ai="summarize" class="menu-item w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-black">
+                                        <i data-lucide="file-text" class="w-4 h-4 text-gray-400"></i> Summarize
+                                    </button>
+                                    <button type="button" role="menuitem" data-ai="cleanup" class="menu-item w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-black">
+                                        <i data-lucide="wand-sparkles" class="w-4 h-4 text-gray-400"></i> Clean up &amp; format
+                                    </button>
+                                    <button type="button" role="menuitem" data-ai="action_items" class="menu-item w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-black">
+                                        <i data-lucide="list-checks" class="w-4 h-4 text-gray-400"></i> Extract action items
+                                    </button>
+                                    <button type="button" role="menuitem" data-ai="ask" class="menu-item w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-black">
+                                        <i data-lucide="message-square" class="w-4 h-4 text-gray-400"></i> Ask AI&hellip;
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button id="btn-delete" type="button" title="Delete note" class="hidden shrink-0 w-10 h-10 rounded-full items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-4 sm:p-6 lg:p-8 space-y-5">
+                            <!-- Read-only banner -->
+                            <div id="readonly-banner" class="hidden bg-gray-50 border border-gray-100 rounded-2xl p-3 text-xs text-gray-500 flex items-center gap-2">
+                                <i data-lucide="lock" class="w-3.5 h-3.5 shrink-0"></i>
+                                <span>You can view this note, but only its owner or a host can edit it.</span>
+                            </div>
+
+                            <!-- Title -->
+                            <div class="text-xs font-mono">
+                                <label for="note-title" class="block text-gray-400 uppercase tracking-widest mb-1.5">Title</label>
+                                <input type="text" id="note-title" maxlength="200" autocomplete="off" class="w-full bg-transparent border-0 border-b border-gray-200 focus:border-black outline-none py-2 font-serif text-2xl sm:text-3xl text-black transition-colors">
+                                <div id="note-meta" class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400"></div>
+                            </div>
+
+                            <!-- Sharing -->
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                                <span class="text-xs font-mono text-gray-400 uppercase tracking-widest">Visibility</span>
+                                <div id="share-control"></div>
+                            </div>
+
+                            <!-- Tabs & toolbar -->
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                                <div class="inline-flex self-start bg-gray-50 border border-gray-100 rounded-full p-1" role="tablist" aria-label="Editor view">
+                                    <button type="button" role="tab" data-view="edit" class="view-tab min-h-[40px] px-4 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors">
+                                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit
+                                    </button>
+                                    <button type="button" role="tab" data-view="preview" class="view-tab min-h-[40px] px-4 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors">
+                                        <i data-lucide="eye" class="w-3.5 h-3.5"></i> Preview
+                                    </button>
+                                    <button type="button" role="tab" data-view="split" class="view-tab hidden lg:flex min-h-[40px] px-4 rounded-full text-xs font-medium items-center gap-1.5 transition-colors">
+                                        <i data-lucide="columns-2" class="w-3.5 h-3.5"></i> Split
+                                    </button>
+                                </div>
+                                <div id="md-toolbar" class="flex items-center gap-0.5 overflow-x-auto no-scrollbar -mx-1 px-1" role="toolbar" aria-label="Formatting">
+                                    <button type="button" data-format="heading" title="Heading" class="fmt-btn shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-black disabled:opacity-30 disabled:pointer-events-none"><i data-lucide="heading" class="w-4 h-4"></i></button>
+                                    <button type="button" data-format="bold" title="Bold (Ctrl+B)" class="fmt-btn shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-black disabled:opacity-30 disabled:pointer-events-none"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                                    <button type="button" data-format="italic" title="Italic (Ctrl+I)" class="fmt-btn shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-black disabled:opacity-30 disabled:pointer-events-none"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                                    <span class="w-px h-5 bg-gray-200 mx-1 shrink-0"></span>
+                                    <button type="button" data-format="bullet" title="Bullet list" class="fmt-btn shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-black disabled:opacity-30 disabled:pointer-events-none"><i data-lucide="list" class="w-4 h-4"></i></button>
+                                    <button type="button" data-format="checklist" title="Checklist" class="fmt-btn shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-black disabled:opacity-30 disabled:pointer-events-none"><i data-lucide="list-checks" class="w-4 h-4"></i></button>
+                                    <button type="button" data-format="table" title="Insert table" class="fmt-btn shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-black disabled:opacity-30 disabled:pointer-events-none"><i data-lucide="table" class="w-4 h-4"></i></button>
+                                    <button type="button" data-format="link" title="Link" class="fmt-btn shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-black disabled:opacity-30 disabled:pointer-events-none"><i data-lucide="link" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>
+
+                            <!-- Body -->
+                            <div id="editor-body" class="grid gap-4">
+                                <div id="pane-write" class="min-w-0 text-xs font-mono">
+                                    <label for="note-body" class="block text-gray-400 uppercase tracking-widest mb-1.5">Markdown</label>
+                                    <textarea id="note-body" spellcheck="true" class="w-full h-[55vh] min-h-[300px] lg:h-[60vh] bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 sm:px-5 outline-none focus:border-black focus:bg-white text-gray-800 resize-y transition-colors"></textarea>
+                                </div>
+                                <div id="pane-preview" class="hidden min-w-0">
+                                    <span class="block text-xs font-mono text-gray-400 uppercase tracking-widest mb-1.5">Preview</span>
+                                    <div id="preview-box" class="md-preview border border-gray-100 rounded-2xl px-5 py-5 sm:px-6 min-h-[300px] bg-white"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="mt-auto border-t border-gray-100 py-8 text-xs font-mono text-gray-400">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-center">
+                <span>&copy; Chowaniec Notes &bull; All Rights Reserved</span>
+                <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Saved automatically</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Floating Return Button -->
+    <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full flex items-center justify-center text-gray-600 hover:text-black hover:bg-gray-50 hover:scale-105 transition-all z-50">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    </button>
+
+    <!-- Toast -->
+    <div id="toast" role="status" aria-live="polite" class="hidden fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-10 z-[70] max-w-[calc(100vw-2rem)] bg-black text-white text-xs font-medium rounded-full px-5 py-3 shadow-xl items-center gap-2"></div>
+
+    <!-- Ask AI Modal -->
+    <div id="ask-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-gray-100 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-start gap-4">
+                <div>
+                    <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 block">AI Assistant</span>
+                    <h3 class="text-xl font-serif text-black">Ask AI</h3>
+                </div>
+                <button type="button" data-close="ask-modal" title="Close" class="w-10 h-10 -mr-2 -mt-2 flex items-center justify-center text-gray-400 hover:text-black">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="text-xs font-mono">
+                <label for="ask-instruction" class="block text-gray-400 uppercase tracking-widest mb-1.5">What should the AI do?</label>
+                <textarea id="ask-instruction" rows="4" maxlength="2000" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light text-sm resize-none"></textarea>
+                <p class="mt-1.5 text-gray-400 font-sans font-light normal-case">For example: turn this into a rehearsal schedule, or translate it to Polish. The AI reads the current note.</p>
+            </div>
+            <div class="flex gap-3">
+                <button type="button" data-close="ask-modal" class="flex-1 min-h-[44px] py-3 text-xs font-medium text-gray-500 hover:bg-gray-50 rounded-xl transition-colors">Cancel</button>
+                <button type="button" id="ask-submit" class="flex-1 min-h-[44px] py-3 text-xs font-medium bg-black text-white rounded-xl hover:bg-gray-800 transition-all shadow-md flex items-center justify-center gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i> Ask
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Result Modal -->
+    <div id="ai-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] hidden items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-gray-100 flex flex-col max-h-[92vh] sm:max-h-[86vh]">
+            <div class="flex justify-between items-start gap-4 px-5 sm:px-8 pt-6 pb-4 border-b border-gray-100">
+                <div class="min-w-0">
+                    <span class="text-[10px] font-mono uppercase tracking-widest text-gray-400 flex items-center gap-1.5"><i data-lucide="sparkles" class="w-3 h-3"></i> AI Assistant</span>
+                    <h3 id="ai-title" class="text-xl font-serif text-black">Result</h3>
+                </div>
+                <button type="button" data-action="ai-discard" title="Close" class="w-10 h-10 -mr-2 -mt-1 shrink-0 flex items-center justify-center text-gray-400 hover:text-black">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="ai-body" class="flex-1 overflow-y-auto px-5 sm:px-8 py-5 min-h-[160px]"></div>
+            <div id="ai-actions" class="px-5 sm:px-8 py-4 border-t border-gray-100 grid grid-cols-2 sm:flex sm:justify-end gap-2"></div>
+        </div>
+    </div>
+
+    <!-- Conflict Modal -->
+    <div id="conflict-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-gray-100 space-y-5">
+            <div class="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+                <i data-lucide="triangle-alert" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h3 class="text-xl font-serif text-black">Someone else changed this note</h3>
+                <p id="conflict-detail" class="text-sm text-gray-500 font-light mt-1">Their changes were saved after you opened it. Choose which version to keep.</p>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button type="button" id="conflict-load" class="flex-1 min-h-[44px] py-3 px-4 text-xs font-medium border border-gray-200 text-gray-700 hover:border-black hover:text-black rounded-xl transition-colors flex items-center justify-center gap-2">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i> Load their version
+                </button>
+                <button type="button" id="conflict-keep" class="flex-1 min-h-[44px] py-3 px-4 text-xs font-medium bg-black text-white rounded-xl hover:bg-gray-800 transition-all shadow-md flex items-center justify-center gap-2">
+                    <i data-lucide="save" class="w-4 h-4"></i> Keep mine (overwrite)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sign-in-again Modal -->
+    <div id="signin-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[80] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-gray-100 space-y-5 text-center">
+            <div class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center mx-auto text-black">
+                <i data-lucide="log-in" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h3 class="text-xl font-serif text-black mb-1">Please sign in again</h3>
+                <p class="text-xs text-gray-400 font-light">Your session has expired. Enter your passcode to keep working on your notes.</p>
+            </div>
+            <button type="button" id="btn-signin" class="w-full min-h-[44px] py-3 text-xs font-medium bg-black text-white rounded-xl hover:bg-gray-800 transition-colors shadow-md">Sign in again</button>
+        </div>
+    </div>
+
+    <script src="notes.js"></script>
+</body>
+</html>

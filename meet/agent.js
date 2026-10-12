@@ -12,12 +12,15 @@ const AGENT_MAX_LINES_PER_UPDATE = 400;
 const AGENT_WAKE_PATTERN = /\b(?:hey|hi|okay|ok)[\s,.!?-]+agents?\b[\s,.!?:;-]*/i;
 const AGENT_COMMAND_SILENCE_MS = 2500;
 const AGENT_WAKE_ONLY_WAIT_MS = 5000;
+const CHECKIN_TIMEOUT_MS = 90 * 1000;
+const NOTES_ENDPOINT = '/.netlify/functions/notes';
 
 let agent = freshAgentState();
 let agentListeningRemotely = false;   // someone in the call has the Agent running
 let agentNotesTimer = null;
 let agentRenderTimer = null;
 let agentTranscriptOpen = false;
+let checkInTimer = null;
 const agentNames = {};                 // session id -> last known name
 
 function freshAgentState() {
@@ -34,7 +37,12 @@ function freshAgentState() {
     pinned: [],              // notes added with "Hey Agent, note that..."
     polls: [],               // poll objects launched from this device (live tallies)
     activity: [],            // { time, text, status }
-    pending: {}              // speaker id -> command being captured
+    pending: {},             // speaker id -> command being captured
+    // Voice check-in: everyone says their name so notes know who is speaking.
+    checkIn: { active: false, expected: {}, heard: {} },
+    intros: {},              // session id -> { name, text } from the check-in
+    savedNoteId: null,       // the shared note in /notes that mirrors these notes
+    notesSyncError: null
   };
 }
 
@@ -46,9 +54,9 @@ function agentStorageKey() {
 
 function saveAgentState() {
   try {
-    const { transcript, notes, notesUpdatedIndex, notesUpdatedAt, pinned, activity, startedAt } = agent;
+    const { transcript, notes, notesUpdatedIndex, notesUpdatedAt, pinned, activity, startedAt, intros, savedNoteId } = agent;
     const polls = agent.polls.map(pollSummary);
-    localStorage.setItem(agentStorageKey(), JSON.stringify({ transcript, notes, notesUpdatedIndex, notesUpdatedAt, pinned, activity, startedAt, polls }));
+    localStorage.setItem(agentStorageKey(), JSON.stringify({ transcript, notes, notesUpdatedIndex, notesUpdatedAt, pinned, activity, startedAt, polls, intros, savedNoteId }));
   } catch (e) {
     // Storage full or unavailable; notes still live in memory.
   }
@@ -67,6 +75,8 @@ function loadAgentState() {
         pinned: Array.isArray(stored.pinned) ? stored.pinned : [],
         activity: Array.isArray(stored.activity) ? stored.activity : [],
         startedAt: stored.startedAt || null,
+        intros: stored.intros && typeof stored.intros === 'object' ? stored.intros : {},
+        savedNoteId: stored.savedNoteId || null,
         // Earlier polls keep their final tallies as plain summaries.
         polls: (Array.isArray(stored.polls) ? stored.polls : []).map((p) => ({ ...p, archived: true }))
       });
@@ -91,6 +101,7 @@ function agentAttach(frame) {
       broadcastAgentSay('The Agent is now listening and taking notes. Say "Hey Agent" to give it a command.');
       clearInterval(agentNotesTimer);
       agentNotesTimer = setInterval(() => updateAgentNotes(false), AGENT_NOTES_INTERVAL_MS);
+      startVoiceCheckIn();
     }
     updateAgentChip();
     scheduleAgentRender();
@@ -119,6 +130,9 @@ function agentAttach(frame) {
 
 function agentDetach() {
   clearInterval(agentNotesTimer);
+  clearTimeout(checkInTimer);
+  agent.checkIn.active = false;
+  hideCheckInCard();
   agentNotesTimer = null;
   Object.values(agent.pending).forEach((p) => clearTimeout(p.timer));
   agent.pending = {};
@@ -161,6 +175,7 @@ function handleTranscriptionMessage(evt) {
     text: evt.text.trim()
   };
   agent.transcript.push(line);
+  recordCheckIn(line);
   detectAgentCommand(line);
   saveAgentState();
   scheduleAgentRender();
@@ -314,11 +329,13 @@ async function updateAgentNotes(manual) {
       newLines: linesForAgent(agent.transcript.slice(agent.notesUpdatedIndex, end)),
       polls: agent.polls.map(pollSummary),
       formResponses,
-      pinned: agent.pinned.map((p) => p.text)
+      pinned: agent.pinned.map((p) => p.text),
+      intros: Object.values(agent.intros).map((i) => ({ device: i.name, said: i.text }))
     });
     agent.notes = notes;
     agent.notesUpdatedIndex = end;
     agent.notesUpdatedAt = new Date().toISOString();
+    syncNotesToNotebook();
   } catch (err) {
     agent.notesError = err.message;
   } finally {
@@ -326,6 +343,133 @@ async function updateAgentNotes(manual) {
     saveAgentState();
     scheduleAgentRender();
   }
+}
+
+// --- Voice check-in ---
+// Daily transcribes each device separately, so lines are already labelled by device.
+// The check-in confirms every microphone reaches the Agent and lets people who share a
+// device introduce themselves, so the notes can tell them apart.
+
+function startVoiceCheckIn() {
+  if (!callFrame || !agent.running) return;
+  const expected = {};
+  Object.values(callFrame.participants()).forEach((p) => { expected[p.session_id] = p.user_name || 'Guest'; });
+  agent.checkIn = { active: true, expected, heard: {} };
+  callFrame.sendAppMessage({ type: 'CHECKIN' }, '*');
+  showCheckInCard();
+  clearTimeout(checkInTimer);
+  checkInTimer = setTimeout(() => finishVoiceCheckIn(), CHECKIN_TIMEOUT_MS);
+  logAgentActivity('Voice check-in started.', 'ok');
+  scheduleAgentRender();
+}
+
+// Prompts someone who joins while the Agent is running to introduce themselves.
+function agentOnParticipantJoined(participant) {
+  if (!agent.running || !participant || !participant.session_id) return;
+  agent.checkIn.expected[participant.session_id] = participant.user_name || 'Guest';
+  callFrame.sendAppMessage({ type: 'CHECKIN' }, participant.session_id);
+  scheduleAgentRender();
+}
+
+function recordCheckIn(line) {
+  const { checkIn } = agent;
+  if (!checkIn.expected[line.id]) return;
+  const intro = agent.intros[line.id] || { name: line.speaker, text: '' };
+  if (intro.text.length < 300) intro.text = `${intro.text} ${line.text}`.trim().slice(0, 300);
+  agent.intros[line.id] = intro;
+  if (checkIn.heard[line.id]) return;
+
+  checkIn.heard[line.id] = true;
+  if (line.id === localSessionId()) markCheckInHeard();
+  else callFrame.sendAppMessage({ type: 'CHECKIN_HEARD' }, line.id);
+  scheduleAgentRender();
+  if (checkIn.active && Object.keys(checkIn.expected).every((id) => checkIn.heard[id] || !getParticipant(id))) {
+    finishVoiceCheckIn();
+  }
+}
+
+function finishVoiceCheckIn() {
+  const { checkIn } = agent;
+  if (!checkIn.active) return;
+  checkIn.active = false;
+  clearTimeout(checkInTimer);
+  if (callFrame) callFrame.sendAppMessage({ type: 'CHECKIN_DONE' }, '*');
+  hideCheckInCard();
+  const missing = Object.keys(checkIn.expected)
+    .filter((id) => !checkIn.heard[id] && getParticipant(id))
+    .map((id) => checkIn.expected[id]);
+  broadcastAgentSay(missing.length
+    ? `Voice check-in done. I couldn't hear ${missing.join(', ')} yet; please check ${missing.length === 1 ? 'that microphone' : 'those microphones'}.`
+    : 'Voice check-in done. The Agent can hear everyone.');
+  logAgentActivity(missing.length ? `Check-in finished; not heard: ${missing.join(', ')}.` : 'Check-in finished; heard everyone.', missing.length ? 'error' : 'ok');
+  scheduleAgentRender();
+}
+
+function showCheckInCard() {
+  const card = document.getElementById('checkin-card');
+  if (!card) return;
+  document.getElementById('checkin-status').innerText = 'Listening for you...';
+  card.classList.remove('hidden');
+}
+
+function markCheckInHeard() {
+  const card = document.getElementById('checkin-card');
+  if (!card || card.classList.contains('hidden')) return;
+  document.getElementById('checkin-status').innerText = 'Got it, thanks!';
+  setTimeout(hideCheckInCard, 2500);
+}
+
+function hideCheckInCard() {
+  const card = document.getElementById('checkin-card');
+  if (card) card.classList.add('hidden');
+}
+
+// Check-in messages from the host running the Agent. Returns true when handled.
+function agentHandleAppMessage(msg, fromId) {
+  if (!['CHECKIN', 'CHECKIN_HEARD', 'CHECKIN_DONE'].includes(msg.type)) return false;
+  const sender = getParticipant(fromId);
+  if (!(isPrivileged(fromId) || (sender && sender.owner))) return true;
+  if (msg.type === 'CHECKIN') showCheckInCard();
+  else if (msg.type === 'CHECKIN_HEARD') markCheckInHeard();
+  else hideCheckInCard();
+  return true;
+}
+
+// --- Saving to Chowaniec Notes (/notes) ---
+
+async function notesRequest(method, body) {
+  const res = await fetch(NOTES_ENDPOINT, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Chowaniec-Key': signedInKey() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  return { status: res.status, data };
+}
+
+// Mirrors the Agent's notes into a note shared with the family, so everyone can read them.
+async function syncNotesToNotebook() {
+  if (!agent.notes) return;
+  const date = new Date(agent.startedAt || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  const title = `${agent.notes.title || 'Meeting notes'} (${date})`;
+  const markdown = agentNotesMarkdown();
+  try {
+    if (agent.savedNoteId) {
+      const { status } = await notesRequest('PUT', { id: agent.savedNoteId, title, markdown });
+      if (status === 404) agent.savedNoteId = null;
+      else if (status !== 200) throw new Error();
+    }
+    if (!agent.savedNoteId) {
+      const { status, data } = await notesRequest('POST', { title, markdown, shared: true, source: 'agent', meetingCode: currentMeetingCode });
+      if (status !== 200) throw new Error();
+      agent.savedNoteId = data.note.id;
+    }
+    agent.notesSyncError = null;
+  } catch (e) {
+    agent.notesSyncError = 'Could not save these notes to Chowaniec Notes. They are still saved on this device.';
+  }
+  saveAgentState();
+  scheduleAgentRender();
 }
 
 // --- Start / stop ---
@@ -455,6 +599,13 @@ function renderAgentPanel() {
         <p class="text-[11px] text-zinc-500 leading-relaxed">Say <span class="text-zinc-300">"Hey Agent"</span> then a command, e.g. "make a poll about what I just said", "ask everyone what they would prefer", or "note that we shoot on Saturday". Commands work for the Director and Co-Director.</p>
       </div>
 
+      ${renderCheckInSection()}
+
+      ${agent.savedNoteId ? `
+        <a href="/notes/?id=${encodeURIComponent(agent.savedNoteId)}" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-sky-300">
+          <i data-lucide="notebook-pen" class="w-3.5 h-3.5"></i> Saved to Chowaniec Notes (shared with family)
+        </a>` : ''}
+      ${agent.notesSyncError ? `<p class="text-[11px] text-amber-300">${escapeHtml(agent.notesSyncError)}</p>` : ''}
       ${agent.notesError ? `<p class="text-[11px] text-red-400">${escapeHtml(agent.notesError)}</p>` : ''}
       ${agent.notesUpdatedAt ? `<p class="text-[10px] font-mono text-zinc-500">NOTES UPDATED ${escapeHtml(formatClock(agent.notesUpdatedAt))}</p>` : ''}
       ${notesHtml}
@@ -478,6 +629,32 @@ function renderAgentPanel() {
         </details>` : ''}
     </div>
   `;
+}
+
+function renderCheckInSection() {
+  const { checkIn } = agent;
+  const ids = Object.keys(checkIn.expected);
+  if (!agent.running || !ids.length) return '';
+  return `
+    <div class="p-4 rounded-xl bg-white/5 border border-white/5 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-medium text-white">Voice Check-in</span>
+        <span class="text-[11px] ${checkIn.active ? 'text-violet-300' : 'text-zinc-500'}">${checkIn.active ? 'In progress' : 'Done'}</span>
+      </div>
+      <ul class="space-y-1.5">
+        ${ids.map((id) => {
+          const heard = checkIn.heard[id];
+          const present = !!getParticipant(id);
+          return `<li class="flex items-center gap-2 text-xs ${present ? 'text-zinc-200' : 'text-zinc-500 line-through'}">
+            <i data-lucide="${heard ? 'circle-check' : 'mic'}" class="w-3.5 h-3.5 ${heard ? 'text-emerald-400' : 'text-zinc-500'}"></i>
+            ${escapeHtml(checkIn.expected[id])}${heard ? '' : ' <span class="text-zinc-500">waiting...</span>'}
+          </li>`;
+        }).join('')}
+      </ul>
+      ${checkIn.active
+        ? '<button onclick="finishVoiceCheckIn()" class="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-300">Finish Check-in</button>'
+        : '<button onclick="startVoiceCheckIn()" class="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-300">Run Check-in Again</button>'}
+    </div>`;
 }
 
 // --- Export ---

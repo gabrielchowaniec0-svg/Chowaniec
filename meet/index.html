@@ -165,6 +165,23 @@
     </footer>
   </div>
 
+  <!-- Voice check-in prompt (sent by the host running the Meeting Agent) -->
+  <div id="checkin-card" class="hidden fixed top-36 sm:top-32 left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-[26rem] z-[45] p-4 rounded-2xl bg-[#282a2d] border border-violet-400/40 shadow-2xl">
+    <div class="flex items-start gap-3">
+      <div class="w-9 h-9 shrink-0 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-300">
+        <i data-lucide="mic" class="w-4 h-4"></i>
+      </div>
+      <div class="space-y-1 min-w-0">
+        <p class="text-sm font-medium text-white">Voice check-in</p>
+        <p class="text-xs text-zinc-300 leading-relaxed">Please say your name and a sentence, e.g. "Hi, this is Emilia, I'm playing the lead." If you're sharing this device, each person should say their name.</p>
+        <p id="checkin-status" class="text-[11px] text-violet-300">Listening for you...</p>
+      </div>
+      <button onclick="hideCheckInCard()" title="Dismiss" class="w-8 h-8 shrink-0 rounded-full hover:bg-white/10 flex items-center justify-center text-zinc-400">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+
   <!-- Toast notifications -->
   <div id="toast" class="hidden fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-full bg-white text-black text-xs font-medium shadow-2xl max-w-[90vw] text-center"></div>
 
@@ -914,6 +931,7 @@
       refreshRoles();
       // Bring newcomers up to date with any role hand-overs.
       const newcomer = evt && evt.participant && evt.participant.session_id;
+      agentOnParticipantJoined(evt && evt.participant);
       if (newcomer && myRole() === 'Director' && (roleOverride.directorId || roleOverride.coDirectorId)) {
         callFrame.sendAppMessage({ type: 'ROLE_STATE', ...roleOverride }, newcomer);
       }
@@ -1021,6 +1039,7 @@
     function handleAppMessage(evt) {
       const msg = evt.data || {};
       const fromId = evt.fromId;
+      if (agentHandleAppMessage(msg, fromId)) return;
 
       if (msg.type === 'PUSH_FORM' && isPrivileged(fromId) && msg.form) {
         activeForm = sanitizeForm(msg.form);
