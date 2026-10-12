@@ -46,7 +46,7 @@
         </div>
         <span class="hidden sm:inline text-sm font-medium tracking-wide text-zinc-200">Production Call</span>
         <span class="hidden sm:inline text-zinc-600">|</span>
-        <span id="active-code-display" class="text-xs font-mono text-zinc-400 truncate">ID: production</span>
+        <span id="active-code-display" class="text-xs font-mono text-zinc-400 truncate"></span>
         <span class="hidden sm:inline text-zinc-600">|</span>
         <span id="clock" class="hidden sm:inline text-xs font-mono text-zinc-400">00:00 PM</span>
       </div>
@@ -63,6 +63,11 @@
           Guests: <strong id="guest-count">0/4</strong>
         </span>
       </div>
+
+      <!-- Shown to everyone while the Meeting Agent is listening -->
+      <button onclick="toggleDrawer('agent')" id="agent-chip" class="hidden shrink-0 items-center gap-1.5 text-[11px] font-mono px-3 py-1.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-violet-200">
+        <span class="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"></span>Agent
+      </button>
 
       <!-- Compact role chip on small screens -->
       <button onclick="toggleDrawer('roster')" id="mobile-role-chip" class="md:hidden shrink-0 text-[11px] font-mono px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-zinc-300">
@@ -135,6 +140,10 @@
           <i data-lucide="clipboard-list" class="w-4 h-4"></i>
         </button>
 
+        <button onclick="toggleDrawer('agent')" title="Meeting Agent" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="bot" class="w-4 h-4"></i>
+        </button>
+
         <button onclick="toggleDrawer('roster')" title="People & Director Controls" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
           <i data-lucide="users" class="w-4 h-4"></i>
         </button>
@@ -166,14 +175,14 @@
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Your Name</label>
-          <input type="text" id="user-name-input" placeholder="Your name" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none transition-all">
+          <input type="text" id="user-name-input" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none transition-all">
           <p id="host-hint" class="text-[11px] text-zinc-500 mt-1">Host priority is based on the passcode you signed in with.</p>
         </div>
 
         <div>
           <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Meeting Code</label>
           <div class="relative">
-            <input type="text" id="room-code-input" placeholder="abc-defg-hij" value="production" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
+            <input type="text" id="room-code-input" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
           </div>
           <p id="room-subtext" class="text-[11px] text-zinc-500 mt-1">Room code will be appended to invite links.</p>
         </div>
@@ -218,7 +227,7 @@
     let callFrame = null;
     let isLeaving = false;
     let localUserName = '';
-    let currentMeetingCode = 'production';
+    let currentMeetingCode = '';
     let currentDrawerTab = null;
     let isAudioMuted = false;
     let isVideoMuted = false;
@@ -459,6 +468,7 @@
       callFrame.on('app-message', handleAppMessage);
       callFrame.on('left-meeting', handleLeftMeeting);
       callFrame.on('error', (evt) => endCall(describeJoinError(evt, currentMeetingCode)));
+      agentAttach(callFrame);
 
       const joinOptions = {
         url: (access && access.url) || `https://${DAILY_DOMAIN}/${codeInput}`,
@@ -507,6 +517,7 @@
 
     // Tears down the call frame and returns to the lobby with a message.
     function endCall(message) {
+      agentDetach();
       if (callFrame) {
         const frame = callFrame;
         callFrame = null;
@@ -690,6 +701,11 @@
 
     async function leaveMeeting() {
       isLeaving = true;
+      if (callFrame && agentIsActive()) {
+        callFrame.stopTranscription();
+        agentDetach();
+        downloadAgentNotes();
+      }
       if (callFrame) {
         try {
           await callFrame.leave();
@@ -710,7 +726,7 @@
         activeForm = sanitizeForm(msg.form);
         if (!activeForm.fields.length) return;
         displayBroadcastPopup('Form Received: ' + activeForm.title, `
-          <p class="text-xs text-zinc-300 font-light mb-2">Fill out before continuing shoot:</p>
+          <p class="text-xs text-zinc-300 font-light mb-2">Please answer below:</p>
           <div class="space-y-3">
             ${activeForm.fields.map((f, i) => `
               <label class="block space-y-1">
@@ -748,6 +764,8 @@
         };
         refreshRoles();
         toast(`${sessionRoles.director ? sessionRoles.director.name : 'Someone'} is now the Director.`);
+      } else if (msg.type === 'AGENT_SAY' && typeof msg.text === 'string' && (isPrivileged(fromId) || (getParticipant(fromId) || {}).owner)) {
+        showAgentSay(msg.text.slice(0, 500));
       } else if (msg.type === 'MUTE' && isPrivileged(fromId)) {
         if (!isAudioMuted) {
           isAudioMuted = true;
@@ -871,6 +889,7 @@
         body.innerHTML = `
           <div class="space-y-2">
             ${item("copyInviteLink(); toggleDrawer(null)", 'link-2', 'Copy Meeting Link')}
+            ${item("toggleDrawer('agent')", 'bot', 'Meeting Agent & Notes')}
             ${item("toggleDrawer('roster')", 'users', 'People & Director Controls')}
             ${item("toggleDrawer('polls')", 'bar-chart-2', 'Quick Polls')}
             ${item("toggleDrawer('forms')", 'clipboard-list', 'Production Forms')}
@@ -919,10 +938,10 @@
         body.innerHTML = !canManage ? restrictedNotice('launch polls') : `
           <div class="space-y-3">
             <label class="block text-xs font-mono text-zinc-400">POLL QUESTION</label>
-            <input type="text" id="poll-q" placeholder="e.g., Approve Take 4?" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
+            <input type="text" id="poll-q" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
 
             <label class="block text-xs font-mono text-zinc-400 mt-2">OPTIONS (COMMA-SEPARATED)</label>
-            <input type="text" id="poll-opts" placeholder="Yes, No, Needs Recut" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
+            <input type="text" id="poll-opts" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
 
             <button onclick="broadcastQuickPoll()" class="w-full mt-4 py-2.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-medium transition-colors">
               Broadcast Poll Now
@@ -933,6 +952,9 @@
       } else if (tab === 'roster') {
         title.innerText = 'People & Roles';
         body.innerHTML = renderRoster();
+      } else if (tab === 'agent') {
+        title.innerText = 'Meeting Agent';
+        body.innerHTML = renderAgentPanel();
       }
       lucide.createIcons();
     }
@@ -1052,13 +1074,13 @@
         <div class="space-y-4">
           <div>
             <label class="block text-xs font-mono text-zinc-400 mb-1.5">FORM TITLE</label>
-            <input type="text" maxlength="80" value="${escapeHtml(formDraft.title)}" oninput="formDraft.title = this.value" placeholder="e.g. Scene 4 Sign-off" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
+            <input type="text" maxlength="80" value="${escapeHtml(formDraft.title)}" oninput="formDraft.title = this.value" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
           </div>
           <div class="space-y-2">
             <span class="block text-xs font-mono text-zinc-400">FIELDS (${formDraft.fields.length}/${MAX_FORM_FIELDS})</span>
             ${formDraft.fields.map((f, i) => `
               <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-2">
-                <input type="text" maxlength="80" value="${escapeHtml(f.label)}" oninput="formDraft.fields[${i}].label = this.value" placeholder="Question" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
+                <input type="text" maxlength="80" value="${escapeHtml(f.label)}" oninput="formDraft.fields[${i}].label = this.value" class="w-full bg-[#1e1f22] border border-white/10 rounded-lg p-2.5 text-xs text-white">
                 <div class="flex items-center gap-1.5">
                   <select onchange="formDraft.fields[${i}].type = this.value" class="flex-1 min-w-0 bg-[#1e1f22] border border-white/10 rounded-lg p-2 text-xs text-white">${typeOptions(f.type)}</select>
                   <button onclick="moveDraftField(${i}, -1)" title="Move up" class="w-9 h-9 shrink-0 rounded-lg hover:bg-white/10 flex items-center justify-center text-zinc-400 disabled:opacity-30" ${i === 0 ? 'disabled' : ''}><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i></button>
@@ -1173,6 +1195,7 @@
       }
 
       myPoll = { id: Date.now().toString(36), question: q, options: opts, votes: {} };
+      agentTrackPoll(myPoll);
       callFrame.sendAppMessage({
         type: 'PUSH_POLL',
         poll: { id: myPoll.id, question: q, options: opts }
@@ -1203,5 +1226,6 @@
       }
     });
   </script>
+  <script src="agent.js"></script>
 </body>
 </html>

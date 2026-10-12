@@ -105,7 +105,6 @@
           <input
             type="password"
             id="gate-passcode-input"
-            placeholder="••••••••"
             class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-center text-sm font-mono tracking-widest outline-none focus:border-black focus:bg-white transition-all"
           />
           <p id="gate-passcode-error" class="text-xs text-red-500 font-medium hidden">

@@ -197,13 +197,13 @@
             <form onsubmit="handlePaymentSubmit(event)" class="space-y-4 text-xs font-mono">
                 <div>
                     <label class="block text-gray-400 uppercase tracking-widest mb-1.5">Cardholder Name</label>
-                    <input type="text" id="pay-name" placeholder="Johnathan Doe" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light">
+                    <input type="text" id="pay-name" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-sans font-light">
                 </div>
 
                 <div>
                     <label class="block text-gray-400 uppercase tracking-widest mb-1.5">Card Number</label>
                     <div class="relative">
-                        <input type="text" id="pay-card" placeholder="4532 •••• •••• 8891" maxlength="19" oninput="formatCardNumber(this)" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pl-11 outline-none focus:border-black font-mono">
+                        <input type="text" id="pay-card" maxlength="19" oninput="formatCardNumber(this)" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pl-11 outline-none focus:border-black font-mono">
                         <i data-lucide="credit-card" class="w-4 h-4 text-gray-400 absolute left-4 top-3.5"></i>
                     </div>
                 </div>
@@ -211,11 +211,11 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-gray-400 uppercase tracking-widest mb-1.5">Exp Date</label>
-                        <input type="text" id="pay-exp" placeholder="MM/YY" maxlength="5" oninput="formatExpDate(this)" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-mono">
+                        <input type="text" id="pay-exp" maxlength="5" oninput="formatExpDate(this)" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-mono">
                     </div>
                     <div>
                         <label class="block text-gray-400 uppercase tracking-widest mb-1.5">Security CVV</label>
-                        <input type="password" id="pay-cvv" placeholder="•••" maxlength="4" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-mono">
+                        <input type="password" id="pay-cvv" maxlength="4" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black font-mono">
                     </div>
                 </div>
 
