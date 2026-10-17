@@ -5,11 +5,15 @@
 //   GET ?media=<mediaId>     -> image bytes (works with the sign-in cookie, for <img>)
 //   POST { text, image?, replyTo? }          -> { message }  (notifies others; @AI gets a reply)
 //   POST { action: 'react', id, emoji }      -> { message }
+//   POST { action: 'typing' } | { action: 'read', id }   -> { ok }
+//   POST { action: 'pin', id } -> { pinned }   POST { action: 'unpin' } -> { pinned: null }
 //   DELETE ?id=<id>                          -> { ok }        (author or host)
+// Every message GET also returns { presence, pinned } and marks the caller online.
 import { getUser, json } from '../lib/auth.mjs';
 import {
   AI_NAME, isMessageId, latest, since, before, getMessage, getImage, postMessage, deleteMessage,
-  toggleReaction, notifyMessage, transcriptOf
+  toggleReaction, notifyMessage, transcriptOf, touchPresence, setTyping, clearTyping, setRead, listPresence,
+  getPinned, pinMessage, unpin
 } from '../lib/group-store.mjs';
 import { aiConfigured, aiClient, textOf } from '../lib/ai.mjs';
 import { sendPush } from '../lib/push.mjs';
@@ -59,16 +63,19 @@ export default async (req, context) => {
         });
       }
       const sinceId = url.searchParams.get('since');
-      if (sinceId) {
-        if (!isMessageId(sinceId)) return json(400, { error: 'Invalid cursor.' });
-        return json(200, { messages: await since(sinceId) });
-      }
       const beforeId = url.searchParams.get('before');
-      if (beforeId) {
-        if (!isMessageId(beforeId)) return json(400, { error: 'Invalid cursor.' });
-        return json(200, await before(beforeId));
+      if ((sinceId && !isMessageId(sinceId)) || (beforeId && !isMessageId(beforeId))) {
+        return json(400, { error: 'Invalid cursor.' });
       }
-      return json(200, { messages: await latest(50) });
+      await touchPresence(user.name);
+      const [page, presence, pinned] = await Promise.all([
+        sinceId ? since(sinceId).then((messages) => ({ messages }))
+          : beforeId ? before(beforeId)
+            : latest(50).then((messages) => ({ messages })),
+        listPresence(),
+        getPinned()
+      ]);
+      return json(200, { ...page, presence, pinned });
     }
 
     if (req.method === 'DELETE') {
@@ -77,6 +84,8 @@ export default async (req, context) => {
       if (!found) return json(404, { error: 'Message not found.' });
       if (found.message.user !== user.name && !user.host) return json(403, { error: 'You can only delete your own messages.' });
       await deleteMessage(id);
+      const pinned = await getPinned();
+      if (pinned && pinned.id === id) await unpin();
       return json(200, { ok: true });
     }
 
@@ -86,6 +95,29 @@ export default async (req, context) => {
       body = await req.json();
     } catch (e) {
       return json(400, { error: 'Invalid request.' });
+    }
+
+    if (body.action === 'typing') {
+      await setTyping(user.name);
+      return json(200, { ok: true });
+    }
+    if (body.action === 'read') {
+      if (!isMessageId(body.id)) return json(400, { error: 'Invalid message.' });
+      await setRead(user.name, body.id);
+      return json(200, { ok: true });
+    }
+    if (body.action === 'pin') {
+      const pinned = await pinMessage(String(body.id || ''), user.name);
+      if (!pinned) return json(404, { error: 'Message not found.' });
+      return json(200, { pinned });
+    }
+    if (body.action === 'unpin') {
+      const pinned = await getPinned();
+      if (pinned && pinned.pinnedBy !== user.name && !user.host) {
+        return json(403, { error: 'Only the person who pinned it or a host can unpin.' });
+      }
+      await unpin();
+      return json(200, { pinned: null });
     }
 
     if (body.action === 'react') {
@@ -101,6 +133,7 @@ export default async (req, context) => {
       image: body.image || null,
       replyTo: isMessageId(body.replyTo) ? body.replyTo : null
     });
+    await clearTyping(user.name);
     // Notifications and the AI's reply run after the response is sent.
     context.waitUntil(notifyMessage(message));
     if (message.mentions.includes('AI')) context.waitUntil(replyAsAi(message));

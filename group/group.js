@@ -1,4 +1,4 @@
-// Chowaniec Group: the family group chat. Talks to /.netlify/functions/group (see API spec).
+// Chowaniec Group: the family group chat. Talks to /.netlify/functions/group (see API spec + v2 additions).
 (function () {
     'use strict';
 
@@ -8,15 +8,22 @@
     const FULL_SYNC_MS = 20000;           // re-read the latest 50 to pick up reactions & deletions
     const GROUP_GAP_MS = 5 * 60 * 1000;   // consecutive messages within 5 min are grouped
     const NEAR_BOTTOM_PX = 120;
+    const JUMP_SHOW_PX = 360;
     const MAX_IMAGE_EDGE = 1600;
     const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+    const TYPING_EVERY_MS = 3000;
+    const READ_EVERY_MS = 3000;
+    const SWIPE_REPLY_PX = 60;
     const QUICK_EMOJI = ['❤️', '👍', '😂', '😮', '😢', '🎉'];
-    const AI_NAME = 'Chowaniec AI';
-    const AVATAR_COLORS = [
-        ['#fee2e2', '#991b1b'], ['#ffedd5', '#9a3412'], ['#dcfce7', '#166534'], ['#dbeafe', '#1e40af'],
-        ['#fce7f3', '#9d174d'], ['#e0f2fe', '#075985'], ['#fef9c3', '#854d0e'], ['#ccfbf1', '#115e59'],
-        ['#ede9fe', '#5b21b6'], ['#f1f5f9', '#334155']
+    const EMOJI = [
+        '😀', '😂', '🤣', '😊', '😍', '🥰', '😘', '😉', '😎', '🤩', '🥳', '😇', '🙂', '🤔', '🤗', '😴',
+        '😅', '😭', '😢', '😮', '😱', '😡', '🙄', '😬', '🤪', '😋', '🥺', '🤭', '👍', '👎', '👏', '🙌',
+        '🙏', '💪', '👋', '🤝', '✌️', '👌', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💕', '🔥', '✨',
+        '🎉', '🎂', '🎁', '🌹', '☀️', '🌙', '⭐', '🍝', '🍕', '☕', '🍷', '🏠', '🚗', '✈️', '📸', '✅'
     ];
+    const AI_NAME = 'Chowaniec AI';
+    const PALETTE = 8;
+    const THEME_KEY = 'chowaniec_group_theme';
 
     const state = {
         started: false,
@@ -42,15 +49,33 @@
         image: null,           // { dataUrl, width, height, bytes }
         mention: null,         // { start, query, options, index }
         menuFor: null,
+        menuEmojiOpen: false,
         confirmId: null,
         aiThinkingUntil: 0,
         push: 'loading',
         pushBusy: false,
-        nodeCache: new Map()
+        nodeCache: new Map(),
+        // v2
+        presence: [],
+        pinned: null,
+        typingSentAt: 0,
+        readSentId: null,
+        readSentAt: 0,
+        readTimer: null,
+        extrasSig: '',
+        rendered: false,
+        newestTs: 0,
+        confirmed: new Set(),
+        caret: { start: 0, end: 0 },
+        sheetOpen: false,
+        search: { q: '', busy: false, timer: null },
+        theme: 'auto'
     };
 
     const $ = (id) => document.getElementById(id);
     const isFinePointer = () => window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    const reducedMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // ---------- helpers ----------
     function escapeHtml(value) {
@@ -72,7 +97,7 @@
     let toastTimer = null;
     function toast(message, kind) {
         const el = $('toast');
-        el.innerHTML = `<i data-lucide="${kind === 'error' ? 'circle-alert' : 'check'}" class="w-4 h-4 shrink-0 ${kind === 'error' ? 'text-red-300' : 'text-emerald-300'}"></i><span>${escapeHtml(message)}</span>`;
+        el.innerHTML = `<i data-lucide="${kind === 'error' ? 'circle-alert' : 'check'}" class="${kind === 'error' ? 'err' : 'ok'}"></i><span>${escapeHtml(message)}</span>`;
         el.classList.remove('hidden');
         el.classList.add('flex');
         icons(el);
@@ -98,14 +123,22 @@
     }
 
     function sameName(a, b) { return String(a || '').toLowerCase() === String(b || '').toLowerCase(); }
+    function myName() { return state.user ? state.user.name : ''; }
     function isMine(m) { return !!state.user && m.kind !== 'ai' && m.kind !== 'system' && sameName(m.user, state.user.name); }
     function displayName(m) { return m.kind === 'ai' ? (m.user || AI_NAME) : (m.user || 'Someone'); }
+    function isAiName(name) { return sameName(name, AI_NAME); }
 
-    function avatarColors(name) {
+    function hashName(name) {
         let h = 0;
-        const s = String(name || '?');
+        const s = String(name || '?').toLowerCase();
         for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-        return AVATAR_COLORS[h % AVATAR_COLORS.length];
+        return h;
+    }
+
+    // Fixed palette: family members get distinct colours by their position in the people list.
+    function personClass(name) {
+        const idx = state.people.findIndex((n) => sameName(n, name));
+        return 'p' + ((idx >= 0 ? idx : hashName(name)) % PALETTE);
     }
 
     function initial(name) {
@@ -113,22 +146,35 @@
         return s ? Array.from(s)[0].toUpperCase() : '?';
     }
 
+    function avatarHtml(name, size, opts) {
+        const o = opts || {};
+        const sz = size ? ' ' + size : '';
+        if (o.ai || isAiName(name)) return `<span class="av ai-av${sz}" aria-hidden="true"><i data-lucide="sparkles"></i></span>`;
+        if (o.everyone) return `<span class="av all-av${sz}" aria-hidden="true"><i data-lucide="users"></i></span>`;
+        return `<span class="av ${personClass(name)}${sz}" data-user="${escapeHtml(String(name || '').toLowerCase())}" aria-hidden="true">${escapeHtml(initial(name))}<span class="dot"></span></span>`;
+    }
+
     function dayKey(t) {
         const d = new Date(t);
         return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     }
 
-    function dayLabel(t) {
+    function dayDiff(t) {
         const d = new Date(t);
         const today = new Date();
         const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
         const startD = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-        const diff = Math.round((startToday - startD) / 86400000);
+        return Math.round((startToday - startD) / 86400000);
+    }
+
+    function dayLabel(t) {
+        const d = new Date(t);
+        const diff = dayDiff(t);
         if (diff === 0) return 'Today';
         if (diff === 1) return 'Yesterday';
         if (diff > 1 && diff < 7) return d.toLocaleDateString([], { weekday: 'long' });
         const opts = { weekday: 'short', month: 'short', day: 'numeric' };
-        if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric';
+        if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
         return d.toLocaleDateString([], opts);
     }
 
@@ -138,6 +184,26 @@
 
     function fullTime(t) {
         return new Date(t).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    function shortWhen(t) {
+        const diff = dayDiff(t);
+        if (diff === 0) return timeLabel(t);
+        if (diff === 1) return 'Yesterday';
+        if (diff > 1 && diff < 7) return new Date(t).toLocaleDateString([], { weekday: 'short' });
+        return new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+
+    function lastSeenLabel(iso) {
+        const t = Date.parse(iso);
+        if (!t) return '';
+        const ago = Date.now() - t;
+        if (ago < 90 * 1000) return 'Last seen just now';
+        if (ago < 60 * 60 * 1000) return `Last seen ${Math.round(ago / 60000)} min ago`;
+        const diff = dayDiff(t);
+        if (diff === 0) return `Last seen today at ${timeLabel(t)}`;
+        if (diff === 1) return `Last seen yesterday at ${timeLabel(t)}`;
+        return `Last seen ${new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
     }
 
     function mediaUrl(id) { return `${API}?media=${encodeURIComponent(id)}`; }
@@ -232,18 +298,34 @@
         return out;
     }
 
-    function isEmojiOnly(text) {
+    // Returns 0 when not emoji-only, otherwise the number of emoji (1-3).
+    function emojiOnlyCount(text) {
         const s = String(text || '').replace(/\s+/g, '');
-        if (!s || s.length > 32) return false;
-        let pics;
+        if (!s || s.length > 32) return 0;
         try {
-            pics = s.match(/\p{Extended_Pictographic}/gu);
-            if (!pics || pics.length > 3) return false;
+            const pics = s.match(/\p{Extended_Pictographic}/gu);
+            if (!pics || pics.length > 3) return 0;
             const rest = s.replace(/\p{Extended_Pictographic}|\p{Emoji_Modifier}|[‍️⃣]|\p{Regional_Indicator}/gu, '');
-            return rest.length === 0;
+            return rest.length === 0 ? pics.length : 0;
         } catch (e) {
-            return false;
+            return 0;
         }
+    }
+
+    // Escaped text with every case-insensitive occurrence of q wrapped in <mark>.
+    function highlight(text, q) {
+        const src = String(text || '');
+        if (!q) return escapeHtml(src);
+        const lower = src.toLowerCase();
+        let out = '';
+        let i = 0;
+        for (;;) {
+            const j = lower.indexOf(q, i);
+            if (j < 0) break;
+            out += escapeHtml(src.slice(i, j)) + '<mark>' + escapeHtml(src.slice(j, j + q.length)) + '</mark>';
+            i = j + q.length;
+        }
+        return out + escapeHtml(src.slice(i));
     }
 
     // ---------- API ----------
@@ -342,26 +424,69 @@
         return fresh;
     }
 
-    // ---------- rendering ----------
-    function hoverActionsHtml(id) {
-        return `<div class="hover-actions" aria-hidden="false">
-            <button type="button" data-act="menu" data-id="${escapeHtml(id)}" title="React"><i data-lucide="smile-plus" class="w-4 h-4"></i></button>
-            <button type="button" data-act="reply" data-id="${escapeHtml(id)}" title="Reply"><i data-lucide="reply" class="w-4 h-4"></i></button>
-            <button type="button" data-act="menu" data-id="${escapeHtml(id)}" title="More"><i data-lucide="ellipsis" class="w-4 h-4"></i></button>
-        </div>`;
+    // Presence + pinned come back with every GET.
+    function applyExtras(data) {
+        if (!data) return;
+        if (Array.isArray(data.presence)) state.presence = data.presence.filter((p) => p && p.user);
+        if (Object.prototype.hasOwnProperty.call(data, 'pinned')) state.pinned = data.pinned || null;
+        renderHeader();
+        renderPinned();
+        applyPresenceDots();
+        if (state.sheetOpen) {
+            $('sheet-sub').innerHTML = subtitleHtml().html;
+            renderSheetMembers();
+        }
     }
 
-    function avatarHtml(m) {
-        if (m.kind === 'ai') {
-            return `<div class="avatar" style="background:#7c3aed;color:#fff" aria-hidden="true"><i data-lucide="sparkles" class="w-4 h-4"></i></div>`;
+    // ---------- presence ----------
+    function presenceOf(name) {
+        return state.presence.find((p) => sameName(p.user, name)) || null;
+    }
+    function onlineNames() {
+        return new Set(state.presence.filter((p) => p.online).map((p) => String(p.user).toLowerCase()));
+    }
+    function typingOthers() {
+        return state.presence.filter((p) => p.typing && !sameName(p.user, myName()) && !isAiName(p.user)).map((p) => String(p.user));
+    }
+    function typingLabel(names) {
+        if (names.length === 1) return `${names[0]} is typing…`;
+        if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
+        return `${names.length} people are typing…`;
+    }
+
+    function applyPresenceDots(root) {
+        const online = onlineNames();
+        (root || document).querySelectorAll('.av[data-user]').forEach((el) => {
+            el.classList.toggle('online', online.has(el.dataset.user));
+        });
+    }
+
+    function receiptInfo() {
+        if (!state.user) return null;
+        let mine = null;
+        for (let i = state.messages.length - 1; i >= 0; i--) {
+            if (isMine(state.messages[i])) { mine = state.messages[i]; break; }
         }
-        const [bg, fg] = avatarColors(m.user);
-        return `<div class="avatar" style="background:${bg};color:${fg}" aria-hidden="true">${escapeHtml(initial(m.user))}</div>`;
+        if (!mine) return null;
+        const id = String(mine.id);
+        const seen = state.presence
+            .filter((p) => !sameName(p.user, myName()) && !isAiName(p.user) && p.lastReadId != null && String(p.lastReadId) >= id)
+            .map((p) => String(p.user));
+        return { id: mine.id, seen };
+    }
+
+    // ---------- rendering ----------
+    function hoverActionsHtml(id) {
+        return `<div class="hover-actions">
+            <button type="button" data-act="menu" data-id="${escapeHtml(id)}" title="React" aria-label="React"><i data-lucide="smile-plus"></i></button>
+            <button type="button" data-act="reply" data-id="${escapeHtml(id)}" title="Reply" aria-label="Reply"><i data-lucide="reply"></i></button>
+            <button type="button" data-act="menu" data-id="${escapeHtml(id)}" title="More" aria-label="More actions"><i data-lucide="ellipsis"></i></button>
+        </div>`;
     }
 
     function reactionsHtml(m) {
         const r = m.reactions && typeof m.reactions === 'object' ? m.reactions : {};
-        const me = state.user ? state.user.name : '';
+        const me = myName();
         const chips = Object.keys(r)
             .filter((emoji) => Array.isArray(r[emoji]) && r[emoji].length)
             .map((emoji) => {
@@ -380,33 +505,34 @@
         if (flags.start) classes.push('group-start');
         if (flags.end) classes.push('group-end');
         if (m._pending) classes.push(m._pending === 'failed' ? 'failed' : 'pending');
-
-        let meta = '';
-        if (flags.start) {
-            meta = mine
-                ? `<div class="msg-meta"><span class="when">${escapeHtml(timeLabel(t))}</span></div>`
-                : `<div class="msg-meta"><span class="who">${escapeHtml(displayName(m))}</span><span class="when">${escapeHtml(timeLabel(t))}</span></div>`;
-        }
+        const reacts = reactionsHtml(m);
+        if (reacts) classes.push('has-reacts');
 
         const hasImage = !!(m.image || m._localImage);
         const text = String(m.text || '');
-        const emojiOnly = !hasImage && !m.replyTo && isEmojiOnly(text);
+        const emojiCount = !hasImage && !m.replyTo ? emojiOnlyCount(text) : 0;
+        const photoOnly = hasImage && !text && !m.replyTo;
         const bubbleCls = ['bubble'];
         if (hasImage) bubbleCls.push('has-image');
-        if (emojiOnly) bubbleCls.push('emoji-only');
+        if (photoOnly) bubbleCls.push('photo-only');
+        if (emojiCount) bubbleCls.push('emoji-only', 'e' + emojiCount);
         if (flags.mentionsMe) bubbleCls.push('mentions-me');
+        if (flags.end && !emojiCount && !photoOnly) bubbleCls.push('tail');
 
+        const time = escapeHtml(timeLabel(t));
+        // NB: the bubble is white-space: pre-wrap, so its inner HTML must not contain stray whitespace.
         let inner = '';
         if (m.replyTo && typeof m.replyTo === 'object') {
             const rt = m.replyTo;
             const rtText = rt.text ? snippet(rt.text, 140) : 'Photo';
-            inner += `<button type="button" class="reply-quote" data-act="jump" data-id="${escapeHtml(rt.id)}" title="Show original message"><b>${escapeHtml(rt.user || 'Message')}</b><span>${escapeHtml(rtText)}</span></button>`;
+            inner += `<button type="button" class="reply-quote ${isAiName(rt.user) ? '' : personClass(rt.user)}" data-act="jump" data-id="${escapeHtml(rt.id)}" title="Show original message"><b class="acc-text">${escapeHtml(rt.user || 'Message')}</b><span>${escapeHtml(rtText)}</span></button>`;
         }
         if (hasImage) {
             const src = m._localImage || mediaUrl(m.image);
-            inner += `<button type="button" class="msg-img-btn" data-act="lightbox" data-src="${escapeHtml(src)}" data-caption="${escapeHtml(displayName(m) + ' · ' + fullTime(t))}" title="Open photo"><img src="${escapeHtml(src)}" alt="Photo from ${escapeHtml(displayName(m))}" loading="lazy" decoding="async"></button>`;
+            inner += `<button type="button" class="msg-img-btn shimmer" data-act="lightbox" data-src="${escapeHtml(src)}" data-caption="${escapeHtml(displayName(m) + ' · ' + fullTime(t))}" title="Open photo"><img src="${escapeHtml(src)}" alt="Photo from ${escapeHtml(displayName(m))}" loading="lazy" decoding="async"></button>`;
         }
-        if (text) inner += `<span class="msg-text">${formatText(text, m.mentions)}</span>`;
+        if (text) inner += `<span class="msg-text">${formatText(text, m.mentions)}${emojiCount ? '' : `<span class="stamp-gap" aria-hidden="true">${time}</span>`}</span>`;
+        inner += `<span class="stamp">${time}</span>`;
 
         let status = '';
         if (m._pending === 'sending') status = `<div class="msg-status">Sending…</div>`;
@@ -414,22 +540,22 @@
             status = `<button type="button" class="msg-status failed" data-act="retry" data-id="${escapeHtml(m.id)}"><i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Failed — tap to retry</button>`;
         }
 
-        return `<div class="${classes.join(' ')}" data-id="${escapeHtml(m.id)}">
-            ${mine ? '' : (flags.start ? avatarHtml(m) : '<div class="avatar-spacer"></div>')}
-            <div class="msg-col">
-                ${meta}
-                <div class="${bubbleCls.join(' ')}" data-bubble="1" data-id="${escapeHtml(m.id)}" title="${escapeHtml(fullTime(t))}">${inner}</div>
-                ${reactionsHtml(m)}
-                ${status}
-            </div>
-            ${m._pending ? '' : hoverActionsHtml(m.id)}
-        </div>`;
+        let name = '';
+        if (!mine && flags.start) {
+            name = m.kind === 'ai'
+                ? `<div class="msg-name"><i data-lucide="sparkles" class="w-3 h-3"></i>${escapeHtml(displayName(m))}</div>`
+                : `<div class="msg-name acc-text ${personClass(m.user)}">${escapeHtml(displayName(m))}</div>`;
+        }
+        const avatar = mine ? '' : `<div class="av-slot">${flags.end ? avatarHtml(m.user, '', { ai: m.kind === 'ai' }) : ''}</div>`;
+        const swipe = m._pending ? '' : `<span class="swipe-ic" aria-hidden="true"><i data-lucide="reply"></i></span>`;
+
+        return `<div class="${classes.join(' ')}" data-id="${escapeHtml(m.id)}">${swipe}${avatar}<div class="msg-col">${name}<div class="${bubbleCls.join(' ')}" data-bubble="1" data-id="${escapeHtml(m.id)}" title="${escapeHtml(fullTime(t))}">${inner}</div>${reacts}${status}</div>${m._pending ? '' : hoverActionsHtml(m.id)}</div>`;
     }
 
     function pendingAsMessage(p) {
         return {
             id: p.tempId,
-            user: state.user ? state.user.name : '',
+            user: myName(),
             text: p.text,
             createdAt: p.createdAt,
             kind: 'user',
@@ -442,12 +568,35 @@
         };
     }
 
+    function typingRowHtml(names, ai) {
+        const avs = ai ? avatarHtml(AI_NAME, '', { ai: true }) : names.slice(0, 2).map((n) => avatarHtml(n)).join('');
+        const label = ai ? 'Chowaniec AI is thinking' : typingLabel(names);
+        return `<div class="msg-row theirs group-start group-end typing-row${ai ? ' ai' : ''}" aria-label="${escapeHtml(label)}">
+            <div class="av-slot"><span class="theirs-stack">${avs}</span></div>
+            <div class="msg-col">
+                <div class="bubble tail typing-bubble"><span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span></div>
+            </div>
+        </div>`;
+    }
+
+    function receiptHtml(info) {
+        if (!info.seen.length) return `<div class="receipt" data-receipt="1"><span>Delivered</span></div>`;
+        const names = info.seen;
+        let label;
+        if (names.length === 1) label = `Seen by ${names[0]}`;
+        else if (names.length === 2) label = `Seen by ${names[0]} & ${names[1]}`;
+        else label = `Seen by ${names.length}`;
+        const avs = names.slice(0, 5).map((n) => avatarHtml(n, 'av-xs')).join('');
+        return `<div class="receipt" data-receipt="1" title="${escapeHtml('Seen by ' + names.join(', '))}"><span>${escapeHtml(label)}</span><span class="avs">${avs}</span></div>`;
+    }
+
     function buildItems() {
         const all = state.messages.concat(state.pending.map(pendingAsMessage));
         const items = [];
         const groupKey = (m) => (m.kind === 'system' ? null : `${m.kind || 'user'}|${String(m.user || '').toLowerCase()}`);
         const continues = (a, b) => !!a && !!b && a.kind !== 'system' && b.kind !== 'system' &&
             groupKey(a) === groupKey(b) && dayKey(ts(a)) === dayKey(ts(b)) && Math.abs(ts(b) - ts(a)) <= GROUP_GAP_MS;
+        const receipt = receiptInfo();
 
         for (let i = 0; i < all.length; i++) {
             const m = all[i];
@@ -459,7 +608,7 @@
                 items.push({ key: `day:${dayKey(t)}`, sig: label, html: `<div class="day-sep" role="separator"><span>${escapeHtml(label)}</span></div>` });
             }
             if (m.kind === 'system') {
-                items.push({ key: `m:${m.id}`, sig: `sys|${m.text}`, html: `<div class="sys-row" data-id="${escapeHtml(m.id)}">${formatText(m.text, m.mentions)}</div>` });
+                items.push({ key: `m:${m.id}`, sig: `sys|${m.text}`, t, html: `<div class="sys-row" data-id="${escapeHtml(m.id)}"><span>${formatText(m.text, m.mentions)}</span></div>` });
                 continue;
             }
             const flags = {
@@ -468,22 +617,26 @@
                 end: !continues(m, next),
                 mentionsMe: mentionsMe(m)
             };
-            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, flags, dayLabel(t)]);
-            items.push({ key: `m:${m.id}`, sig, html: messageHtml(m, flags) });
+            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, flags, dayLabel(t), timeLabel(t), state.people.length]);
+            items.push({ key: `m:${m.id}`, sig, t, id: m.id, html: messageHtml(m, flags) });
+            if (receipt && receipt.id === m.id) {
+                items.push({ key: 'receipt', sig: 'r|' + receipt.seen.join(','), html: receiptHtml(receipt) });
+            }
         }
 
         if (state.aiThinkingUntil > Date.now()) {
-            items.push({
-                key: 'ai-typing',
-                sig: 'typing',
-                html: `<div class="msg-row theirs ai group-start group-end" aria-label="Chowaniec AI is thinking">
-                    ${avatarHtml({ kind: 'ai' })}
-                    <div class="msg-col"><div class="msg-meta"><span class="who">${AI_NAME}</span></div>
-                    <div class="bubble"><span class="inline-flex items-center gap-2 text-violet-700"><i data-lucide="loader-circle" class="w-4 h-4 spin"></i> Thinking…</span></div></div>
-                </div>`
-            });
+            items.push({ key: 'ai-typing', sig: 'typing', anim: true, html: typingRowHtml([], true) });
+        }
+        const typing = typingOthers();
+        if (typing.length) {
+            items.push({ key: 'typing', sig: typing.join('|'), anim: true, html: typingRowHtml(typing, false) });
         }
         return items;
+    }
+
+    function extrasSignature() {
+        const r = receiptInfo();
+        return JSON.stringify([typingOthers(), r ? [r.id, r.seen] : null]);
     }
 
     function htmlToEl(html) {
@@ -499,11 +652,12 @@
 
     function scrollToBottom(smooth) {
         const sc = $('scroller');
-        if (smooth && sc.scrollTo) sc.scrollTo({ top: sc.scrollHeight, behavior: 'smooth' });
+        if (smooth && sc.scrollTo && !reducedMotion()) sc.scrollTo({ top: sc.scrollHeight, behavior: 'smooth' });
         else sc.scrollTop = sc.scrollHeight;
         state.stick = true;
         state.unseen = 0;
-        renderPill();
+        renderJump();
+        maybeSendRead();
     }
 
     function findAnchor() {
@@ -524,16 +678,26 @@
         const anchor = wasNearBottom ? null : findAnchor();
 
         const items = buildItems();
+        state.extrasSig = extrasSignature();
         const container = $('messages');
+        const prevCache = state.nodeCache;
         const nextCache = new Map();
+        let newest = state.newestTs;
         const nodes = items.map((it) => {
-            let c = state.nodeCache.get(it.key);
+            let c = prevCache.get(it.key);
             if (!c || c.sig !== it.sig) {
                 const el = htmlToEl(it.html);
                 el.dataset.key = it.key;
                 icons(el);
+                const isNew = !prevCache.has(it.key);
+                const freshMsg = it.t != null && it.t > state.newestTs && !(it.id != null && state.confirmed.has(it.id));
+                if (state.rendered && isNew && (freshMsg || it.anim) && !reducedMotion()) {
+                    el.classList.add('enter');
+                    el.addEventListener('animationend', () => el.classList.remove('enter'), { once: true });
+                }
                 c = { sig: it.sig, el };
             }
+            if (it.t != null && it.t > newest) newest = it.t;
             nextCache.set(it.key, c);
             return c.el;
         });
@@ -543,6 +707,9 @@
         }
         while (container.children.length > nodes.length) container.lastElementChild.remove();
         state.nodeCache = nextCache;
+        state.newestTs = newest;
+        if (state.loaded) state.rendered = true;
+        applyPresenceDots(container);
 
         const hasAny = items.length > 0;
         if (state.loaded) {
@@ -559,7 +726,9 @@
             const delta = anchor.el.getBoundingClientRect().top - anchor.top;
             if (Math.abs(delta) > 0.5) sc.scrollTop += delta;
         }
-        renderPill();
+        renderJump();
+        maybeSendRead();
+        if (state.sheetOpen) renderSheetPhotos();
     }
 
     function renderOlder() {
@@ -568,20 +737,26 @@
         if (state.loadingOlder) {
             el.innerHTML = `<span class="inline-flex items-center gap-2"><i data-lucide="loader-circle" class="w-3.5 h-3.5 spin"></i> Loading earlier</span>`;
         } else if (state.hasMore) {
-            el.innerHTML = `<button type="button" data-act="older" class="min-h-[40px] px-4 rounded-full hover:bg-white hover:text-black border border-transparent hover:border-gray-100 transition-colors">${state.olderError ? 'Couldn’t load — try again' : 'Load earlier messages'}</button>`;
+            el.innerHTML = `<button type="button" data-act="older">${state.olderError ? 'Couldn’t load — try again' : 'Load earlier messages'}</button>`;
         } else {
-            el.innerHTML = `<span>Beginning of the family chat</span>`;
+            el.innerHTML = `<span class="begin">Beginning of the family chat</span>`;
         }
         icons(el);
     }
 
-    function renderPill() {
-        const pill = $('new-pill');
+    function renderJump() {
+        const btn = $('jump-btn');
+        const badge = $('jump-badge');
+        const far = distanceFromBottom() > JUMP_SHOW_PX;
+        const showIt = (state.unseen > 0 && !state.stick) || (far && state.loaded);
+        btn.classList.toggle('show', !!showIt);
         if (state.unseen > 0 && !state.stick) {
-            $('new-pill-text').textContent = state.unseen === 1 ? '1 new message' : `${state.unseen} new messages`;
-            show(pill);
+            badge.textContent = state.unseen > 99 ? '99+' : String(state.unseen);
+            badge.classList.remove('hidden');
+            btn.setAttribute('aria-label', state.unseen === 1 ? '1 new message — jump to newest' : `${state.unseen} new messages — jump to newest`);
         } else {
-            hide(pill);
+            badge.classList.add('hidden');
+            btn.setAttribute('aria-label', 'Jump to newest messages');
         }
     }
 
@@ -596,6 +771,64 @@
             updateTitle();
         }
         if (!state.stick && distanceFromBottom() >= NEAR_BOTTOM_PX) state.unseen += fresh;
+    }
+
+    // ---------- header / pinned ----------
+    function subtitleHtml() {
+        const typing = typingOthers();
+        if (typing.length) return { html: escapeHtml(typingLabel(typing)), typing: true };
+        const me = myName();
+        const onlineOthers = state.presence.filter((p) => p.online && !sameName(p.user, me) && !isAiName(p.user)).length;
+        const n = state.people.length;
+        const base = n ? `${n} members` : 'Family chat';
+        return { html: onlineOthers ? `${escapeHtml(base)}, <span class="on">${onlineOthers} online</span>` : escapeHtml(base), typing: false };
+    }
+
+    function groupAvatarHtml(size) {
+        const me = myName();
+        const others = state.people.filter((n) => !sameName(n, me));
+        const pick = (others.length ? others : state.people).slice(0, 2);
+        if (!pick.length) return avatarHtml('C', size);
+        return pick.map((n) => avatarHtml(n, size)).join('');
+    }
+
+    function renderHeader() {
+        const line = $('member-line');
+        const sub = subtitleHtml();
+        line.innerHTML = sub.html;
+        line.classList.toggle('typing', sub.typing);
+        line.title = state.people.join(', ');
+        const ga = $('group-avatar');
+        const html = groupAvatarHtml('');
+        if (ga.dataset.sig !== html) { ga.innerHTML = html; ga.dataset.sig = html; }
+    }
+
+    function canUnpin() {
+        const p = state.pinned;
+        return !!(p && state.user && (state.user.host || sameName(p.pinnedBy, myName())));
+    }
+
+    function renderPinned() {
+        const bar = $('pinned-bar');
+        const p = state.pinned;
+        if (!p || !p.id) { bar.classList.add('hidden'); bar.innerHTML = ''; bar.dataset.sig = ''; return; }
+        const sig = JSON.stringify([p.id, p.text, p.image, p.pinnedBy, canUnpin()]);
+        bar.classList.remove('hidden');
+        if (bar.dataset.sig === sig) return;
+        bar.dataset.sig = sig;
+        const text = p.text ? snippet(p.text, 160) : (p.image ? 'Photo' : 'Message');
+        bar.innerHTML = `<div class="wrap">
+            <button type="button" class="pinned-main" data-act="jump-pinned" title="Show pinned message">
+                <span class="pinned-bar-line"></span>
+                <span class="pinned-body">
+                    <span class="pinned-label"><i data-lucide="pin"></i>Pinned<span class="by">${p.pinnedBy ? '· by ' + escapeHtml(p.pinnedBy) : ''}</span></span>
+                    <span class="pinned-text">${p.user ? `<b style="font-weight:500;color:var(--text-2)">${escapeHtml(p.user)}:</b> ` : ''}${escapeHtml(text)}</span>
+                </span>
+                ${p.image ? `<img class="pinned-thumb" src="${escapeHtml(mediaUrl(p.image))}" alt="">` : ''}
+            </button>
+            ${canUnpin() ? `<button type="button" class="icon-btn" data-act="unpin" title="Unpin" aria-label="Unpin message"><i data-lucide="x"></i></button>` : ''}
+        </div>`;
+        icons(bar);
     }
 
     // ---------- polling ----------
@@ -625,7 +858,9 @@
             const full = !state.latestId || !state.loaded || Date.now() - state.lastFull > FULL_SYNC_MS;
             const data = await api(full ? API : `${API}?since=${encodeURIComponent(state.latestId)}`);
             const list = Array.isArray(data.messages) ? data.messages : [];
+            applyExtras(data);
             let fresh;
+            let rendered = false;
             if (full) {
                 const first = !state.loaded;
                 fresh = reconcileLatest(list);
@@ -640,16 +875,19 @@
                     noteFresh(fresh);
                     render('auto');
                 }
+                rendered = true;
             } else {
                 fresh = upsert(list);
                 if (list.length) state.latestId = list.slice().sort(compareMsgs)[list.length - 1].id;
                 noteFresh(fresh);
-                if (list.length || state.aiThinkingUntil) render('auto');
+                if (list.length || state.aiThinkingUntil) { render('auto'); rendered = true; }
             }
             if (state.aiThinkingUntil && state.aiThinkingUntil <= Date.now()) {
                 state.aiThinkingUntil = 0;
                 render('auto');
+                rendered = true;
             }
+            if (!rendered && extrasSignature() !== state.extrasSig) render('auto');
             state.failures = 0;
             hideBanner();
         } catch (e) {
@@ -658,7 +896,7 @@
             const wait = Math.round(Math.min(30000, 2000 * Math.pow(2, state.failures - 1)) / 1000);
             showBanner(`${state.loaded ? 'Can’t reach the chat' : 'Couldn’t load messages'}: ${e.message.replace(/\.$/, '')}. Retrying in ${wait}s.`);
             if (!state.loaded) {
-                $('initial-loading').innerHTML = `<i data-lucide="wifi-off" class="w-6 h-6 text-gray-300"></i>Waiting for connection&hellip;`;
+                $('initial-loading').innerHTML = `<i data-lucide="wifi-off" class="w-6 h-6"></i><span class="eyebrow mt-3">Waiting for connection&hellip;</span>`;
                 icons($('initial-loading'));
             }
         } finally {
@@ -687,10 +925,45 @@
         if (!state.olderError) requestAnimationFrame(fillViewport);
     }
 
+    async function loadOlderAndWait() {
+        while (state.loadingOlder) await sleep(80);
+        await loadOlder();
+        while (state.loadingOlder) await sleep(80);
+    }
+
     // Keep loading history while the screen isn't full yet (or the user is parked at the top).
     function fillViewport() {
         const sc = $('scroller');
         if (state.hasMore && !state.loadingOlder && sc.scrollHeight <= sc.clientHeight + 40) loadOlder();
+    }
+
+    // ---------- typing + read receipts ----------
+    function noteTyping() {
+        if (!state.loaded || state.stopped) return;
+        if (!$('composer-input').value.trim()) return;
+        const now = Date.now();
+        if (now - state.typingSentAt < TYPING_EVERY_MS) return;
+        state.typingSentAt = now;
+        api(API, { method: 'POST', body: { action: 'typing' } }).catch(() => { /* best effort */ });
+    }
+
+    function maybeSendRead() {
+        if (!state.loaded || state.stopped || document.visibilityState !== 'visible') return;
+        if (distanceFromBottom() >= NEAR_BOTTOM_PX) return;
+        const last = state.messages[state.messages.length - 1];
+        if (!last) return;
+        const id = String(last.id);
+        if (id === state.readSentId) return;
+        const wait = READ_EVERY_MS - (Date.now() - state.readSentAt);
+        if (wait > 0) {
+            if (!state.readTimer) state.readTimer = setTimeout(() => { state.readTimer = null; maybeSendRead(); }, wait + 20);
+            return;
+        }
+        state.readSentId = id;
+        state.readSentAt = Date.now();
+        api(API, { method: 'POST', body: { action: 'read', id } }).catch(() => {
+            if (state.readSentId === id) state.readSentId = null;
+        });
     }
 
     // ---------- sending ----------
@@ -702,7 +975,11 @@
     }
 
     function updateSendButton() {
-        $('btn-send').disabled = !($('composer-input').value.trim() || state.image);
+        const hasText = !!$('composer-input').value.trim();
+        const has = hasText || !!state.image;
+        $('btn-send').disabled = !has;
+        $('composer').classList.toggle('has-content', has);
+        $('composer').classList.toggle('has-text', !!$('composer-input').value);
     }
 
     function renderAttachments() {
@@ -710,29 +987,30 @@
         let html = '';
         if (state.replyTo) {
             const r = state.replyTo;
-            html += `<div class="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl pl-3 pr-1 py-1 fade-in">
-                <i data-lucide="reply" class="w-4 h-4 text-gray-400 shrink-0"></i>
-                <div class="min-w-0 flex-1 border-l-2 border-gray-300 pl-2.5 py-0.5">
-                    <div class="text-[10px] font-mono uppercase tracking-widest text-gray-400">Replying to <span class="text-gray-700">${escapeHtml(displayName(r))}</span></div>
-                    <div class="text-xs text-gray-500 truncate">${escapeHtml(r.text ? snippet(r.text, 120) : (r.image ? 'Photo' : ''))}</div>
+            const pc = r.kind === 'ai' ? '' : personClass(r.user);
+            html += `<div class="chip-card chip-reply ${pc} fade-in">
+                <div class="min-w-0 flex-1 pl-1.5">
+                    <div class="chip-k"><span style="color:var(--muted);font-weight:400">Replying to</span> <span class="acc-text">${escapeHtml(displayName(r))}</span></div>
+                    <div class="chip-t">${escapeHtml(r.text ? snippet(r.text, 120) : (r.image ? 'Photo' : ''))}</div>
                 </div>
-                <button type="button" data-act="cancel-reply" title="Cancel reply" class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-black hover:bg-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+                ${r.image ? `<img class="chip-img" style="width:40px;height:40px" src="${escapeHtml(mediaUrl(r.image))}" alt="">` : ''}
+                <button type="button" data-act="cancel-reply" title="Cancel reply" aria-label="Cancel reply" class="x"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>`;
         }
         if (state.image) {
             const im = state.image;
             const kb = Math.round(im.bytes / 1024);
-            html += `<div class="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl p-1.5 pr-1 fade-in">
-                <img src="${escapeHtml(im.dataUrl)}" alt="Selected photo" class="w-12 h-12 rounded-xl object-cover shrink-0 bg-gray-100">
+            html += `<div class="chip-card fade-in">
+                <img src="${escapeHtml(im.dataUrl)}" alt="Selected photo" class="chip-img">
                 <div class="min-w-0 flex-1">
-                    <div class="text-xs font-medium text-gray-700">Photo ready to send</div>
-                    <div class="text-[10px] font-mono uppercase tracking-widest text-gray-400">${im.width}×${im.height} · ${kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB'}</div>
+                    <div class="chip-k">Photo ready to send</div>
+                    <div class="chip-t font-mono" style="font-size:11px">${im.width}×${im.height} · ${kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB'}</div>
                 </div>
-                <button type="button" data-act="remove-image" title="Remove photo" class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-black hover:bg-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+                <button type="button" data-act="remove-image" title="Remove photo" aria-label="Remove photo" class="x"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>`;
         }
         row.innerHTML = html;
-        if (html) show(row); else hide(row);
+        if (html) row.classList.remove('hidden'); else row.classList.add('hidden');
         icons(row);
     }
 
@@ -759,9 +1037,12 @@
         state.pending.push(p);
         if (/(^|[^\w@])@ai\b/i.test(text)) state.aiThinkingUntil = Date.now() + 60000;
         ta.value = '';
+        state.caret = { start: 0, end: 0 };
         state.image = null;
         state.replyTo = null;
+        state.typingSentAt = 0;
         closeMention();
+        closeEmoji();
         autosize();
         updateSendButton();
         renderAttachments();
@@ -778,7 +1059,10 @@
         try {
             const data = await api(API, { method: 'POST', body });
             state.pending = state.pending.filter((x) => x !== p);
-            if (data && data.message) upsert([data.message]);
+            if (data && data.message) {
+                state.confirmed.add(data.message.id);
+                upsert([data.message]);
+            }
             render('auto');
         } catch (e) {
             p.status = 'failed';
@@ -846,7 +1130,7 @@
         }
         const btn = $('btn-photo');
         btn.disabled = true;
-        btn.innerHTML = '<i data-lucide="loader-circle" class="w-5 h-5 spin"></i>';
+        btn.innerHTML = '<i data-lucide="loader-circle" class="spin"></i>';
         icons(btn);
         try {
             state.image = await resizeImage(file);
@@ -857,14 +1141,14 @@
             toast(e.message || 'Could not use that photo.', 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i data-lucide="image-plus" class="w-5 h-5"></i>';
+            btn.innerHTML = '<i data-lucide="image-plus"></i>';
             icons(btn);
         }
     }
 
     // ---------- mentions autocomplete ----------
     function mentionOptions() {
-        const me = state.user ? state.user.name : '';
+        const me = myName();
         const opts = state.people.filter((n) => !sameName(n, me)).map((n) => ({ name: n, hint: '', kind: 'person' }));
         opts.push({ name: 'everyone', hint: 'Notify the whole family', kind: 'everyone' });
         opts.push({ name: 'AI', hint: 'Ask Chowaniec AI', kind: 'ai' });
@@ -886,35 +1170,35 @@
         if (!options.length) return closeMention();
         const prevIndex = state.mention && state.mention.query === query ? state.mention.index : 0;
         state.mention = { start: caret - x[2].length - 1, end: caret, query, options, index: Math.min(prevIndex, options.length - 1) };
+        closeEmoji();
         renderMention();
     }
 
     function renderMention() {
         const pop = $('mention-popup');
         const m = state.mention;
-        if (!m) { hide(pop, 'block'); return; }
-        pop.innerHTML = `<p class="px-3 pt-1.5 pb-1 text-[10px] font-mono uppercase tracking-widest text-gray-400">Mention</p>` + m.options.map((o, i) => {
-            let av;
-            if (o.kind === 'ai') av = `<span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:#7c3aed;color:#fff"><i data-lucide="sparkles" class="w-4 h-4"></i></span>`;
-            else if (o.kind === 'everyone') av = `<span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-black text-white"><i data-lucide="users" class="w-4 h-4"></i></span>`;
-            else {
-                const [bg, fg] = avatarColors(o.name);
-                av = `<span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-[13px] font-semibold" style="background:${bg};color:${fg}">${escapeHtml(initial(o.name))}</span>`;
-            }
+        if (!m) { pop.classList.add('hidden'); return; }
+        const online = onlineNames();
+        pop.innerHTML = `<p class="pop-title">Mention</p>` + m.options.map((o, i) => {
+            const av = o.kind === 'ai' ? avatarHtml(AI_NAME, 'av-md', { ai: true })
+                : o.kind === 'everyone' ? avatarHtml('', 'av-md', { everyone: true })
+                    : avatarHtml(o.name, 'av-md');
+            const hint = o.hint || (online.has(o.name.toLowerCase()) ? 'Online' : '');
             const active = i === m.index;
-            return `<button type="button" role="option" aria-selected="${active}" data-mention="${escapeHtml(o.name)}" class="w-full min-h-[44px] px-2 rounded-xl flex items-center gap-3 text-left text-sm ${active ? 'bg-gray-100 text-black' : 'text-gray-700 hover:bg-gray-50'}">
-                ${av}<span class="min-w-0 flex-1"><span class="font-medium">@${escapeHtml(o.name)}</span>${o.hint ? `<span class="block text-[11px] text-gray-400 truncate">${escapeHtml(o.hint)}</span>` : ''}</span>
+            return `<button type="button" role="option" aria-selected="${active}" data-mention="${escapeHtml(o.name)}" class="opt">
+                ${av}<span class="min-w-0 flex-1"><span class="font-medium">@${escapeHtml(o.name)}</span>${hint ? `<span class="hint truncate">${escapeHtml(hint)}</span>` : ''}</span>
             </button>`;
         }).join('');
-        show(pop, 'block');
+        pop.classList.remove('hidden');
         icons(pop);
+        applyPresenceDots(pop);
         const act = pop.querySelector('[aria-selected="true"]');
         if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
     }
 
     function closeMention() {
         state.mention = null;
-        hide($('mention-popup'), 'block');
+        $('mention-popup').classList.add('hidden');
     }
 
     function insertMention(name) {
@@ -926,10 +1210,53 @@
         ta.value = ta.value.slice(0, m.start) + insert + after;
         const pos = m.start + insert.length + (after.startsWith(' ') ? 1 : 0);
         ta.setSelectionRange(pos, pos);
+        state.caret = { start: pos, end: pos };
         closeMention();
         autosize();
         updateSendButton();
         ta.focus();
+    }
+
+    // ---------- emoji picker ----------
+    // Only trust the selection while the textarea is focused (or just blurring): an unfocused
+    // textarea can report a reset selection, which would make emoji land at the start.
+    function rememberCaret(force) {
+        const ta = $('composer-input');
+        if (force !== true && document.activeElement !== ta) return;
+        if (typeof ta.selectionStart === 'number') state.caret = { start: ta.selectionStart, end: ta.selectionEnd };
+    }
+
+    function openEmoji() {
+        const pop = $('emoji-popup');
+        if (!pop.dataset.built) {
+            pop.innerHTML = `<p class="pop-title">Emoji</p><div class="emoji-grid">${EMOJI.map((e) => `<button type="button" data-emoji-insert="${e}" aria-label="${e}">${e}</button>`).join('')}</div>`;
+            pop.dataset.built = '1';
+        }
+        closeMention();
+        pop.classList.remove('hidden');
+        $('btn-emoji').setAttribute('aria-expanded', 'true');
+        $('btn-emoji').classList.add('on');
+    }
+
+    function closeEmoji() {
+        $('emoji-popup').classList.add('hidden');
+        $('btn-emoji').setAttribute('aria-expanded', 'false');
+        $('btn-emoji').classList.remove('on');
+    }
+
+    function insertAtCaret(text) {
+        const ta = $('composer-input');
+        const len = ta.value.length;
+        const start = Math.min(state.caret.start == null ? len : state.caret.start, len);
+        const end = Math.min(Math.max(start, state.caret.end == null ? start : state.caret.end), len);
+        ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+        const pos = start + text.length;
+        state.caret = { start: pos, end: pos };
+        try { ta.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+        autosize();
+        updateSendButton();
+        noteTyping();
+        if (isFinePointer()) ta.focus();
     }
 
     // ---------- actions ----------
@@ -950,41 +1277,43 @@
         return c ? c.el : null;
     }
 
-    function openActions(id, anchorEl) {
-        const m = findMessage(id);
-        if (!m || m.kind === 'system') return;
-        closeActions();
-        state.menuFor = id;
-        const menu = $('action-menu');
+    function actionMenuHtml(m) {
         const pendingMsg = !!m._pending;
-        let html = '';
+        let html = `<div class="grabber"></div>`;
+        const t = ts(m);
+        const pv = m.text ? snippet(m.text, 120) : (m.image || m._localImage ? 'Photo' : '');
+        html += `<div class="menu-preview">${avatarHtml(m.user, 'av-sm', { ai: m.kind === 'ai' })}<div class="min-w-0 flex-1"><div class="n">${escapeHtml(displayName(m))} <span style="font-weight:400;color:var(--faint)">· ${escapeHtml(fullTime(t))}</span></div><div class="t">${escapeHtml(pv)}</div></div></div>`;
         if (!pendingMsg) {
-            html += `<div class="flex items-center justify-between gap-1 px-1 pb-2 mb-1 border-b border-gray-100">` +
-                QUICK_EMOJI.map((e) => {
-                    const on = ((m.reactions || {})[e] || []).some((n) => sameName(n, state.user.name));
-                    return `<button type="button" role="menuitem" data-act="react" data-id="${escapeHtml(m.id)}" data-emoji="${e}" title="React ${e}" class="w-11 h-11 rounded-full text-2xl flex items-center justify-center transition-transform hover:scale-110 ${on ? 'bg-gray-100 ring-1 ring-gray-300' : 'hover:bg-gray-50'}">${e}</button>`;
-                }).join('') + `</div>`;
+            const mineReacts = (e) => ((m.reactions || {})[e] || []).some((n) => sameName(n, myName()));
+            if (state.menuEmojiOpen) {
+                html += `<div class="menu-emoji"><div class="emoji-grid">${EMOJI.map((e) => `<button type="button" role="menuitem" data-act="react" data-id="${escapeHtml(m.id)}" data-emoji="${e}" aria-label="React ${e}">${e}</button>`).join('')}</div></div>`;
+            } else {
+                html += `<div class="quick-react">` +
+                    QUICK_EMOJI.map((e) => `<button type="button" role="menuitem" data-act="react" data-id="${escapeHtml(m.id)}" data-emoji="${e}" title="React ${e}" class="${mineReacts(e) ? 'on' : ''}">${e}</button>`).join('') +
+                    `<button type="button" role="menuitem" data-act="react-more" data-id="${escapeHtml(m.id)}" class="more" title="More reactions" aria-label="More reactions"><i data-lucide="plus"></i></button></div>`;
+            }
         }
-        const item = (act, icon, label, extra) => `<button type="button" role="menuitem" data-act="${act}" data-id="${escapeHtml(m.id)}" class="w-full min-h-[44px] px-3 rounded-xl flex items-center gap-3 text-sm ${extra || 'text-gray-700 hover:bg-gray-50 hover:text-black'}"><i data-lucide="${icon}" class="w-4 h-4 ${extra ? '' : 'text-gray-400'}"></i> ${label}</button>`;
-        if (!pendingMsg) html += item('reply', 'reply', 'Reply');
-        if (m._pending === 'failed') html += item('retry', 'rotate-cw', 'Retry sending');
-        if (m.text) html += item('copy', 'copy', 'Copy text');
-        if (canDelete(m)) html += item('delete', 'trash-2', pendingMsg ? 'Discard' : 'Delete', 'text-red-600 hover:bg-red-50');
-        menu.innerHTML = html;
-        icons(menu);
+        const item = (act, icon, label, extra) => `<button type="button" role="menuitem" data-act="${act}" data-id="${escapeHtml(m.id)}" class="mi${extra ? ' ' + extra : ''}"><i data-lucide="${icon}"></i>${label}</button>`;
+        let items = '';
+        if (!pendingMsg) items += item('reply', 'reply', 'Reply');
+        if (!pendingMsg) {
+            const isPinned = state.pinned && String(state.pinned.id) === String(m.id);
+            if (isPinned) { if (canUnpin()) items += item('unpin', 'pin-off', 'Unpin'); }
+            else items += item('pin', 'pin', 'Pin');
+        }
+        if (m._pending === 'failed') items += item('retry', 'rotate-cw', 'Retry sending');
+        if (m.text) items += item('copy', 'copy', 'Copy text');
+        if (canDelete(m)) items += item('delete', 'trash-2', pendingMsg ? 'Discard' : 'Delete', 'danger');
+        html += `<div class="menu-items">${items}</div>`;
+        return html;
+    }
 
-        const backdrop = $('action-backdrop');
-        show(backdrop, 'block');
-        show(menu, 'block');
-        menu.classList.add('sheet-enter');
-
-        const row = rowEl(id);
-        if (row) row.classList.add('press');
-
-        // Desktop / tablet: float next to the bubble. Phones: bottom sheet (CSS).
+    function positionMenu(anchorEl) {
+        const menu = $('action-menu');
+        const row = rowEl(state.menuFor);
         if (window.innerWidth >= 640) {
             const target = anchorEl || (row && row.querySelector('.bubble'));
-            const r = target ? target.getBoundingClientRect() : { top: window.innerHeight / 2, bottom: window.innerHeight / 2, left: window.innerWidth / 2, right: window.innerWidth / 2 };
+            const r = target && target.isConnected ? target.getBoundingClientRect() : { top: window.innerHeight / 2, bottom: window.innerHeight / 2, left: window.innerWidth / 2, right: window.innerWidth / 2 };
             const mw = menu.offsetWidth;
             const mh = menu.offsetHeight;
             const mine = row && row.classList.contains('mine');
@@ -998,8 +1327,39 @@
             menu.style.left = '';
             menu.style.top = '';
         }
+    }
+
+    function openActions(id, anchorEl) {
+        const m = findMessage(id);
+        if (!m || m.kind === 'system') return;
+        closeActions();
+        closeEmoji();
+        state.menuFor = id;
+        state.menuEmojiOpen = false;
+        state.menuAnchor = anchorEl || null;
+        const menu = $('action-menu');
+        menu.innerHTML = actionMenuHtml(m);
+        icons(menu);
+
+        show($('action-backdrop'), 'block');
+        show(menu, 'block');
+        menu.classList.add('sheet-enter');
+
+        const row = rowEl(id);
+        if (row) row.classList.add('press');
+        positionMenu(anchorEl);
         const first = menu.querySelector('button');
         if (first && isFinePointer()) first.focus({ preventScroll: true });
+    }
+
+    function expandMenuEmoji() {
+        const m = findMessage(state.menuFor);
+        if (!m) return;
+        state.menuEmojiOpen = true;
+        const menu = $('action-menu');
+        menu.innerHTML = actionMenuHtml(m);
+        icons(menu);
+        positionMenu(state.menuAnchor);
     }
 
     function closeActions() {
@@ -1007,6 +1367,7 @@
         const row = rowEl(state.menuFor);
         if (row) row.classList.remove('press');
         state.menuFor = null;
+        state.menuAnchor = null;
         hide($('action-menu'), 'block');
         hide($('action-backdrop'), 'block');
         $('action-menu').classList.remove('sheet-enter');
@@ -1057,6 +1418,64 @@
             if (e.status !== 401) toast(e.message, 'error');
         }
         render('auto');
+        return !had;
+    }
+
+    function heartPop(id) {
+        const row = rowEl(id);
+        const bubble = row && row.querySelector('.bubble');
+        if (!bubble) return;
+        const h = document.createElement('span');
+        h.className = 'heart-pop';
+        h.setAttribute('aria-hidden', 'true');
+        h.textContent = '❤️';
+        bubble.appendChild(h);
+        setTimeout(() => h.remove(), 800);
+    }
+
+    async function doubleTapHeart(id) {
+        const m = state.byId.get(id);
+        if (!m) return;
+        const had = ((m.reactions || {})['❤️'] || []).some((n) => sameName(n, myName()));
+        if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* ignore */ } }
+        const p = toggleReaction(id, '❤️');
+        if (!had) heartPop(id);
+        await p;
+    }
+
+    async function pinMessage(id) {
+        const m = state.byId.get(id);
+        if (!m) return;
+        const prev = state.pinned;
+        state.pinned = { id: m.id, user: displayName(m), text: m.text || '', image: m.image || null, pinnedBy: myName(), pinnedAt: new Date().toISOString() };
+        renderPinned();
+        try {
+            const data = await api(API, { method: 'POST', body: { action: 'pin', id } });
+            if (data && Object.prototype.hasOwnProperty.call(data, 'pinned')) state.pinned = data.pinned;
+            renderPinned();
+            toast('Message pinned');
+        } catch (e) {
+            state.pinned = prev;
+            renderPinned();
+            if (e.status !== 401) toast(e.message, 'error');
+        }
+    }
+
+    async function unpinMessage() {
+        if (!state.pinned) return;
+        const prev = state.pinned;
+        state.pinned = null;
+        renderPinned();
+        try {
+            const data = await api(API, { method: 'POST', body: { action: 'unpin' } });
+            if (data && Object.prototype.hasOwnProperty.call(data, 'pinned')) state.pinned = data.pinned;
+            renderPinned();
+            toast('Message unpinned');
+        } catch (e) {
+            state.pinned = prev;
+            renderPinned();
+            if (e.status !== 401) toast(e.message, 'error');
+        }
     }
 
     function askDelete(id) {
@@ -1088,6 +1507,7 @@
         try {
             await api(`${API}?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
             if (state.latestId === id) state.latestId = state.messages.length ? state.messages[state.messages.length - 1].id : null;
+            if (state.pinned && String(state.pinned.id) === String(id)) { state.pinned = null; renderPinned(); }
             toast('Message deleted');
         } catch (e) {
             state.byId.set(id, m);
@@ -1097,17 +1517,28 @@
         }
     }
 
-    function jumpTo(id) {
-        const row = rowEl(id);
-        if (!row) {
-            toast(state.hasMore ? 'That message is further back. Scroll up to load more.' : 'That message is no longer here.');
-            return;
-        }
-        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    function flashRow(row) {
+        row.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
         row.classList.remove('flash');
         void row.offsetWidth;
         row.classList.add('flash');
-        setTimeout(() => row.classList.remove('flash'), 1500);
+        setTimeout(() => row.classList.remove('flash'), 1600);
+    }
+
+    // Scrolls to a message, loading earlier pages if needed (bounded).
+    async function revealMessage(id) {
+        let row = rowEl(id);
+        if (row) { flashRow(row); return true; }
+        if (!state.hasMore) { toast('That message is no longer here.'); return false; }
+        toast('Finding that message…');
+        for (let i = 0; i < 20 && !row && state.hasMore; i++) {
+            await loadOlderAndWait();
+            if (state.olderError) break;
+            row = rowEl(id);
+        }
+        if (row) { requestAnimationFrame(() => flashRow(row)); return true; }
+        toast(state.olderError ? 'Couldn’t load older messages.' : 'That message is no longer here.', state.olderError ? 'error' : undefined);
+        return false;
     }
 
     // ---------- lightbox ----------
@@ -1153,20 +1584,20 @@
         const s = state.push;
         let icon = 'bell';
         let title = 'Notifications';
-        let cls = 'border-gray-200 bg-white text-gray-600 hover:border-black hover:text-black';
         if (state.pushBusy) { icon = 'loader-circle'; title = 'Working…'; }
-        else if (s === 'enabled') { icon = 'bell-ring'; title = 'Notifications are on'; cls = 'border-black bg-black text-white hover:bg-gray-800'; }
+        else if (s === 'enabled') { icon = 'bell-ring'; title = 'Notifications are on'; }
         else if (s === 'disabled') { icon = 'bell'; title = 'Turn on notifications'; }
         else if (s === 'needs-install') { icon = 'bell-plus'; title = 'Install the app to get notifications'; }
-        else if (s === 'denied') { icon = 'bell-off'; title = 'Notifications are blocked'; cls = 'border-gray-200 bg-white text-gray-400 hover:border-black hover:text-black'; }
-        else if (s === 'unsupported' || s === 'not-configured') { icon = 'bell-off'; title = 'Notifications unavailable'; cls = 'border-gray-200 bg-white text-gray-400 hover:border-black hover:text-black'; }
-        btn.className = `w-10 h-10 rounded-full border flex items-center justify-center transition-colors relative ${cls}`;
+        else if (s === 'denied') { icon = 'bell-off'; title = 'Notifications are blocked'; }
+        else if (s === 'unsupported' || s === 'not-configured') { icon = 'bell-off'; title = 'Notifications unavailable'; }
+        btn.className = `icon-btn${s === 'enabled' ? ' on' : ''}`;
         btn.title = title;
         btn.setAttribute('aria-label', title);
         btn.dataset.status = s;
-        const dot = s === 'disabled' || s === 'needs-install' ? '<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-white"></span>' : '';
-        btn.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 ${state.pushBusy ? 'spin' : ''}"></i>${dot}`;
+        const dot = s === 'disabled' || s === 'needs-install' ? '<span class="attn"></span>' : '';
+        btn.innerHTML = `<i data-lucide="${icon}" class="${state.pushBusy ? 'spin' : ''}"></i>${dot}`;
         icons(btn);
+        if (state.sheetOpen) renderSheetNotify();
     }
 
     function deniedSteps() {
@@ -1177,38 +1608,43 @@
         return 'Click the icon to the left of the address bar → <b>Site settings</b> → <b>Notifications</b> → <b>Allow</b>, then reload this page or tap “Check again”.';
     }
 
+    function bellPanelHtml(inSheet) {
+        const s = state.push;
+        const head = (icon, title, tone) => `<div class="np-head"><div class="np-ic ${tone || ''}"><i data-lucide="${icon}"></i></div><h3 class="np-title">${title}</h3></div>`;
+        const p = (t) => `<p class="np-p">${t}</p>`;
+        const pill = (attrs, label, dark) => `<button type="button" ${attrs} class="btn ${dark ? 'btn-solid' : 'btn-ghost'}">${label}</button>`;
+        if (state.pushBusy) return head('loader-circle', 'Working…') + p('One moment while we update your notifications.');
+        if (s === 'enabled') {
+            return head('bell-ring', 'Notifications are on', 'solid') +
+                p('You’ll get a notification for new family messages and when someone @mentions you.') +
+                `<div class="np-actions">${pill('data-bell="test"', 'Send a test')}${pill('data-bell="disable"', 'Turn off', true)}</div>`;
+        }
+        if (s === 'needs-install') {
+            return head('smartphone', 'Install the app first') +
+                p('On iPhone and iPad, notifications only work when Chowaniec is opened from your Home Screen.') +
+                `<div class="np-actions"><a href="/get-the-app/" class="btn btn-solid">How to install <i data-lucide="arrow-right"></i></a></div>`;
+        }
+        if (s === 'denied') {
+            return head('bell-off', 'Notifications are blocked', 'warn') +
+                p('Your browser is blocking notifications for this site. To turn them back on:') +
+                `<p class="np-p" style="margin-top:8px;color:var(--text-2)">${deniedSteps()}</p>` +
+                `<div class="np-actions">${pill('data-bell="check"', 'Check again')}</div>`;
+        }
+        if (s === 'disabled') {
+            return head('bell', 'Get notified') + p('Turn on notifications to hear about new messages and @mentions.') +
+                `<div class="np-actions">${pill('data-bell="enable"', 'Turn on notifications', true)}</div>`;
+        }
+        if (s === 'not-configured') return head('bell-off', 'Not set up yet') + p('Notifications haven’t been switched on for the family site yet. Check back soon.');
+        if (s === 'unsupported') {
+            return head('bell-off', 'Not available here') + p('This browser can’t show notifications. Installing the Chowaniec app usually fixes that.') +
+                `<div class="np-actions"><a href="/get-the-app/" class="btn btn-ghost">Get the app</a></div>`;
+        }
+        return head('loader-circle', 'One moment…') + p(inSheet ? 'Notifications are still loading.' : 'Notifications are still loading. Try again in a second.');
+    }
+
     function renderBellPanel() {
         const panel = $('bell-panel');
-        const s = state.push;
-        const head = (icon, title, tone) => `<div class="flex items-center gap-3 mb-2"><div class="w-9 h-9 rounded-full ${tone || 'bg-gray-50 border border-gray-100 text-black'} flex items-center justify-center shrink-0"><i data-lucide="${icon}" class="w-4 h-4"></i></div><h3 class="font-serif text-lg text-black leading-tight">${title}</h3></div>`;
-        const p = (t) => `<p class="text-xs text-gray-500 font-light leading-relaxed">${t}</p>`;
-        const pill = (attrs, label, dark) => `<button type="button" ${attrs} class="min-h-[40px] px-4 rounded-full text-xs font-medium transition-colors ${dark ? 'bg-black text-white hover:bg-gray-800 shadow-md' : 'border border-gray-200 text-gray-700 hover:border-black hover:text-black'}">${label}</button>`;
-        let html = '';
-        if (s === 'enabled') {
-            html = head('bell-ring', 'Notifications are on', 'bg-black text-white') +
-                p('You’ll get a notification for new family messages and when someone @mentions you.') +
-                `<div class="flex flex-wrap gap-2 mt-4">${pill('data-bell="test"', 'Send a test')}${pill('data-bell="disable"', 'Turn off', true)}</div>`;
-        } else if (s === 'needs-install') {
-            html = head('smartphone', 'Install the app first') +
-                p('On iPhone and iPad, notifications only work when Chowaniec is opened from your Home Screen.') +
-                `<div class="mt-4"><a href="/get-the-app/" class="inline-flex items-center gap-2 min-h-[40px] px-4 rounded-full bg-black text-white text-xs font-medium hover:bg-gray-800 shadow-md">How to install <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></a></div>`;
-        } else if (s === 'denied') {
-            html = head('bell-off', 'Notifications are blocked', 'bg-amber-50 border border-amber-100 text-amber-700') +
-                p('Your browser is blocking notifications for this site. To turn them back on:') +
-                `<p class="text-xs text-gray-600 leading-relaxed mt-2">${deniedSteps()}</p>` +
-                `<div class="mt-4">${pill('data-bell="check"', 'Check again')}</div>`;
-        } else if (s === 'disabled') {
-            html = head('bell', 'Get notified') + p('Turn on notifications to hear about new messages and @mentions.') +
-                `<div class="mt-4">${pill('data-bell="enable"', 'Turn on notifications', true)}</div>`;
-        } else if (s === 'not-configured') {
-            html = head('bell-off', 'Not set up yet') + p('Notifications haven’t been switched on for the family site yet. Check back soon.');
-        } else if (s === 'unsupported') {
-            html = head('bell-off', 'Not available here') + p('This browser can’t show notifications. Installing the Chowaniec app usually fixes that.') +
-                `<div class="mt-4"><a href="/get-the-app/" class="inline-flex items-center gap-2 min-h-[40px] px-4 rounded-full border border-gray-200 text-gray-700 text-xs font-medium hover:border-black hover:text-black">Get the app</a></div>`;
-        } else {
-            html = head('loader-circle', 'One moment…') + p('Notifications are still loading. Try again in a second.');
-        }
-        panel.innerHTML = html;
+        panel.innerHTML = bellPanelHtml(false);
         icons(panel);
     }
 
@@ -1217,11 +1653,26 @@
         const open = force != null ? force : panel.classList.contains('hidden');
         if (open) {
             renderBellPanel();
-            show(panel, 'block');
+            panel.classList.remove('hidden');
         } else {
-            hide(panel, 'block');
+            panel.classList.add('hidden');
         }
         $('btn-bell').setAttribute('aria-expanded', String(open));
+    }
+
+    async function enablePushFlow(fromSheet) {
+        const P = pwa();
+        if (!P || state.pushBusy) return;
+        toggleBellPanel(false);
+        state.pushBusy = true;
+        renderBell();
+        let result = 'error';
+        try { result = await P.enablePush(); } catch (e) { result = 'error'; }
+        state.pushBusy = false;
+        await refreshBell();
+        if (result === 'enabled') toast('Notifications are on');
+        else if (result === 'denied') { if (!fromSheet) toggleBellPanel(true); }
+        else toast('Couldn’t turn on notifications. Please try again.', 'error');
     }
 
     async function onBellClick() {
@@ -1232,23 +1683,11 @@
             toggleBellPanel();
             return;
         }
-        if (state.push === 'disabled') {
-            toggleBellPanel(false);
-            state.pushBusy = true;
-            renderBell();
-            let result = 'error';
-            try { result = await P.enablePush(); } catch (e) { result = 'error'; }
-            state.pushBusy = false;
-            await refreshBell();
-            if (result === 'enabled') toast('Notifications are on');
-            else if (result === 'denied') toggleBellPanel(true);
-            else toast('Couldn’t turn on notifications. Please try again.', 'error');
-            return;
-        }
+        if (state.push === 'disabled') { await enablePushFlow(false); return; }
         toggleBellPanel();
     }
 
-    async function onBellPanelAction(action) {
+    async function onBellPanelAction(action, fromSheet) {
         const P = pwa();
         if (!P) return;
         if (action === 'disable') {
@@ -1265,21 +1704,210 @@
             } catch (e) { toast('Couldn’t send a test', 'error'); }
         } else if (action === 'check') {
             await refreshBell();
-            if (state.push !== 'denied') toggleBellPanel(state.push !== 'disabled' && state.push !== 'enabled' ? true : false);
-            if (state.push === 'disabled') toast('Unblocked — tap the bell to turn on');
+            if (!fromSheet && state.push !== 'denied') toggleBellPanel(state.push !== 'disabled' && state.push !== 'enabled');
+            if (state.push === 'disabled') toast(fromSheet ? 'Unblocked — you can turn them on now' : 'Unblocked — tap the bell to turn on');
         } else if (action === 'enable') {
             state.push = 'disabled';
-            toggleBellPanel(false);
-            onBellClick();
+            await enablePushFlow(fromSheet);
         }
     }
 
-    // ---------- header ----------
-    function renderHeader() {
-        const names = state.people;
-        const line = $('member-line');
-        line.textContent = names.length ? `${names.length} members · ${names.join(', ')}` : 'Family chat';
-        line.title = names.join(', ');
+    // ---------- theme ----------
+    const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function readTheme() {
+        try {
+            const v = localStorage.getItem(THEME_KEY);
+            return v === 'light' || v === 'dark' ? v : 'auto';
+        } catch (e) {
+            return 'auto';
+        }
+    }
+
+    function applyTheme() {
+        const pref = state.theme;
+        const dark = pref === 'dark' || (pref === 'auto' && !!(darkQuery && darkQuery.matches));
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', dark ? '#141417' : '#ffffff');
+    }
+
+    function setTheme(pref) {
+        state.theme = pref === 'light' || pref === 'dark' ? pref : 'auto';
+        try {
+            if (state.theme === 'auto') localStorage.removeItem(THEME_KEY);
+            else localStorage.setItem(THEME_KEY, state.theme);
+        } catch (e) { /* storage blocked: still applies for this visit */ }
+        applyTheme();
+        renderThemeSeg();
+    }
+
+    function renderThemeSeg() {
+        document.querySelectorAll('#theme-seg [data-theme-choice]').forEach((b) => {
+            b.setAttribute('aria-pressed', String(b.dataset.themeChoice === state.theme));
+        });
+    }
+
+    // ---------- chat info sheet ----------
+    function openSheet(focusSearch) {
+        if (state.sheetOpen) { if (focusSearch) $('search-input').focus(); return; }
+        closeActions();
+        toggleBellPanel(false);
+        closeEmoji();
+        state.sheetOpen = true;
+        renderSheet();
+        renderThemeSeg();
+        show($('sheet-backdrop'), 'block');
+        const sheet = $('info-sheet');
+        show(sheet);
+        sheet.classList.remove('sheet-enter');
+        void sheet.offsetWidth;
+        sheet.classList.add('sheet-enter');
+        $('btn-info').setAttribute('aria-expanded', 'true');
+        try { history.pushState({ chowaniecSheet: true }, ''); } catch (e) { /* ignore */ }
+        if (focusSearch) setTimeout(() => $('search-input').focus(), 60);
+        else if (isFinePointer()) $('sheet-close').focus({ preventScroll: true });
+    }
+
+    function closeSheet(fromPop) {
+        if (!state.sheetOpen) return;
+        state.sheetOpen = false;
+        hide($('info-sheet'));
+        hide($('sheet-backdrop'), 'block');
+        $('btn-info').setAttribute('aria-expanded', 'false');
+        if (!fromPop && history.state && history.state.chowaniecSheet) {
+            try { history.back(); } catch (e) { /* ignore */ }
+        }
+    }
+
+    function renderSheet() {
+        const ga = $('sheet-avatar');
+        ga.innerHTML = groupAvatarHtml('');
+        const sub = subtitleHtml();
+        $('sheet-sub').innerHTML = sub.html;
+        renderSheetMembers();
+        renderSheetNotify();
+        renderSheetPhotos();
+        if (state.search.q) renderSearch();
+        icons($('info-sheet'));
+        applyPresenceDots($('info-sheet'));
+    }
+
+    function memberEntries() {
+        const names = state.people.slice();
+        state.presence.forEach((p) => { if (!isAiName(p.user) && !names.some((n) => sameName(n, p.user))) names.push(String(p.user)); });
+        if (state.user && !names.some((n) => sameName(n, myName()))) names.push(myName());
+        return names.map((n) => {
+            const p = presenceOf(n);
+            const isMe = sameName(n, myName());
+            const online = !!(p && p.online) || isMe;
+            const t = p && p.lastSeen ? Date.parse(p.lastSeen) || 0 : 0;
+            return { name: n, p, isMe, online, t };
+        }).sort((a, b) => (Number(b.online) - Number(a.online)) || (b.t - a.t) || a.name.localeCompare(b.name));
+    }
+
+    function renderSheetMembers() {
+        const list = memberEntries();
+        $('members-count').textContent = String(list.length);
+        $('sheet-members').innerHTML = list.map((e) => {
+            let st;
+            let on = false;
+            if (e.p && e.p.typing && !e.isMe) { st = 'typing…'; on = true; }
+            else if (e.online) { st = 'Online'; on = true; }
+            else if (e.p && e.p.lastSeen) st = lastSeenLabel(e.p.lastSeen);
+            else st = 'Hasn’t opened the chat yet';
+            return `<div class="member" data-member="${escapeHtml(e.name)}">${avatarHtml(e.name, 'av-lg')}<div class="min-w-0 flex-1"><div class="nm">${escapeHtml(e.name)}${e.isMe ? '<span class="you">You</span>' : ''}</div><div class="st${on ? ' on' : ''}">${escapeHtml(st)}</div></div></div>`;
+        }).join('');
+        // You are always shown as online in your own list.
+        const meEl = $('sheet-members').querySelector('.av[data-user="' + (window.CSS && CSS.escape ? CSS.escape(myName().toLowerCase()) : myName().toLowerCase()) + '"]');
+        applyPresenceDots($('sheet-members'));
+        if (meEl) meEl.classList.add('online');
+    }
+
+    function renderSheetNotify() {
+        const el = $('sheet-notify');
+        el.innerHTML = bellPanelHtml(true);
+        icons(el);
+    }
+
+    function renderSheetPhotos() {
+        const photos = state.messages.filter((m) => m.image).slice().reverse();
+        $('photos-count').textContent = photos.length ? String(photos.length) + (state.hasMore ? '+' : '') : '';
+        const el = $('sheet-photos');
+        const sig = photos.map((m) => m.id).join(',');
+        if (el.dataset.sig === sig) return;
+        el.dataset.sig = sig;
+        if (!photos.length) {
+            el.innerHTML = `<div class="card"><p class="muted-note">Photos shared in the chat will show up here.</p></div>`;
+            return;
+        }
+        el.innerHTML = `<div class="photo-grid">${photos.map((m) => {
+            const src = mediaUrl(m.image);
+            return `<button type="button" class="shimmer" data-act="lightbox" data-src="${escapeHtml(src)}" data-caption="${escapeHtml(displayName(m) + ' · ' + fullTime(ts(m)))}" title="${escapeHtml('Photo from ' + displayName(m))}"><img src="${escapeHtml(src)}" alt="${escapeHtml('Photo from ' + displayName(m))}" loading="lazy" decoding="async"></button>`;
+        }).join('')}</div>`;
+    }
+
+    function searchMatches(q) {
+        return state.messages.filter((m) => m.kind !== 'system' && String(m.text || '').toLowerCase().includes(q)).reverse();
+    }
+
+    function hitSnippet(text, q) {
+        const s = String(text || '').replace(/\s+/g, ' ');
+        const i = s.toLowerCase().indexOf(q);
+        if (i > 48) return '…' + s.slice(i - 36);
+        return s;
+    }
+
+    function renderSearch() {
+        const q = state.search.q.trim().toLowerCase();
+        const res = $('search-results');
+        const sections = $('sheet-sections');
+        $('search-field').classList.toggle('has-value', !!state.search.q);
+        if (!q) {
+            res.classList.add('hidden');
+            res.innerHTML = '';
+            sections.classList.remove('hidden');
+            return;
+        }
+        sections.classList.add('hidden');
+        res.classList.remove('hidden');
+        const hits = searchMatches(q);
+        const oldest = state.messages[0];
+        let html = `<div class="sec-title"><span>${hits.length === 1 ? '1 result' : hits.length + ' results'}</span></div>`;
+        if (hits.length) {
+            html += `<div class="card">${hits.slice(0, 200).map((m) => `<button type="button" class="hit" data-act="search-hit" data-id="${escapeHtml(m.id)}">${avatarHtml(m.user, 'av-md', { ai: m.kind === 'ai' })}<span class="min-w-0 flex-1"><span class="top"><b class="${m.kind === 'ai' ? '' : 'acc-text ' + personClass(m.user)}">${escapeHtml(displayName(m))}</b><time>${escapeHtml(shortWhen(ts(m)))}</time></span><span class="tx">${highlight(hitSnippet(m.text, q), q)}</span></span></button>`).join('')}</div>`;
+        } else {
+            html += `<div class="card"><p class="muted-note">No messages match “${escapeHtml(state.search.q.trim())}”${state.hasMore ? ' in the loaded history yet' : ''}.</p></div>`;
+        }
+        html += `<div class="search-foot">`;
+        if (state.search.busy) {
+            html += `<span class="inline-flex items-center gap-2"><i data-lucide="loader-circle" class="w-4 h-4 spin"></i> Searching older messages…</span>`;
+        } else if (state.hasMore) {
+            html += `<span>Searched back to ${escapeHtml(oldest ? dayLabel(ts(oldest)) : 'the start')}</span><button type="button" class="btn btn-ghost" data-act="search-older"><i data-lucide="history"></i>Search older messages</button>`;
+        } else {
+            html += `<span>Searched the whole chat</span>`;
+        }
+        html += `</div>`;
+        res.innerHTML = html;
+        icons(res);
+        applyPresenceDots(res);
+    }
+
+    async function searchOlder() {
+        if (state.search.busy) return;
+        const q = state.search.q.trim().toLowerCase();
+        if (!q) return;
+        state.search.busy = true;
+        renderSearch();
+        const before = searchMatches(q).length;
+        for (let i = 0; i < 10 && state.hasMore; i++) {
+            await loadOlderAndWait();
+            if (state.olderError) break;
+            if (searchMatches(q).length > before) break;
+        }
+        state.search.busy = false;
+        if (state.olderError) toast('Couldn’t load older messages.', 'error');
+        if (state.sheetOpen) renderSearch();
     }
 
     // ---------- events ----------
@@ -1291,25 +1919,32 @@
             const near = distanceFromBottom() < NEAR_BOTTOM_PX;
             state.stick = near;
             if (near && state.unseen) state.unseen = 0;
-            renderPill();
+            renderJump();
+            if (near) maybeSendRead();
             if (sc.scrollTop < 300) loadOlder();
             if (state.menuFor && window.innerWidth >= 640) closeActions();
         }, { passive: true });
 
-        // Images change height when they load: stay pinned to the bottom if we were there.
-        $('messages').addEventListener('load', () => {
-            if (state.stick) sc.scrollTop = sc.scrollHeight;
-        }, true);
+        // Images change height when they load: stay pinned to the bottom if we were there. Also stop the shimmer.
+        const onImg = (e) => {
+            const t = e.target;
+            if (!t || t.tagName !== 'IMG') return;
+            const sh = t.closest('.shimmer');
+            if (sh) sh.classList.add('loaded');
+            if (state.stick && $('messages').contains(t)) sc.scrollTop = sc.scrollHeight;
+        };
+        document.addEventListener('load', onImg, true);
+        document.addEventListener('error', onImg, true);
 
         // The composer grows (reply chip, photo, multi-line text) or the keyboard opens: stay pinned.
         if (window.ResizeObserver) {
             new ResizeObserver(() => { if (state.stick) sc.scrollTop = sc.scrollHeight; }).observe(sc);
         }
 
-        $('new-pill').addEventListener('click', () => scrollToBottom(true));
+        $('jump-btn').addEventListener('click', () => scrollToBottom(true));
         $('btn-retry').addEventListener('click', () => { state.failures = 0; hideBanner(); poll(); });
 
-        // Delegated clicks inside the message list + composer extras
+        // Delegated clicks inside the message list, sheets + composer extras
         document.addEventListener('click', (e) => {
             if (suppressClick) { suppressClick = false; e.preventDefault(); e.stopPropagation(); return; }
             const t = e.target.closest('[data-act]');
@@ -1320,63 +1955,128 @@
                 case 'menu': openActions(id, t.closest('.msg-row') && t.closest('.msg-row').querySelector('.bubble')); break;
                 case 'reply': closeActions(); setReply(findMessage(id)); break;
                 case 'react': closeActions(); toggleReaction(id, t.dataset.emoji); break;
+                case 'react-more': expandMenuEmoji(); break;
                 case 'copy': { closeActions(); const m = findMessage(id); if (m) copyText(m.text || ''); break; }
                 case 'delete': closeActions(); askDelete(id); break;
                 case 'retry': closeActions(); retryPending(id); break;
-                case 'jump': jumpTo(id); break;
+                case 'pin': closeActions(); pinMessage(id); break;
+                case 'unpin': closeActions(); unpinMessage(); break;
+                case 'jump': revealMessage(id); break;
+                case 'jump-pinned': if (state.pinned) revealMessage(state.pinned.id); break;
                 case 'lightbox': openLightbox(t.dataset.src, t.dataset.caption); break;
                 case 'older': loadOlder(); break;
                 case 'cancel-reply': setReply(null); break;
                 case 'remove-image': state.image = null; renderAttachments(); updateSendButton(); break;
+                case 'search-hit': closeSheet(false); setTimeout(() => revealMessage(id), 80); break;
+                case 'search-older': searchOlder(); break;
                 default: break;
             }
         }, true);
 
-        // Long-press (touch) and right-click open the action menu.
+        // ----- Touch gestures: long-press (actions), swipe right (reply), double-tap (❤️) -----
         let pressTimer = null;
-        let pressStart = null;
+        let pressVisual = null;
         let suppressClick = false;
-        const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; pressStart = null; };
+        let g = null;              // current gesture
+        let lastTap = null;
+        const clearPressTimers = () => { clearTimeout(pressTimer); pressTimer = null; clearTimeout(pressVisual); pressVisual = null; };
+        const unpress = () => {
+            if (g && g.row && state.menuFor !== g.id) g.row.classList.remove('press');
+        };
+        const resetSwipe = (row, animate) => {
+            if (!row) return;
+            row.classList.remove('swiping', 'armed');
+            if (animate) {
+                row.classList.add('settle');
+                setTimeout(() => row.classList.remove('settle'), 280);
+            }
+            row.style.transform = '';
+            row.style.removeProperty('--swipe');
+        };
+
         sc.addEventListener('pointerdown', (e) => {
             if (e.pointerType === 'mouse') return;
+            const row = e.target.closest('.msg-row[data-id]');
+            if (!row || row.classList.contains('typing-row')) { g = null; return; }
             const bubble = e.target.closest('.bubble[data-bubble]');
+            const m = findMessage(row.dataset.id);
+            g = {
+                id: row.dataset.id, row, bubble, x: e.clientX, y: e.clientY, t: Date.now(), mode: null, dx: 0,
+                canReply: !!m && !m._pending && m.kind !== 'system',
+                interactive: !!e.target.closest('a, .msg-img-btn, .reply-quote, .react-chip, .msg-status, .hover-actions')
+            };
             if (!bubble) return;
-            pressStart = { x: e.clientX, y: e.clientY };
-            const row = bubble.closest('.msg-row');
-            if (row) row.classList.add('press');
+            pressVisual = setTimeout(() => { if (g && !g.mode) row.classList.add('press'); }, 140);
             pressTimer = setTimeout(() => {
                 pressTimer = null;
+                if (!g || g.mode) return;
+                g.mode = 'long';
                 suppressClick = true;
                 setTimeout(() => { suppressClick = false; }, 700);
-                if (row) row.classList.remove('press');
+                row.classList.remove('press');
                 if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) { /* ignore */ } }
                 openActions(bubble.dataset.id, bubble);
             }, 450);
         });
+
         sc.addEventListener('pointermove', (e) => {
-            if (!pressStart) return;
-            if (Math.abs(e.clientX - pressStart.x) > 10 || Math.abs(e.clientY - pressStart.y) > 10) {
-                const row = e.target.closest && e.target.closest('.msg-row');
-                if (row && state.menuFor !== row.dataset.id) row.classList.remove('press');
-                cancelPress();
+            if (!g || g.mode === 'long' || e.pointerType === 'mouse') return;
+            const dx = e.clientX - g.x;
+            const dy = e.clientY - g.y;
+            if (!g.mode) {
+                if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+                clearPressTimers();
+                unpress();
+                g.mode = (g.canReply && dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.3) ? 'swipe' : 'scroll';
+                if (g.mode === 'swipe') g.row.classList.add('swiping');
+            }
+            if (g.mode !== 'swipe') return;
+            const raw = Math.max(0, dx);
+            const off = raw <= SWIPE_REPLY_PX ? raw : SWIPE_REPLY_PX + Math.min(30, (raw - SWIPE_REPLY_PX) * 0.3);
+            g.dx = raw;
+            g.row.style.transform = `translateX(${off.toFixed(1)}px)`;
+            g.row.style.setProperty('--swipe', Math.min(1, raw / SWIPE_REPLY_PX).toFixed(3));
+            const armed = raw >= SWIPE_REPLY_PX;
+            if (armed !== g.row.classList.contains('armed')) {
+                g.row.classList.toggle('armed', armed);
+                if (armed && navigator.vibrate) { try { navigator.vibrate(6); } catch (err) { /* ignore */ } }
             }
         });
-        const endPress = (e) => {
-            if (pressTimer) {
-                const row = e.target.closest && e.target.closest('.msg-row');
-                if (row && state.menuFor !== row.dataset.id) row.classList.remove('press');
+
+        const endGesture = (e, cancelled) => {
+            if (!g || e.pointerType === 'mouse') return;
+            const cur = g;
+            clearPressTimers();
+            unpress();
+            if (cur.mode === 'swipe') {
+                resetSwipe(cur.row, true);
+                if (!cancelled && cur.dx >= SWIPE_REPLY_PX) {
+                    suppressClick = true;
+                    setTimeout(() => { suppressClick = false; }, 400);
+                    setReply(findMessage(cur.id));
+                }
+            } else if (!cur.mode && !cancelled && cur.bubble && !cur.interactive && Date.now() - cur.t < 350 && cur.canReply) {
+                const now = Date.now();
+                if (lastTap && lastTap.id === cur.id && now - lastTap.t < 340 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
+                    lastTap = null;
+                    if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (err) { /* ignore */ } }
+                    doubleTapHeart(cur.id);
+                } else {
+                    lastTap = { id: cur.id, t: now, x: e.clientX, y: e.clientY };
+                }
             }
-            cancelPress();
+            g = null;
         };
-        sc.addEventListener('pointerup', endPress);
-        sc.addEventListener('pointercancel', endPress);
+        sc.addEventListener('pointerup', (e) => endGesture(e, false));
+        sc.addEventListener('pointercancel', (e) => endGesture(e, true));
+
         sc.addEventListener('contextmenu', (e) => {
             const bubble = e.target.closest('.bubble[data-bubble]');
             if (!bubble) return;
             if (e.target.closest('a') && isFinePointer()) return; // allow native menu on links (desktop)
             e.preventDefault();
             if (state.menuFor === bubble.dataset.id) return;
-            cancelPress();
+            clearPressTimers();
             openActions(bubble.dataset.id, bubble);
         });
 
@@ -1387,10 +2087,12 @@
         $('composer').addEventListener('submit', (e) => { e.preventDefault(); sendFromComposer(); });
         $('btn-send').addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') e.preventDefault(); });
         $('btn-send').addEventListener('click', (e) => { e.preventDefault(); sendFromComposer(); });
-        ta.addEventListener('input', () => { autosize(); updateSendButton(); detectMention(); });
-        ta.addEventListener('click', detectMention);
-        ta.addEventListener('keyup', (e) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) detectMention(); });
-        ta.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== ta) closeMention(); }, 150));
+        ta.addEventListener('input', () => { autosize(); updateSendButton(); rememberCaret(); detectMention(); noteTyping(); });
+        ta.addEventListener('click', () => { rememberCaret(); detectMention(); if (!isFinePointer()) closeEmoji(); });
+        ta.addEventListener('focus', () => { if (!isFinePointer()) closeEmoji(); });
+        ta.addEventListener('select', rememberCaret);
+        ta.addEventListener('keyup', (e) => { rememberCaret(); if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) detectMention(); });
+        ta.addEventListener('blur', () => { rememberCaret(true); setTimeout(() => { if (document.activeElement !== ta) closeMention(); }, 150); });
         ta.addEventListener('keydown', (e) => {
             if (e.isComposing || e.keyCode === 229) return;
             const m = state.mention;
@@ -1400,6 +2102,7 @@
                 if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(m.options[m.index].name); return; }
                 if (e.key === 'Escape') { e.preventDefault(); closeMention(); return; }
             }
+            if (e.key === 'Escape' && !$('emoji-popup').classList.contains('hidden')) { closeEmoji(); return; }
             if (e.key === 'Escape' && state.replyTo) { setReply(null); return; }
             if (e.key === 'Enter' && !e.shiftKey && !e.altKey && isFinePointer()) {
                 e.preventDefault();
@@ -1420,11 +2123,39 @@
             if (b) insertMention(b.dataset.mention);
         });
 
+        // Emoji picker
+        const emojiBtn = $('btn-emoji');
+        emojiBtn.addEventListener('mousedown', (e) => e.preventDefault());
+        emojiBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if ($('emoji-popup').classList.contains('hidden')) {
+                if (document.activeElement === ta) rememberCaret();
+                openEmoji();
+                if (!isFinePointer()) ta.blur();
+            } else {
+                closeEmoji();
+                if (isFinePointer()) ta.focus();
+            }
+        });
+        const ep = $('emoji-popup');
+        ep.addEventListener('mousedown', (e) => e.preventDefault());
+        ep.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const b = e.target.closest('[data-emoji-insert]');
+            if (b) insertAtCaret(b.dataset.emojiInsert);
+        });
+        document.addEventListener('click', (e) => {
+            if (!ep.classList.contains('hidden') && !e.target.closest('#emoji-popup') && !e.target.closest('#btn-emoji') && e.target !== ta) closeEmoji();
+        });
+
         $('btn-photo').addEventListener('click', () => $('file-input').click());
-        $('file-input').addEventListener('change', (e) => {
-            const f = e.target.files && e.target.files[0];
-            e.target.value = '';
-            attachFile(f);
+        $('btn-camera').addEventListener('click', () => $('camera-input').click());
+        ['file-input', 'camera-input'].forEach((fid) => {
+            $(fid).addEventListener('change', (e) => {
+                const f = e.target.files && e.target.files[0];
+                e.target.value = '';
+                attachFile(f);
+            });
         });
 
         // Drag & drop a photo onto the page (desktop)
@@ -1442,7 +2173,11 @@
         // Lightbox
         $('lightbox-close').addEventListener('click', () => closeLightbox(false));
         $('lightbox').addEventListener('click', (e) => { if (e.target === $('lightbox') || e.target === $('lightbox-img')) closeLightbox(false); });
-        window.addEventListener('popstate', () => closeLightbox(true));
+        window.addEventListener('popstate', () => {
+            const st = history.state || {};
+            if (!$('lightbox').classList.contains('hidden') && !st.chowaniecLightbox) closeLightbox(true);
+            if (state.sheetOpen && !st.chowaniecSheet && !st.chowaniecLightbox) closeSheet(true);
+        });
 
         // Sign in again
         $('btn-signin').addEventListener('click', () => {
@@ -1455,7 +2190,7 @@
         $('bell-panel').addEventListener('click', (e) => {
             e.stopPropagation();
             const b = e.target.closest('[data-bell]');
-            if (b) onBellPanelAction(b.dataset.bell);
+            if (b) onBellPanelAction(b.dataset.bell, false);
         });
         document.addEventListener('click', (e) => {
             if (!$('bell-panel').classList.contains('hidden') && !e.target.closest('#bell-panel') && !e.target.closest('#btn-bell')) toggleBellPanel(false);
@@ -1463,12 +2198,44 @@
         window.addEventListener('chowaniec-pwa-change', refreshBell);
         window.addEventListener('load', refreshBell);
 
+        // Chat info sheet
+        $('btn-info').addEventListener('click', () => openSheet(false));
+        $('btn-search').addEventListener('click', () => openSheet(true));
+        $('sheet-close').addEventListener('click', () => closeSheet(false));
+        $('sheet-backdrop').addEventListener('click', () => closeSheet(false));
+        $('sheet-notify').addEventListener('click', (e) => {
+            const b = e.target.closest('[data-bell]');
+            if (b) onBellPanelAction(b.dataset.bell, true);
+        });
+        $('theme-seg').addEventListener('click', (e) => {
+            const b = e.target.closest('[data-theme-choice]');
+            if (b) setTheme(b.dataset.themeChoice);
+        });
+        const si = $('search-input');
+        si.addEventListener('input', () => {
+            state.search.q = si.value;
+            $('search-field').classList.toggle('has-value', !!si.value);
+            clearTimeout(state.search.timer);
+            state.search.timer = setTimeout(renderSearch, 120);
+        });
+        si.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(state.search.timer); renderSearch(); si.blur(); } });
+        $('search-clear').addEventListener('click', () => { si.value = ''; state.search.q = ''; renderSearch(); si.focus(); });
+        if (darkQuery) {
+            const onScheme = () => { if (state.theme === 'auto') applyTheme(); };
+            if (darkQuery.addEventListener) darkQuery.addEventListener('change', onScheme);
+            else if (darkQuery.addListener) darkQuery.addListener(onScheme);
+        }
+
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') return;
             if (!$('lightbox').classList.contains('hidden')) closeLightbox(false);
             else if (state.menuFor) closeActions();
             else if (!$('confirm-modal').classList.contains('hidden')) { hide($('confirm-modal')); state.confirmId = null; }
             else if (!$('bell-panel').classList.contains('hidden')) toggleBellPanel(false);
+            else if (state.sheetOpen) {
+                if (document.activeElement === si && si.value) { si.value = ''; state.search.q = ''; renderSearch(); }
+                else closeSheet(false);
+            } else if (!$('emoji-popup').classList.contains('hidden')) closeEmoji();
         });
 
         document.addEventListener('visibilitychange', () => {
@@ -1476,6 +2243,7 @@
                 state.hiddenUnseen = 0;
                 updateTitle();
                 if (!state.polling) poll();
+                maybeSendRead();
             } else {
                 schedulePoll();
             }
@@ -1511,6 +2279,8 @@
         if (!state.user || !state.user.key) { handleUnauthorized(); return; }
         state.started = true;
         state.people = loadPeople();
+        state.theme = readTheme();
+        applyTheme();
         renderHeader();
         renderBell();
         bindEvents();
@@ -1519,6 +2289,8 @@
         refreshBell();
         // /pwa.js is deferred: check again shortly in case it arrives without an event.
         [600, 2000, 5000].forEach((ms) => setTimeout(() => { if (!pwa() || state.push === 'loading') refreshBell(); }, ms));
+        // Keep "last seen" labels fresh while the sheet is open.
+        setInterval(() => { if (state.sheetOpen) renderSheetMembers(); }, 30000);
         scheduleMidnightRefresh();
         poll();
     }
