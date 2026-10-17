@@ -711,11 +711,13 @@
             const pollBtn = e.target.closest('#btn-poll');
             const stickerBtn = e.target.closest('#btn-sticker');
             const sheetBtn = e.target.closest('#btn-sheet');
+            const shareBtn = e.target.closest('#btn-share');
             if (e.target.closest('#btn-smart')) { toggleSmart(); return; }
             setPlus(false);
             if (pollBtn) openPollModal();
             if (stickerBtn) openStickers();
             if (sheetBtn) openSheetForm();
+            if (shareBtn) openShare();
             return;
         }
         if (!$('plus-popup').classList.contains('hidden')) setPlus(false);
@@ -734,6 +736,9 @@
                 playVoice(t.dataset.mid, frac);
                 break;
             }
+            case 'emb-rsvp': embedRsvp(t.dataset.eid, t.dataset.r, t.dataset.url); break;
+            case 'share-close': closeShare(); break;
+            case 'share-pick': sharePick(t.dataset.link); break;
             case 'slot-claim': slotAction('claim', t.dataset.sid, t.dataset.slot); break;
             case 'slot-release': slotAction('release', t.dataset.sid, t.dataset.slot); break;
             case 'sheet-close': closeSheetForm(); break;
@@ -826,6 +831,80 @@
             if (reply) G.setReply(null);
             G.render('bottom');
         } catch (e) { if (e.status !== 401) G.toast(e.message || 'Couldn’t send the sticker.', 'error'); }
+    }
+
+    // ---------------------------------------------------------------- link previews and the share picker
+
+    const PREVIEW = '/.netlify/functions/preview';
+    const previewCache = {};
+    const INTERNAL = /(^|\/\/)(chowaniec\.net|localhost(:\d+)?|127\.0\.0\.1(:\d+)?|[\w.-]*netlify\.app)?\/(notes|calendar|meet|group)\/?\?/i;
+    function previewCard(p, url) {
+        if (!p) return '';
+        const btns = (p.buttons || []).map((b) => `<a class="emb-btn${b.primary ? ' primary' : ''}" href="${esc(b.href)}">${esc(b.label)}</a>`).join('');
+        const rsvp = p.rsvp && p.eventId ? ['going', 'maybe', 'no'].map((k) => `<button type="button" class="emb-btn${p.mine === k ? ' on' : ''}" data-x="emb-rsvp" data-eid="${esc(p.eventId)}" data-r="${k}" data-url="${esc(url)}">${k === 'going' ? 'Going' : k === 'maybe' ? 'Maybe' : 'Can’t'}</button>`).join('') : '';
+        return `<div class="emb-top"><span class="emb-ic" aria-hidden="true">${p.icon || '🔗'}</span><span class="emb-main"><b>${esc(p.title)}</b><span class="emb-sub">${esc(p.subtitle || '')}</span></span></div>` +
+            (p.snippet ? `<div class="emb-snip">${esc(p.snippet)}</div>` : '') +
+            (btns || rsvp ? `<div class="emb-actions">${btns}${rsvp}</div>` : '');
+    }
+    async function fillEmbed(el) {
+        const url = el.dataset.url;
+        try {
+            if (!(url in previewCache)) previewCache[url] = G.api(`${PREVIEW}?url=${encodeURIComponent(url)}`).then((d) => d.preview).catch(() => null);
+            const p = await previewCache[url];
+            if (!p) { el.remove(); return; }
+            el.innerHTML = previewCard(p, url);
+            el.classList.add('ready', p.locked ? 'locked' : 'open');
+        } catch (e) { el.remove(); }
+    }
+    function addEmbeds() {
+        document.querySelectorAll('#messages .msg-text a[href], .msg-text a[href]').forEach((a) => {
+            const href = a.getAttribute('href') || '';
+            if (!INTERNAL.test(href)) return;
+            const bubble = a.closest('.bubble');
+            if (!bubble || bubble.querySelector(`.embed[data-url="${CSS.escape(href)}"]`)) return;
+            if (bubble.querySelectorAll('.embed').length >= 2) return;
+            const el = document.createElement('div');
+            el.className = 'embed';
+            el.dataset.url = href;
+            el.innerHTML = '<span class="emb-sub">Loading preview…</span>';
+            bubble.insertBefore(el, bubble.querySelector('.stamp'));
+            fillEmbed(el);
+        });
+    }
+    async function embedRsvp(eid, response, url) {
+        try {
+            const cur = (await previewCache[url]) || {};
+            const next = cur.mine === response ? '' : response;
+            await G.api('/.netlify/functions/calendar', { method: 'POST', body: { action: 'rsvp', id: eid, response: next } });
+            delete previewCache[url];
+            document.querySelectorAll(`.embed[data-url="${CSS.escape(url)}"]`).forEach(fillEmbed);
+        } catch (e) { G.toast(e.message || 'Couldn’t save your answer.', 'error'); }
+    }
+
+    // "Share" picker: pick a note, event or meeting and its link goes into the message box.
+    function openShare() {
+        closeShare();
+        const el = document.createElement('div');
+        el.id = 'share-sheet';
+        el.className = 'x-sheet';
+        el.innerHTML = `<div class="x-sheet-head"><b>Share a link</b><button type="button" data-x="share-close" aria-label="Close">✕</button></div><div id="share-body" class="share-body"><p class="emb-sub">Loading…</p></div>`;
+        document.body.appendChild(el);
+        G.api(`${PREVIEW}?share=1`).then((d) => {
+            const origin = location.origin;
+            const group = (title, items, label) => items.length ? `<h4>${title}</h4>` + items.map((i) => `<button type="button" class="share-item" data-x="share-pick" data-link="${esc(origin + i.path)}"><b>${esc(i.title)}</b><span>${esc(label(i))}</span></button>`).join('') : '';
+            const meeting = d.meeting && d.meeting.path ? [{ title: 'Join my latest meeting', path: d.meeting.path }] : [];
+            const html = group('Notes', d.notes || [], (i) => `by ${i.owner}`) + group('Coming up', d.events || [], (i) => i.when) + group('Meeting', meeting, () => 'Share the join link');
+            $('share-body').innerHTML = html || '<p class="emb-sub">Nothing to share yet.</p>';
+        }).catch(() => { $('share-body').innerHTML = '<p class="emb-sub">Couldn’t load. Try again.</p>'; });
+    }
+    function closeShare() { const el = $('share-sheet'); if (el) el.remove(); }
+    function sharePick(link) {
+        closeShare();
+        const ta = $('composer-input');
+        ta.value = (ta.value ? ta.value.replace(/\s*$/, ' ') : '') + link + ' ';
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        ta.focus();
+        G.toast('Link added. Add a note if you like, then send.');
     }
 
     // ---------------------------------------------------------------- sign-up sheets
@@ -988,6 +1067,6 @@
             if (!m.thread && m.kind !== 'system' && !m._pending) out += `<button type="button" role="menuitem" data-x="thread-open" data-id="${esc(m.id)}" class="mi"><i data-lucide="messages-square"></i>Reply in thread</button>`;
             return out;
         },
-        afterRender() { if (player.id) paintVoice(player.id); }
+        afterRender() { if (player.id) paintVoice(player.id); addEmbeds(); }
     };
 })();

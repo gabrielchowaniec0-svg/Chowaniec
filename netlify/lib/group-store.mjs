@@ -4,9 +4,9 @@
 // Scheduled messages wait in the group-chat store under sched/<user>/<sendAt>-<random>.
 import { getStore } from '@netlify/blobs';
 import crypto from 'node:crypto';
-import { familyNames } from './auth.mjs';
+import { familyNames, resolveName, isHostName } from './auth.mjs';
 import { sendPush } from './push.mjs';
-import { DEFAULT_ROOM, prefixOf, roomMembers } from './rooms.mjs';
+import { DEFAULT_ROOM, prefixOf, roomMembers, isDmId, isAiDm } from './rooms.mjs';
 
 export const MAX_TEXT = 4000;
 export const AI_NAME = 'Chowaniec AI';
@@ -103,21 +103,23 @@ export async function getMessage(id, room = DEFAULT_ROOM) {
   return entry ? { message: entry.data, etag: entry.etag } : null;
 }
 
-// Finds @Name, @everyone and @AI mentions (case-insensitive).
+// Finds @Name (or nickname), @everyone, @important and @AI mentions (case-insensitive).
+// @important pings everyone, so it is returned as 'everyone' here; use hasImportant() to tell them apart.
 export function parseMentions(text) {
-  const names = familyNames();
   const found = new Set();
   for (const match of text.matchAll(/@([A-Za-z][\w-]*)/g)) {
     const word = match[1].toLowerCase();
-    if (word === 'everyone') found.add('everyone');
-    else if (word === 'ai' || word === 'agent') found.add('AI');
+    if (word === 'everyone' || word === 'important') found.add('everyone');
+    else if (word === 'ai' || word === 'agent' || word === 'bob') found.add('AI');
     else {
-      const name = names.find((n) => n.toLowerCase() === word);
+      const name = resolveName(word);
       if (name) found.add(name);
     }
   }
   return [...found];
 }
+
+export const hasImportant = (text) => /(^|[^\w])@important\b/i.test(String(text || ''));
 
 async function saveImage(dataUrl, room = DEFAULT_ROOM) {
   const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || '');
@@ -150,8 +152,12 @@ export async function getImage(id) {
 }
 
 // Stores a message and returns it. `author` is a family name or AI_NAME.
-export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, onBehalfOf, sticker, thread, sheet, room = DEFAULT_ROOM }) {
+export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, onBehalfOf, sticker, thread, sheet, important, room = DEFAULT_ROOM }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
+  const wantsImportant = kind !== 'system' && !!(important || hasImportant(clean));
+  if (wantsImportant && !isHostName(onBehalfOf || author)) {
+    throw Object.assign(new Error('Only Victoria, Gabriel or Nicole can send an @important ping.'), { status: 403 });
+  }
   if (!clean && !image && !poll && !voice && !sticker && !sheet) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
 
   let reply = null;
@@ -177,6 +183,7 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user',
     ...(onBehalfOf ? { onBehalfOf } : {}),
     ...(sticker ? { sticker } : {}),
     ...(sheet ? { sheet } : {}),
+    ...(wantsImportant ? { important: true } : {}),
     ...(thread ? { thread } : {})
   };
   await messages().setJSON(keyOf(message.id, room), message, { onlyIfNew: true });
@@ -292,6 +299,18 @@ export async function notifyMessage(message) {
   const others = everyone.filter((n) => !mentioned.includes(n));
   const skip = message.onBehalfOf || message.user;   // the person an AI message was sent for already knows
   const url = message.room && message.room !== DEFAULT_ROOM ? `/group/?room=${message.room}` : '/group/';
+  if (isAiDm(message.room)) return;                      // the AI's own chat: replyAsAi notifies the person
+  if (isDmId(message.room)) {
+    // A direct message: always treated like a mention (it is for them), never a group-style notification.
+    const to = everyone.filter((n) => n !== skip);
+    if (to.length) await sendPush(to, { title: message.onBehalfOf ? `${AI_NAME} for ${message.onBehalfOf}` : message.user, body, url, tag: `dm-${message.room}` }, { exclude: skip, kind: message.important ? 'important' : 'mention' });
+    return;
+  }
+  if (message.important) {
+    // Everyone in the chat is pinged, whatever their notification mode (only a full "off" is respected).
+    await sendPush(everyone, { title: `🚨 Important from ${message.onBehalfOf || message.user}`, body, url, tag: `important-${message.id}`, requireInteraction: true }, { exclude: skip, kind: 'important' });
+    return;
+  }
   await Promise.all([
     mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: skip, kind: 'mention' }) : 0,
     others.length ? sendPush(others, { title: `${message.user}${threadTitle}`, body, url }, { exclude: skip, kind: 'message' }) : 0
@@ -461,6 +480,7 @@ export async function nextScheduledAt() {
 
 export async function scheduleMessage({ user, text, replyTo, sendAt, room = DEFAULT_ROOM, asAi = false }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
+  if (hasImportant(clean) && !isHostName(user)) throw Object.assign(new Error('Only Victoria, Gabriel or Nicole can send an @important ping.'), { status: 403 });
   if (!clean) throw Object.assign(new Error('Write a message to schedule.'), { status: 400 });
   const when = Date.parse(sendAt);
   const now = Date.now();

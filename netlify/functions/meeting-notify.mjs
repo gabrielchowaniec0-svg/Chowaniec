@@ -5,7 +5,7 @@
 // joins straight away. With postToChat the join link is also posted in the group chat (without a
 // second notification).
 import { getStore } from '@netlify/blobs';
-import { getUser, json, familyNames } from '../lib/auth.mjs';
+import { getUser, json, familyNames, resolveName } from '../lib/auth.mjs';
 import { sendPush } from '../lib/push.mjs';
 import { postMessage } from '../lib/group-store.mjs';
 
@@ -25,7 +25,7 @@ export async function notifyMeeting(user, body, origin) {
   const family = familyNames().filter((n) => n !== user.name);
   const people = body.people === 'all' || body.people === undefined
     ? family
-    : [...new Set((Array.isArray(body.people) ? body.people : []).filter((n) => family.includes(n)))];
+    : [...new Set((Array.isArray(body.people) ? body.people : []).map((n) => resolveName(n)).filter((n) => n && family.includes(n)))];
   if (!people.length && !body.postToChat) return { status: 400, error: 'Pick at least one person.' };
 
   const last = await throttleStore().get(`last/${code}`, { type: 'json' });

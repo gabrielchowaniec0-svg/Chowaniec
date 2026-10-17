@@ -16,7 +16,7 @@ export const CAPABILITIES = {
 };
 
 export const TOOL_CAPABILITY = {
-  post_to_group: 'post', schedule_group_message: 'post', create_poll: 'post', create_signup_sheet: 'post',
+  post_to_group: 'post', send_direct_message: 'post', schedule_group_message: 'post', create_poll: 'post', create_signup_sheet: 'post',
   add_calendar_event: 'calendar',
   notify_meeting: 'notify',
   create_note: 'notes', append_to_note: 'notes',

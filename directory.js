@@ -9,6 +9,15 @@ window.DIRECTORY_CONFIG = [
     description: "The family group chat, with photos, replies, reactions and notifications."
   },
   {
+    id: "messages",
+    title: "Messages",
+    path: "/messages/",
+    localFallback: "./messages/index.html",
+    icon: "message-circle",
+    status: "Active",
+    description: "Private one-to-one messages with family members and the AI."
+  },
+  {
     id: "ai",
     title: "Chowaniec AI",
     path: "/ai/",

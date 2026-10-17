@@ -79,6 +79,7 @@ export async function whoWantsPush(names, kind, now = new Date()) {
     try {
       const n = (await getSettings(name)).notifications;
       if (n.messages === 'off') return null;
+      if (kind === 'important') return name;           // an @important ping gets through quiet hours and "mentions only"
       if (n.messages === 'mentions' && kind === 'message') return null;
       if (inQuietHours(n.quietHours, now)) return null;
       return name;

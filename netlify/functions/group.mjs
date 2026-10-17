@@ -34,6 +34,8 @@ import {
 import { publishMessage } from '../lib/group-post.mjs';
 import { catchUpSummary } from '../lib/catch-up.mjs';
 import { analyzeMessage } from '../lib/smart-message.mjs';
+import { listDms, dmInfo } from '../lib/dm.mjs';
+import { isDmId } from '../lib/rooms.mjs';
 import { createEvent, describeWhen } from '../lib/calendar-store.mjs';
 import { resolveRoom, roomsFor, canAccessRoom } from '../lib/rooms.mjs';
 
@@ -46,6 +48,7 @@ export default async (req, context) => {
 
   try {
     if (req.method === 'GET' && url.searchParams.get('rooms')) return json(200, { rooms: roomsFor(user.name) });
+    if (req.method === 'GET' && url.searchParams.get('dms')) return json(200, { dms: await listDms(user) });
     let body = null;
     if (req.method === 'POST') {
       try {
@@ -78,6 +81,7 @@ export default async (req, context) => {
         return new Response(image.bytes, { headers });
       }
       if (url.searchParams.get('stickers')) return json(200, { stickers: STICKERS });
+      if (url.searchParams.get('dminfo')) return json(200, { dm: dmInfo(user, room) });
       const threadId = url.searchParams.get('thread');
       if (threadId) {
         if (!isMessageId(threadId)) return json(400, { error: 'Invalid thread.' });
@@ -216,7 +220,7 @@ export default async (req, context) => {
       await threadRoot(body.thread, room);
       thread = body.thread;
     }
-    const smart = body.smart === false || body.image || thread ? null : analyzeMessage(body.text);
+    const smart = body.smart === false || body.image || thread || isDmId(room) ? null : analyzeMessage(body.text);
     if (smart && (smart.event || smart.polls.length)) {
       const posted = [];
       const replyTo = isMessageId(body.replyTo) ? body.replyTo : null;

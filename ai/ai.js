@@ -15,6 +15,7 @@
         { name: 'meeting-recap', args: 'optional code', desc: 'Recap the latest meeting you were in and post it to a chat', server: true },
         { name: 'calendar', args: 'event details', desc: 'Add something to the family calendar', server: true },
         { name: 'poll', args: 'question and answers', desc: 'Create a poll in a group chat', server: true },
+        { name: 'messages', args: 'person and what to tell them', desc: 'Send a direct message, or catch up on yours', server: true },
         { name: 'signup', args: 'title and slots', desc: 'Create a sign-up sheet people can tap to claim', server: true },
         { name: 'new', args: '', desc: 'Start a new chat', server: false },
         { name: 'help', args: '', desc: 'Show what I can do', server: false },
@@ -22,7 +23,7 @@
     ];
     const COMMAND_ICONS = {
         summarize: 'scroll-text', note: 'notebook-pen', meet: 'video', group: 'messages-square',
-        remind: 'bell-ring', recap: 'history', 'meeting-recap': 'clipboard-list', calendar: 'calendar-days', poll: 'chart-no-axes-column', signup: 'clipboard-check', new: 'square-pen', help: 'circle-help', clear: 'eraser'
+        remind: 'bell-ring', recap: 'history', 'meeting-recap': 'clipboard-list', calendar: 'calendar-days', poll: 'chart-no-axes-column', signup: 'clipboard-check', messages: 'message-circle', new: 'square-pen', help: 'circle-help', clear: 'eraser'
     };
 
     const SUGGESTIONS = [
@@ -502,7 +503,7 @@
         row.className = 'flex gap-3 fade-in';
         row.setAttribute('data-role', 'assistant');
         row.innerHTML = `
-            <div class="w-8 h-8 shrink-0 rounded-full bg-black text-white flex items-center justify-center mt-0.5"><i data-lucide="sparkles" class="w-4 h-4"></i></div>
+            <div class="w-8 h-8 shrink-0 rounded-full bg-violet-600 flex items-center justify-center mt-0.5 p-1 bob-avatar">${window.ChowaniecRobot ? window.ChowaniecRobot.face() : ''}</div>
             <div class="flex-1 min-w-0 space-y-3">
                 <div data-slot="tools" class="hidden flex-wrap gap-2"></div>
                 <div data-slot="typing" class="hidden typing-dots items-center gap-1 h-7"><span></span><span></span><span></span></div>
@@ -859,6 +860,7 @@
         if (request.command) body.command = request.command;
         if (request.references && request.references.length) body.references = request.references;
         if (request.mentions && request.mentions.length) body.mentions = request.mentions;
+        body.chat = chatChoice();
 
         try {
             const res = await fetch(AGENT_URL, {
@@ -1469,6 +1471,31 @@
     }
 
     let started = false;
+    // ---------- which group chat the AI posts to (the one without Emilia unless you change it) ----------
+    const CHAT_KEY = 'chowaniec_ai_chat';
+    function chatChoice() {
+        const sel = document.getElementById('chat-pick');
+        if (sel && sel.value) return sel.value;
+        try { return localStorage.getItem(CHAT_KEY) || 'no-emilia'; } catch (e) { return 'no-emilia'; }
+    }
+    async function loadChatPicker() {
+        const sel = document.getElementById('chat-pick');
+        if (!sel) return;
+        try {
+            const data = await api('/.netlify/functions/group?rooms=1');
+            const rooms = data.rooms || [];
+            if (rooms.length < 2) return;
+            let saved = 'no-emilia';
+            try { saved = localStorage.getItem(CHAT_KEY) || 'no-emilia'; } catch (e) { /* ignore */ }
+            if (!rooms.some((r) => r.id === saved)) saved = (rooms.find((r) => r.id === 'no-emilia') || rooms[0]).id;
+            sel.innerHTML = rooms.map((r) => `<option value="${r.id}">${String(r.name).replace(/[<>&"]/g, '')}</option>`).join('');
+            sel.value = saved;
+            sel.addEventListener('change', () => { try { localStorage.setItem(CHAT_KEY, sel.value); } catch (e) { /* ignore */ } });
+            const wrap = document.getElementById('chat-pick-wrap');
+            wrap.classList.remove('hidden'); wrap.classList.add('flex');
+        } catch (e) { /* the picker just stays hidden */ }
+    }
+
     async function start() {
         if (started) return;
         state.user = getUser();
@@ -1480,6 +1507,9 @@
         state.people = loadPeople();
         configureSanitizer();
         bindEvents();
+        loadChatPicker();
+        const hb = document.getElementById('hdr-bob');
+        if (hb && window.ChowaniecRobot) hb.innerHTML = window.ChowaniecRobot.face();
         renderUserChip();
         renderSuggestions();
         renderConversations();
