@@ -1,0 +1,56 @@
+// Web Push for Chowaniec (VAPID keys in VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).
+// Subscriptions live in Netlify Blobs under sub/<user>/<hash of endpoint>.
+import { getStore } from '@netlify/blobs';
+import webpush from 'web-push';
+import crypto from 'node:crypto';
+
+const store = () => getStore({ name: 'push-subscriptions', consistency: 'strong' });
+
+export function pushConfig() {
+  const publicKey = Netlify.env.get('VAPID_PUBLIC_KEY');
+  const privateKey = Netlify.env.get('VAPID_PRIVATE_KEY');
+  return publicKey && privateKey ? { publicKey, privateKey } : null;
+}
+
+const keyFor = (user, endpoint) => `sub/${encodeURIComponent(user)}/${crypto.createHash('sha256').update(endpoint).digest('hex').slice(0, 32)}`;
+
+export async function saveSubscription(user, subscription, userAgent) {
+  await store().setJSON(keyFor(user, subscription.endpoint), {
+    user, subscription, userAgent: String(userAgent || '').slice(0, 200), savedAt: new Date().toISOString()
+  });
+}
+
+export async function removeSubscription(user, endpoint) {
+  await store().delete(keyFor(user, endpoint));
+}
+
+// Sends `payload` ({ title, body, url, tag }) to every device of the given users
+// (or everyone when users is '*'), skipping `exclude`. Returns how many were delivered.
+export async function sendPush(users, payload, { exclude } = {}) {
+  const config = pushConfig();
+  if (!config) return 0;
+  webpush.setVapidDetails(Netlify.env.get('VAPID_SUBJECT') || 'https://chowaniec.net', config.publicKey, config.privateKey);
+
+  const { blobs } = await store().list({ prefix: 'sub/' });
+  const targets = blobs.filter((b) => {
+    const user = decodeURIComponent(b.key.split('/')[1]);
+    if (exclude && user === exclude) return false;
+    return users === '*' || users.includes(user);
+  });
+
+  const body = JSON.stringify(payload);
+  const results = await Promise.all(targets.map(async (b) => {
+    const record = await store().get(b.key, { type: 'json' });
+    if (!record) return 0;
+    try {
+      await webpush.sendNotification(record.subscription, body, { TTL: 60 * 60 * 24 });
+      return 1;
+    } catch (err) {
+      // 404/410: the device unsubscribed or the subscription expired.
+      if (err.statusCode === 404 || err.statusCode === 410) await store().delete(b.key);
+      else console.error('Push failed:', err.statusCode, err.body || err.message);
+      return 0;
+    }
+  }));
+  return results.reduce((a, b) => a + b, 0);
+}
