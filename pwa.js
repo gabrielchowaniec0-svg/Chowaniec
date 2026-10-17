@@ -41,20 +41,32 @@
     return registration;
   }
 
+  // Asks the server whether notifications are set up. Only a clear answer is remembered: if the
+  // check itself fails (bad connection, expired sign-in) we say so and try again next time, instead
+  // of wrongly telling people the family host still has to switch notifications on.
   async function getServerInfo() {
     if (serverInfo) return serverInfo;
-    try {
-      const res = await fetch(PUSH_API, { headers: authHeaders() });
-      serverInfo = res.ok ? await res.json() : { enabled: false };
-    } catch (e) {
-      serverInfo = { enabled: false };
+    let failed = false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(PUSH_API, { headers: authHeaders(), credentials: 'same-origin', cache: 'no-store' });
+        if (res.ok) {
+          serverInfo = await res.json();
+          return serverInfo;
+        }
+        failed = true;
+      } catch (e) {
+        failed = true;
+      }
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 600));
     }
-    return serverInfo;
+    return failed ? { enabled: false, failed: true } : { enabled: false };
   }
 
   async function pushStatus() {
     if (!pushSupported()) return platform() === 'ios' && !isStandalone() ? 'needs-install' : 'unsupported';
     const info = await getServerInfo();
+    if (info.failed) return 'error';
     if (!info.enabled || !info.publicKey) return 'not-configured';
     if (Notification.permission === 'denied') return 'denied';
     const reg = await getRegistration();
@@ -147,6 +159,121 @@
     installPrompt = null;
     changed();
   });
+
+
+  // ---------- Friendly "turn on notifications" card ----------
+  // Browsers only show their real "Allow notifications?" box after a tap, so we show a small card
+  // with a button; tapping it opens that box. It appears on the hub and Group Chat until the person
+  // allows or blocks notifications, or taps "Not now" (we then wait three days before asking again).
+  const PROMPT_PAUSE_KEY = 'chowaniec_notify_prompt_until';
+  const PROMPT_DELAY_MS = 3 * 24 * 60 * 60 * 1000;
+  let promptEl = null;
+
+  function promptPaused() {
+    try { return Date.now() < Number(localStorage.getItem(PROMPT_PAUSE_KEY) || 0); } catch (e) { return false; }
+  }
+
+  function promptPage() {
+    const path = location.pathname.replace(/index\.html$/, '');
+    return path === '/' ? 'hub' : /^\/group\/?$/.test(path) ? 'group' : null;
+  }
+
+  function removePrompt() {
+    if (promptEl) { promptEl.remove(); promptEl = null; }
+  }
+
+  function showPrompt(page) {
+    if (promptEl || document.getElementById('chowaniec-notify-card')) return;
+    if (!document.getElementById('chowaniec-notify-style')) {
+      const style = document.createElement('style');
+      style.id = 'chowaniec-notify-style';
+      style.textContent = [
+        '#chowaniec-notify-card{position:fixed;left:12px;right:12px;z-index:9000;max-width:420px;margin:0 auto;padding:14px 14px 12px;border-radius:18px;',
+        'background:#fff;color:#111;border:1px solid rgba(0,0,0,.08);box-shadow:0 12px 40px rgba(0,0,0,.22);font:14px/1.4 Outfit,system-ui,-apple-system,sans-serif;',
+        'animation:chNotifyIn .35s cubic-bezier(.2,.9,.3,1.1)}',
+        '#chowaniec-notify-card.at-top{top:calc(env(safe-area-inset-top,0px) + 66px)}',
+        '#chowaniec-notify-card.at-bottom{bottom:calc(env(safe-area-inset-bottom,0px) + 14px)}',
+        '#chowaniec-notify-card .cn-row{display:flex;gap:12px;align-items:flex-start}',
+        '#chowaniec-notify-card .cn-ic{flex:none;width:38px;height:38px;border-radius:12px;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px}',
+        '#chowaniec-notify-card .cn-t{font-weight:600;font-size:15px;margin:0 0 2px}',
+        '#chowaniec-notify-card .cn-p{margin:0;color:#555;font-size:13px}',
+        '#chowaniec-notify-card .cn-actions{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}',
+        '#chowaniec-notify-card button{font:inherit;font-weight:600;font-size:13px;border-radius:12px;padding:9px 16px;border:1px solid transparent;cursor:pointer;min-height:40px}',
+        '#chowaniec-notify-card .cn-yes{background:#111;color:#fff}',
+        '#chowaniec-notify-card .cn-no{background:transparent;color:#555;border-color:rgba(0,0,0,.14)}',
+        '#chowaniec-notify-card button[disabled]{opacity:.6;cursor:default}',
+        '@keyframes chNotifyIn{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}',
+        '@media (prefers-color-scheme:dark){#chowaniec-notify-card{background:#1c1c20;color:#f2f2f4;border-color:rgba(255,255,255,.1)}',
+        '#chowaniec-notify-card .cn-ic{background:#f2f2f4;color:#111}#chowaniec-notify-card .cn-p{color:#a8a8b0}',
+        '#chowaniec-notify-card .cn-yes{background:#f2f2f4;color:#111}#chowaniec-notify-card .cn-no{color:#a8a8b0;border-color:rgba(255,255,255,.18)}}',
+        'html[data-theme="dark"] #chowaniec-notify-card{background:#1c1c20;color:#f2f2f4;border-color:rgba(255,255,255,.1)}',
+        'html[data-theme="dark"] #chowaniec-notify-card .cn-ic{background:#f2f2f4;color:#111}html[data-theme="dark"] #chowaniec-notify-card .cn-p{color:#a8a8b0}',
+        'html[data-theme="dark"] #chowaniec-notify-card .cn-yes{background:#f2f2f4;color:#111}html[data-theme="dark"] #chowaniec-notify-card .cn-no{color:#a8a8b0;border-color:rgba(255,255,255,.18)}',
+        'html[data-theme="light"] #chowaniec-notify-card{background:#fff;color:#111;border-color:rgba(0,0,0,.08)}',
+        'html[data-theme="light"] #chowaniec-notify-card .cn-ic{background:#111;color:#fff}html[data-theme="light"] #chowaniec-notify-card .cn-p{color:#555}',
+        'html[data-theme="light"] #chowaniec-notify-card .cn-yes{background:#111;color:#fff}html[data-theme="light"] #chowaniec-notify-card .cn-no{color:#555;border-color:rgba(0,0,0,.14)}'
+      ].join('');
+      document.head.appendChild(style);
+    }
+    const card = document.createElement('div');
+    card.id = 'chowaniec-notify-card';
+    card.className = page === 'group' ? 'at-top' : 'at-bottom';
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-label', 'Turn on notifications');
+    card.innerHTML = '<div class="cn-row"><div class="cn-ic" aria-hidden="true">🔔</div><div>' +
+      '<p class="cn-t">Get notified</p>' +
+      '<p class="cn-p cn-msg">Hear about new family messages and @mentions, even when the app is closed.</p></div></div>' +
+      '<div class="cn-actions"><button type="button" class="cn-no">Not now</button><button type="button" class="cn-yes">Turn on</button></div>';
+    document.body.appendChild(card);
+    promptEl = card;
+    const yes = card.querySelector('.cn-yes');
+    const no = card.querySelector('.cn-no');
+    const msg = card.querySelector('.cn-msg');
+    no.addEventListener('click', () => {
+      try { localStorage.setItem(PROMPT_PAUSE_KEY, String(Date.now() + PROMPT_DELAY_MS)); } catch (e) { /* ignore */ }
+      removePrompt();
+    });
+    yes.addEventListener('click', async () => {
+      yes.disabled = true;
+      no.disabled = true;
+      const result = await enablePush();   // this opens the browser's own "Allow notifications?" box
+      if (result === 'enabled') {
+        msg.textContent = 'Notifications are on ✓';
+        card.querySelector('.cn-actions').remove();
+        setTimeout(removePrompt, 1800);
+      } else if (result === 'denied') {
+        removePrompt();
+      } else {
+        msg.textContent = 'That didn’t work this time. You can try again from the bell, or on the Get the App page.';
+        yes.disabled = false;
+        no.disabled = false;
+        yes.textContent = 'Try again';
+      }
+    });
+  }
+
+  let promptTries = 0;
+  async function maybePrompt() {
+    try {
+      const page = promptPage();
+      if (!page || promptEl || promptPaused()) return;
+      if (!pushSupported() || Notification.permission !== 'default') return;
+      const user = window.getChowaniecUser ? window.getChowaniecUser() : null;
+      if (!user) {
+        // Not signed in yet (the passcode box may be showing): look again shortly.
+        if (promptTries++ < 30) setTimeout(maybePrompt, 2000);
+        return;
+      }
+      if ((await pushStatus()) === 'disabled') showPrompt(page);
+    } catch (e) {
+      // never get in the way of the page
+    }
+  }
+  window.addEventListener('chowaniec-pwa-change', () => {
+    if (promptEl && Notification.permission !== 'default') removePrompt();
+  });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(maybePrompt, 1500));
+  else setTimeout(maybePrompt, 1500);
 
   window.ChowaniecPWA = {
     isStandalone,

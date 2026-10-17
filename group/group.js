@@ -1590,6 +1590,7 @@
         else if (s === 'needs-install') { icon = 'bell-plus'; title = 'Install the app to get notifications'; }
         else if (s === 'denied') { icon = 'bell-off'; title = 'Notifications are blocked'; }
         else if (s === 'unsupported' || s === 'not-configured') { icon = 'bell-off'; title = 'Notifications unavailable'; }
+        else if (s === 'error') { icon = 'bell'; title = 'Couldn’t check notifications'; }
         btn.className = `icon-btn${s === 'enabled' ? ' on' : ''}`;
         btn.title = title;
         btn.setAttribute('aria-label', title);
@@ -1633,6 +1634,11 @@
         if (s === 'disabled') {
             return head('bell', 'Get notified') + p('Turn on notifications to hear about new messages and @mentions.') +
                 `<div class="np-actions">${pill('data-bell="enable"', 'Turn on notifications', true)}</div>`;
+        }
+        if (s === 'error') {
+            return head('bell', 'Couldn’t check notifications') +
+                p('We couldn’t reach the server just now. Check your connection and try again.') +
+                `<div class="np-actions">${pill('data-bell="check"', 'Try again', true)}</div>`;
         }
         if (s === 'not-configured') return head('bell-off', 'Not set up yet') + p('Notifications haven’t been switched on for the family site yet. Check back soon.');
         if (s === 'unsupported') {
@@ -1999,9 +2005,11 @@
             const row = e.target.closest('.msg-row[data-id]');
             if (!row || row.classList.contains('typing-row')) { g = null; return; }
             const bubble = e.target.closest('.bubble[data-bubble]');
+            // A double-tap on the empty space beside a bubble counts too (hearts the whole message).
+            const tapTarget = bubble || row.querySelector('.bubble[data-bubble]');
             const m = findMessage(row.dataset.id);
             g = {
-                id: row.dataset.id, row, bubble, x: e.clientX, y: e.clientY, t: Date.now(), mode: null, dx: 0,
+                id: row.dataset.id, row, bubble, tapTarget, x: e.clientX, y: e.clientY, t: Date.now(), mode: null, dx: 0,
                 canReply: !!m && !m._pending && m.kind !== 'system',
                 interactive: !!e.target.closest('a, .msg-img-btn, .reply-quote, .react-chip, .msg-status, .hover-actions')
             };
@@ -2055,10 +2063,14 @@
                     setTimeout(() => { suppressClick = false; }, 400);
                     setReply(findMessage(cur.id));
                 }
-            } else if (!cur.mode && !cancelled && cur.bubble && !cur.interactive && Date.now() - cur.t < 350 && cur.canReply) {
+            } else if (!cur.mode && !cancelled && cur.tapTarget && !cur.interactive && Date.now() - cur.t < 350 && cur.canReply) {
                 const now = Date.now();
                 if (lastTap && lastTap.id === cur.id && now - lastTap.t < 340 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
                     lastTap = null;
+                    // The browser still sends a "click" after this tap. By then the new ❤️ chip can sit under
+                    // the finger, so that click would press the chip and take the heart straight back off.
+                    suppressClick = true;
+                    setTimeout(() => { suppressClick = false; }, 450);
                     if (window.getSelection) { try { window.getSelection().removeAllRanges(); } catch (err) { /* ignore */ } }
                     doubleTapHeart(cur.id);
                 } else {
