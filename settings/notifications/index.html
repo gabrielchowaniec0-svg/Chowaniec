@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#000000">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <title>Notifications</title>
+    <script>
+        (function () {
+            var pref = 'auto';
+            try { pref = localStorage.getItem('chowaniec_theme') || localStorage.getItem('chowaniec_group_theme') || 'auto'; } catch (e) {}
+            var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+    <script src="/pwa.js" defer></script>
+    <!-- Tailwind is only used by the shared passcode box -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../../passwords.js"></script>
+    <script src="../../auth-gate.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+    <link rel="stylesheet" href="/settings/settings.css">
+</head>
+<body>
+<div id="app-root">
+    <header class="topbar"><div class="topbar-in">
+        <a class="back" href="/settings/" aria-label="Back to Settings">&#8592;</a>
+        <h1 class="serif">Notifications</h1>
+    </div></header>
+
+    <main class="wrap">
+        <!-- Turn on / status -->
+        <section class="card hero" id="status-card" aria-live="polite"></section>
+
+        <!-- What to hear about -->
+        <section class="card" aria-labelledby="h-what">
+            <h2 id="h-what">What to hear about</h2>
+            <p class="lead" style="margin-bottom:6px">This is your own choice and follows you to every device.</p>
+            <div role="radiogroup" aria-labelledby="h-what" id="what">
+                <label class="choice"><input type="radio" name="what" value="all">
+                    <span><span class="t" style="font-weight:500;display:block">Everything</span><span class="s" style="color:var(--muted);font-size:13px">New group messages, @mentions and replies from Chowaniec AI.</span></span></label>
+                <label class="choice"><input type="radio" name="what" value="mentions">
+                    <span><span class="t" style="font-weight:500;display:block">Only when I&rsquo;m mentioned</span><span class="s" style="color:var(--muted);font-size:13px">@you, @everyone and replies to you. No notice for ordinary messages.</span></span></label>
+                <label class="choice"><input type="radio" name="what" value="off">
+                    <span><span class="t" style="font-weight:500;display:block">Nothing</span><span class="s" style="color:var(--muted);font-size:13px">Stay signed up, but don&rsquo;t send me any notifications.</span></span></label>
+            </div>
+        </section>
+
+        <!-- Quiet hours -->
+        <section class="card" aria-labelledby="h-quiet">
+            <h2 id="h-quiet">Quiet hours</h2>
+            <div class="row">
+                <div class="grow"><div class="t"><label for="sw-quiet">Pause notifications at night</label></div>
+                    <div class="s">Nothing is sent to you during these hours. Messages are still waiting in the chat.</div></div>
+                <span class="switch"><input type="checkbox" id="sw-quiet" role="switch"><span class="track"></span></span>
+            </div>
+            <div id="quiet-times" class="hidden">
+                <div class="times">
+                    <label class="timefield" for="q-start">From<input type="time" id="q-start"></label>
+                    <label class="timefield" for="q-end">Until<input type="time" id="q-end"></label>
+                </div>
+                <p class="s" style="color:var(--muted);font-size:13px;margin-top:10px" id="q-zone"></p>
+            </div>
+        </section>
+
+        <!-- Devices -->
+        <section class="card devices" id="devices" aria-labelledby="h-dev">
+            <h2 id="h-dev">Your devices</h2>
+            <p class="lead">Phones and computers that get your notifications.</p>
+            <div id="dev-list"></div>
+        </section>
+    </main>
+</div>
+<script src="/settings/settings.js"></script>
+<script>
+(function () {
+    var S = window.ChowaniecSettings, $ = S.$, esc = S.esc;
+    var pwa = null, settings = null, zone = 'America/New_York';
+    try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || zone; } catch (e) {}
+
+    // ---------- status card ----------
+    function card(bell, title, text, extra) {
+        $('status-card').innerHTML = '<div class="bell" aria-hidden="true">' + bell + '</div><h3>' + title + '</h3><p>' + text + '</p>' + (extra || '');
+    }
+
+    function platformSteps(st) {
+        var plat = pwa.platform();
+        if (st === 'needs-install') {
+            return '<ol class="steps"><li>Open this website in <b>Safari</b>.</li><li>Tap the <b>Share</b> button, then <b>Add to Home Screen</b>.</li><li>Open Chowaniec from your home screen and come back to this page.</li></ol>' +
+                '<div class="actions"><a class="btn solid" href="/get-the-app/">Show me how to install</a></div>';
+        }
+        if (plat === 'ios') return '<ol class="steps"><li>Open the <b>Settings</b> app on your iPhone.</li><li>Scroll to <b>Notifications</b> and find <b>Chowaniec</b>.</li><li>Turn on <b>Allow Notifications</b>, then come back and refresh this page.</li></ol>';
+        if (plat === 'android') return '<ol class="steps"><li>Open the <b>lock icon</b> or <b>&#8942; menu</b> next to the web address.</li><li>Tap <b>Permissions</b> (or <b>Site settings</b>) and then <b>Notifications</b>.</li><li>Choose <b>Allow</b>, then refresh this page.</li></ol>';
+        return '<ol class="steps"><li>Click the <b>lock icon</b> next to the web address.</li><li>Find <b>Notifications</b> and switch it to <b>Allow</b>.</li><li>Refresh this page.</li></ol>';
+    }
+
+    async function paintStatus() {
+        var st;
+        try { st = await pwa.pushStatus(); } catch (e) { st = 'error'; }
+        var el = $('status-card');
+        if (st === 'disabled') {
+            card('&#128276;', 'Turn on notifications on this device?',
+                'You&rsquo;ll hear about new family messages and @mentions, even when the app is closed. Your browser will ask you to confirm.',
+                '<div class="actions"><button type="button" class="btn solid" id="btn-yes">Yes, turn them on</button></div>');
+            $('btn-yes').addEventListener('click', async function () {
+                var b = $('btn-yes');
+                b.disabled = true; b.textContent = 'Waiting for your browser…';
+                var r = await pwa.enablePush();   // opens the browser's own "Allow notifications?" box
+                if (r === 'enabled') {
+                    S.toast('Notifications are on ✓');
+                    sendTest(true);
+                } else if (r === 'denied') S.toast('Notifications were blocked. You can change that in your browser.', true);
+                else S.toast('That didn’t work. Please try again.', true);
+                await paintStatus(); await paintDevices();
+            });
+        } else if (st === 'enabled') {
+            card('&#9989;', 'Notifications are on', 'This device will get the notifications you choose below.',
+                '<div class="actions"><button type="button" class="btn" id="btn-test">Send me a test</button><button type="button" class="btn danger" id="btn-off">Turn off on this device</button></div>');
+            $('btn-test').addEventListener('click', function () { sendTest(false); });
+            $('btn-off').addEventListener('click', async function () {
+                $('btn-off').disabled = true;
+                await pwa.disablePush();
+                S.toast('Notifications are off on this device.');
+                await paintStatus(); await paintDevices();
+            });
+        } else if (st === 'denied') {
+            card('&#128683;', 'Notifications are blocked', 'Your browser is set to block notifications from Chowaniec, so the box can&rsquo;t appear. Switch it back on like this:', platformSteps(st));
+        } else if (st === 'needs-install') {
+            card('&#128241;', 'Install the app first', 'On iPhone and iPad, notifications only work after Chowaniec is added to your home screen.', platformSteps(st));
+        } else if (st === 'unsupported') {
+            card('&#128533;', 'This browser can&rsquo;t do notifications', 'Try Chrome, Edge, Firefox or Safari (added to your home screen on iPhone).');
+        } else if (st === 'not-configured') {
+            card('&#128679;', 'Notifications aren&rsquo;t set up on the server yet', 'The site owner still needs to finish setting them up. Nothing you can do here.');
+        } else {
+            card('&#9888;&#65039;', 'Couldn&rsquo;t check right now', 'Your connection or sign-in may have hiccuped.',
+                '<div class="actions"><button type="button" class="btn solid" id="btn-retry">Try again</button></div>');
+            $('btn-retry').addEventListener('click', paintStatus);
+        }
+    }
+
+    async function sendTest(quiet) {
+        try {
+            var r = await pwa.sendTestPush();
+            if (!quiet || r.sent) S.toast(r.sent ? 'Test sent — it should arrive in a moment.' : 'No device is signed up yet.', !r.sent);
+        } catch (e) { if (!quiet) S.toast(e.message, true); }
+    }
+
+    // ---------- choices (saved to the server) ----------
+    // Changes made close together are sent as one save, so a quick second tap never cancels the first.
+    var saveTimer = null, pending = { notifications: { quietHours: {} } };
+    function save(patch) {
+        var n = patch.notifications || {};
+        Object.keys(n).forEach(function (k) {
+            if (k === 'quietHours') Object.assign(pending.notifications.quietHours, n[k]);
+            else pending.notifications[k] = n[k];
+        });
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(async function () {
+            var send = pending;
+            pending = { notifications: { quietHours: {} } };
+            try {
+                var r = await S.api('/.netlify/functions/settings', { method: 'POST', body: { settings: send } });
+                settings = r.settings;
+                S.toast('Saved ✓');
+            } catch (e) { S.toast(e.message, true); }
+        }, 250);
+    }
+
+    function paintChoices() {
+        var n = settings.notifications;
+        document.querySelectorAll('input[name="what"]').forEach(function (r) { r.checked = r.value === n.messages; });
+        $('sw-quiet').checked = n.quietHours.on;
+        $('q-start').value = n.quietHours.start;
+        $('q-end').value = n.quietHours.end;
+        $('quiet-times').classList.toggle('hidden', !n.quietHours.on);
+        $('q-zone').textContent = 'Times use your time zone (' + n.quietHours.tz.replace(/_/g, ' ') + ').';
+    }
+
+    function wireChoices() {
+        $('what').addEventListener('change', function (e) {
+            if (e.target.name !== 'what') return;
+            settings.notifications.messages = e.target.value;
+            save({ notifications: { messages: e.target.value } });
+        });
+        $('sw-quiet').addEventListener('change', function (e) {
+            var on = e.target.checked;
+            settings.notifications.quietHours.on = on;
+            if (on) settings.notifications.quietHours.tz = zone;
+            $('quiet-times').classList.toggle('hidden', !on);
+            paintChoices();
+            save({ notifications: { quietHours: { on: on, tz: zone } } });
+        });
+        ['q-start', 'q-end'].forEach(function (id) {
+            $(id).addEventListener('change', function () {
+                var start = $('q-start').value, end = $('q-end').value;
+                if (!start || !end) return;
+                save({ notifications: { quietHours: { start: start, end: end, tz: zone } } });
+            });
+        });
+    }
+
+    // ---------- devices ----------
+    function deviceName(ua) {
+        ua = ua || '';
+        var os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android phone' : /Windows/.test(ua) ? 'Windows computer' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux computer' : 'Device';
+        var br = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) || /CriOS/.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+        return br ? os + ' · ' + br : os;
+    }
+
+    async function thisDeviceId() {
+        try {
+            var reg = await navigator.serviceWorker.ready;
+            var sub = await reg.pushManager.getSubscription();
+            if (!sub) return null;
+            var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sub.endpoint));
+            return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('').slice(0, 32);
+        } catch (e) { return null; }
+    }
+
+    async function paintDevices() {
+        var list = $('dev-list');
+        try {
+            var d = await S.api('/.netlify/functions/push?devices=1');
+            var mine = await thisDeviceId();
+            if (!d.devices.length) { list.innerHTML = '<p class="s" style="color:var(--muted)">No devices yet. Turn on notifications above to add this one.</p>'; return; }
+            list.innerHTML = d.devices.map(function (x) {
+                var when = x.savedAt ? new Date(x.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                return '<div class="dev"><div class="grow" style="flex:1;min-width:0"><div class="t" style="font-weight:500">' + esc(deviceName(x.userAgent)) + (x.id === mine ? ' <span class="pill">This device</span>' : '') + '</div>' +
+                    '<div class="s" style="color:var(--muted);font-size:13px">Added ' + esc(when) + '</div></div>' +
+                    '<button type="button" class="btn danger" data-remove="' + esc(x.id) + '">Remove</button></div>';
+            }).join('');
+        } catch (e) { list.innerHTML = '<p class="s" style="color:var(--muted)">Couldn&rsquo;t load your devices.</p>'; }
+    }
+
+    async function start() {
+        pwa = window.ChowaniecPWA;
+        $('dev-list').addEventListener('click', async function (e) {
+            var b = e.target.closest('[data-remove]');
+            if (!b) return;
+            b.disabled = true;
+            try {
+                if (b.dataset.remove === await thisDeviceId()) await pwa.disablePush();
+                else await S.api('/.netlify/functions/push', { method: 'DELETE', body: { id: b.dataset.remove } });
+                S.toast('Device removed.');
+            } catch (err) { S.toast(err.message, true); }
+            await paintDevices(); await paintStatus();
+        });
+        paintStatus();
+        paintDevices();
+        try {
+            var r = await S.api('/.netlify/functions/settings');
+            settings = r.settings;
+            paintChoices();
+            wireChoices();
+        } catch (e) { console.error('choices', e); S.toast('Couldn’t load your saved choices.', true); }
+        window.addEventListener('chowaniec-pwa-change', paintStatus);
+    }
+    S.whenSignedIn(start);
+})();
+</script>
+</body>
+</html>

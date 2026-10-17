@@ -8,6 +8,7 @@ const CHOWANIEC_PASSCODE_HASHES = {
   '67c6bc8bef67c7c78dc5f5e23afc08ec1ea8e93f3f8b601cb6269427105456d3': { name: 'Victoria', host: true },
   '152302fe54354121d6badc400637c3871e7ae994946de748e2991671544b42ca': { name: 'Amelia', host: false },
   '0d63a26561291d7cebf51511ef1c6d39048fd78a946a2c63f238bceb5e5b2caf': { name: 'Emilia', host: false },
+  'da9342ae5c97d5ad2a70a7dc38356b79716fbe9a6e28d56b6ac8607213dd70c4': { name: 'Nicole', host: true },
   'd22960ef32dd2b56ebdf0da3acde7ef46542579275473288628b7182c11b4798': { name: 'Guest', host: false }
 };
 

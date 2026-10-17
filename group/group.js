@@ -23,7 +23,8 @@
     ];
     const AI_NAME = 'Chowaniec AI';
     const PALETTE = 8;
-    const THEME_KEY = 'chowaniec_group_theme';
+    const THEME_KEY = 'chowaniec_theme';            // shared with Settings → Appearance
+    const OLD_THEME_KEY = 'chowaniec_group_theme';
 
     const state = {
         started: false,
@@ -1731,7 +1732,7 @@
 
     function readTheme() {
         try {
-            const v = localStorage.getItem(THEME_KEY);
+            const v = localStorage.getItem(THEME_KEY) || localStorage.getItem(OLD_THEME_KEY);
             return v === 'light' || v === 'dark' ? v : 'auto';
         } catch (e) {
             return 'auto';
@@ -1749,7 +1750,7 @@
     function setTheme(pref) {
         state.theme = pref === 'light' || pref === 'dark' ? pref : 'auto';
         try {
-            if (state.theme === 'auto') localStorage.removeItem(THEME_KEY);
+            if (state.theme === 'auto') { localStorage.removeItem(THEME_KEY); localStorage.removeItem(OLD_THEME_KEY); }
             else localStorage.setItem(THEME_KEY, state.theme);
         } catch (e) { /* storage blocked: still applies for this visit */ }
         applyTheme();

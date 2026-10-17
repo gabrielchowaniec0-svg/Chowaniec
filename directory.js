@@ -81,6 +81,15 @@ window.DIRECTORY_CONFIG = [
     description: "Relax with our spa services, available to book in advance."
   },
   {
+    id: "settings",
+    title: "Settings",
+    path: "/settings/",
+    localFallback: "./settings/index.html",
+    icon: "settings",
+    status: "Active",
+    description: "Your preferences, notifications, security and appearance."
+  },
+  {
     id: "app",
     title: "Get the App",
     path: "/get-the-app/",

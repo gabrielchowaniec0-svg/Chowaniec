@@ -244,7 +244,7 @@
       } else if (result === 'denied') {
         removePrompt();
       } else {
-        msg.textContent = 'That didn’t work this time. You can try again from the bell, or on the Get the App page.';
+        msg.textContent = 'That didn’t work this time. You can try again from Settings → Notifications.';
         yes.disabled = false;
         no.disabled = false;
         yes.textContent = 'Try again';
@@ -275,7 +275,62 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(maybePrompt, 1500));
   else setTimeout(maybePrompt, 1500);
 
+  // ---------- Appearance (Settings → Appearance) ----------
+  // Saved on this device. The theme is used by Group Chat and the Settings pages; "reduce animations"
+  // calms movement on every page.
+  const THEME_KEY = 'chowaniec_theme';
+  const MOTION_KEY = 'chowaniec_reduce_motion';
+  const readKey = (key) => { try { return localStorage.getItem(key); } catch (e) { return null; } };
+
+  function getTheme() {
+    const v = readKey(THEME_KEY) || readKey('chowaniec_group_theme');
+    return v === 'light' || v === 'dark' ? v : 'auto';
+  }
+
+  function applyTheme() {
+    const pref = getTheme();
+    const dark = pref === 'dark' || (pref === 'auto' && !!window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta && /^\/(group|settings)(\/|$)/.test(location.pathname)) meta.setAttribute('content', dark ? '#141417' : '#ffffff');
+  }
+
+  function setTheme(pref) {
+    try {
+      if (pref === 'light' || pref === 'dark') localStorage.setItem(THEME_KEY, pref);
+      else { localStorage.removeItem(THEME_KEY); localStorage.removeItem('chowaniec_group_theme'); }
+    } catch (e) { /* storage blocked: still applies for this visit */ }
+    applyTheme();
+  }
+
+  const getReduceMotion = () => readKey(MOTION_KEY) === '1';
+
+  function applyReduceMotion() {
+    let style = document.getElementById('chowaniec-reduce-motion');
+    if (getReduceMotion()) {
+      if (!style) {
+        style = document.createElement('style');
+        style.id = 'chowaniec-reduce-motion';
+        style.textContent = '*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}';
+        document.head.appendChild(style);
+      }
+    } else if (style) style.remove();
+  }
+
+  function setReduceMotion(on) {
+    try { if (on) localStorage.setItem(MOTION_KEY, '1'); else localStorage.removeItem(MOTION_KEY); } catch (e) { /* ignore */ }
+    applyReduceMotion();
+  }
+
+  applyReduceMotion();
+  if (window.matchMedia) {
+    const q = window.matchMedia('(prefers-color-scheme: dark)');
+    const onScheme = () => { if (getTheme() === 'auto' && /^\/settings(\/|$)/.test(location.pathname)) applyTheme(); };
+    if (q.addEventListener) q.addEventListener('change', onScheme);
+  }
+
   window.ChowaniecPWA = {
+    getTheme, setTheme, getReduceMotion, setReduceMotion,
     isStandalone,
     platform,
     canPromptInstall: () => !!installPrompt,

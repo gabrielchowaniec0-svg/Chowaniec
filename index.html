@@ -16,6 +16,8 @@
     <script src="passwords.js"></script>
     <!-- External Directory Grid Configuration File -->
     <script src="directory.js"></script>
+    <!-- Social media links (placeholders for now) -->
+    <script src="social.js"></script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -166,10 +168,24 @@
             <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
           </button>
           <button
+            onclick="handleMenuClick('social')"
+            class="w-full text-left px-4 py-3 rounded-2xl text-base font-medium text-gray-600 hover:text-black hover:bg-gray-50 transition-colors flex items-center justify-between"
+          >
+            <span>Social Media</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+          </button>
+          <button
             onclick="handleMenuClick('terms')"
             class="w-full text-left px-4 py-3 rounded-2xl text-base font-medium text-gray-600 hover:text-black hover:bg-gray-50 transition-colors flex items-center justify-between"
           >
             <span>Terms</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
+          </button>
+          <button
+            onclick="requestAccess({ type: 'redirect', target: '/settings/', localFallback: './settings/index.html' }); toggleMenu(false)"
+            class="w-full text-left px-4 py-3 rounded-2xl text-base font-medium text-gray-600 hover:text-black hover:bg-gray-50 transition-colors flex items-center justify-between"
+          >
+            <span>Settings</span>
             <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300"></i>
           </button>
         </nav>
@@ -257,66 +273,80 @@
         <div class="text-center max-w-xl mx-auto">
           <h1 class="text-4xl font-serif mb-3 text-black">Our Team</h1>
           <p class="text-gray-400 font-light text-base">
-            The people leading our departments and managing services.
+            The people who run Chowaniec&rsquo;s social media, from oldest to youngest.
           </p>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          <div
-            class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4"
-          >
-            <div
-              class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold"
-            >
-              G
+        <div class="space-y-4">
+          <h2 class="text-xs font-mono uppercase tracking-widest text-gray-400 font-medium">Heads &middot; Social Media Management</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          <div class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4">
+            <div class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold">N</div>
+            <div>
+              <h3 class="text-lg font-medium text-black">Nicole Chowaniec</h3>
+              <p class="text-xs font-mono text-gray-400">Head of Social Media</p>
             </div>
+            <p class="text-gray-400 font-light text-sm leading-relaxed">Manages the family&rsquo;s social media and guides the team, sharing leadership equally with the other heads.</p>
+            <div class="flex flex-wrap gap-1.5"><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Instagram</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Facebook</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">YouTube</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">TikTok</span></div>
+          </div>
+          <div class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4">
+            <div class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold">V</div>
+            <div>
+              <h3 class="text-lg font-medium text-black">Vicky Chowaniec</h3>
+              <p class="text-xs font-mono text-gray-400">Head of Social Media</p>
+            </div>
+            <p class="text-gray-400 font-light text-sm leading-relaxed">Manages the family&rsquo;s social media and guides the team, sharing leadership equally with the other heads.</p>
+            <div class="flex flex-wrap gap-1.5"><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Instagram</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Facebook</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">YouTube</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">TikTok</span></div>
+          </div>
+          <div class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4">
+            <div class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold">G</div>
             <div>
               <h3 class="text-lg font-medium text-black">Gabriel Chowaniec</h3>
-              <p class="text-xs font-mono text-gray-400">
-                Founder
-              </p>
+              <p class="text-xs font-mono text-gray-400">Head of Social Media</p>
             </div>
-            <p class="text-gray-400 font-light text-sm leading-relaxed">
-              Directs lower rankes staff and manages everything with the foundership team.
-            </p>
+            <p class="text-gray-400 font-light text-sm leading-relaxed">Manages the family&rsquo;s social media and guides the team, sharing leadership equally with the other heads.</p>
+            <div class="flex flex-wrap gap-1.5"><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Instagram</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Facebook</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">YouTube</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">TikTok</span></div>
           </div>
-
-          <div
-            class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4"
-          >
-            <div
-              class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold"
-            >
-              V
-            </div>
-            <div>
-              <h3 class="text-lg font-medium text-black">Victoria Chowaniec</h3>
-              <p class="text-xs font-mono text-gray-400">
-                Co-Founder
-              </p>
-            </div>
-            <p class="text-gray-400 font-light text-sm leading-relaxed">
-              Plans ideas and designs everything from our hotels to our cinema.
-            </p>
-          </div>
-
-          <div
-            class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4"
-          >
-            <div
-              class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold"
-            >
-              L
-            </div>
-            <div>
-              <h3 class="text-lg font-medium text-black">Liliana Chowaniec</h3>
-              <p class="text-xs font-mono text-gray-400">Employee</p>
-            </div>
-            <p class="text-gray-400 font-light text-sm leading-relaxed">
-              Acts in movies and works at our luxurious hotels and spa.
-            </p>
           </div>
         </div>
+
+        <div class="space-y-4">
+          <h2 class="text-xs font-mono uppercase tracking-widest text-gray-400 font-medium">Social Media Team</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4">
+            <div class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold">L</div>
+            <div>
+              <h3 class="text-lg font-medium text-black">Liliana Chowaniec</h3>
+              <p class="text-xs font-mono text-gray-400">Social Media Team</p>
+            </div>
+            <p class="text-gray-400 font-light text-sm leading-relaxed">Creates and posts on the family&rsquo;s social media accounts.</p>
+            <div class="flex flex-wrap gap-1.5"><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Instagram</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Facebook</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">YouTube</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">TikTok</span></div>
+          </div>
+          <div class="bg-white p-8 rounded-3xl border border-gray-100 space-y-4">
+            <div class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center font-serif text-lg text-black font-semibold">A</div>
+            <div>
+              <h3 class="text-lg font-medium text-black">Amelia Chowaniec</h3>
+              <p class="text-xs font-mono text-gray-400">Social Media Team</p>
+            </div>
+            <p class="text-gray-400 font-light text-sm leading-relaxed">Creates and posts on the family&rsquo;s social media accounts.</p>
+            <div class="flex flex-wrap gap-1.5"><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Instagram</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">Facebook</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">YouTube</span><span class="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-mono text-gray-500">TikTok</span></div>
+          </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SOCIAL MEDIA VIEW -->
+      <section
+        id="view-social"
+        class="tab-view hidden max-w-4xl mx-auto space-y-12 fade-in"
+      >
+        <div class="text-center max-w-xl mx-auto">
+          <h1 class="text-4xl font-serif mb-3 text-black">Social Media</h1>
+          <p class="text-gray-400 font-light text-base">
+            Find Chowaniec on your favorite platforms.
+          </p>
+        </div>
+        <div id="social-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-6"></div>
       </section>
 
       <!-- TERMS VIEW -->
@@ -481,6 +511,23 @@
         lucide.createIcons();
       }
 
+      // --- SOCIAL MEDIA LINKS (from social.js) ---
+      function renderSocialGrid() {
+        const grid = document.getElementById('social-grid');
+        const items = window.SOCIAL_CONFIG || [];
+        const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        grid.innerHTML = items.map((item) => `
+          <a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer"
+             class="bg-white p-8 rounded-3xl border border-gray-100 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-200/50 transition-all flex items-center justify-between gap-4">
+            <div>
+              <h3 class="text-lg font-medium text-black">${esc(item.name)}</h3>
+              <p class="text-gray-400 font-light text-sm leading-relaxed">${esc(item.blurb)}</p>
+            </div>
+            <span class="w-10 h-10 shrink-0 rounded-full bg-gray-50 text-black flex items-center justify-center"><i data-lucide="arrow-up-right" class="w-4 h-4"></i></span>
+          </a>`).join('');
+        lucide.createIcons();
+      }
+
       function isAuthenticated() {
         return sessionStorage.getItem('chowaniec_authenticated') === 'true';
       }
@@ -596,6 +643,7 @@
 
       window.addEventListener('DOMContentLoaded', () => {
         renderDirectoryGrid();
+        renderSocialGrid();
         updateLockBtn();
       });
     </script>
