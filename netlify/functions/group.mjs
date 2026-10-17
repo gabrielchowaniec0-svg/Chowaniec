@@ -5,6 +5,11 @@
 //   GET ?since=<id>          -> { messages }            newer than id
 //   GET ?before=<id>         -> { messages, hasMore }   up to 50 older
 //   GET ?media=<mediaId>     -> image bytes (works with the sign-in cookie, for <img>)
+//   GET ?thread=<id>         -> { root, replies }      a thread under one message
+//   GET ?search=words&user=&from=&to=  -> { hits, complete }  search this chat's history
+//   GET ?stickers=1          -> { stickers }
+//   POST { action: 'sticker', id, replyTo? } | { action:'catchup' } -> { message } | { summary }
+//   POST { text, thread: <rootId> }          -> { message }  a reply inside a thread
 //   GET ?scheduled=1         -> { scheduled }           the caller's scheduled messages
 //   POST { text, image?, replyTo? }          -> { message }  (notifies others; @AI gets a reply)
 //   POST { action: 'poll', question, options: [..], multi?, replyTo? } -> { message }
@@ -23,9 +28,11 @@ import {
   isMessageId, latest, since, before, getMessage, getImage, postMessage, deleteMessage,
   toggleReaction, touchPresence, setTyping, clearTyping, setRead, listPresence,
   getPinned, pinMessage, unpin, saveAudio, MAX_VOICE_SECONDS, buildPoll, votePoll, closePoll,
-  scheduleMessage, listScheduled, cancelScheduled, nextScheduledAt, deliverDue
+  scheduleMessage, listScheduled, cancelScheduled, nextScheduledAt, deliverDue,
+  STICKERS, stickerById, threadRoot, listThread, searchMessages
 } from '../lib/group-store.mjs';
 import { publishMessage } from '../lib/group-post.mjs';
+import { catchUpSummary } from '../lib/catch-up.mjs';
 import { analyzeMessage } from '../lib/smart-message.mjs';
 import { createEvent, describeWhen } from '../lib/calendar-store.mjs';
 import { resolveRoom, roomsFor, canAccessRoom } from '../lib/rooms.mjs';
@@ -69,6 +76,21 @@ export default async (req, context) => {
           });
         }
         return new Response(image.bytes, { headers });
+      }
+      if (url.searchParams.get('stickers')) return json(200, { stickers: STICKERS });
+      const threadId = url.searchParams.get('thread');
+      if (threadId) {
+        if (!isMessageId(threadId)) return json(400, { error: 'Invalid thread.' });
+        return json(200, await listThread(threadId, room));
+      }
+      if (url.searchParams.get('search') !== null || url.searchParams.get('user') || url.searchParams.get('from')) {
+        const date = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
+        const result = await searchMessages(room, {
+          q: (url.searchParams.get('search') || '').slice(0, 100),
+          user: url.searchParams.get('user') || '',
+          from: date(url.searchParams.get('from')), to: date(url.searchParams.get('to'))
+        });
+        return json(200, { hits: result.hits, complete: result.complete });
       }
       if (url.searchParams.get('scheduled')) return json(200, { scheduled: await listScheduled(user.name, room) });
       const sinceId = url.searchParams.get('since');
@@ -150,11 +172,25 @@ export default async (req, context) => {
       if (duration > MAX_VOICE_SECONDS) return json(400, { error: 'Voice messages can be up to 5 minutes.' });
       const mediaId = await saveAudio(body.audio, room);
       const message = await postMessage({
-        author: user.name, room, text: '🎤 Voice message', voice: { id: mediaId, duration },
+        author: user.name, room, text: '🎤 Voice message',
+        voice: { id: mediaId, duration, ...(String(body.transcript || '').trim() ? { transcript: String(body.transcript).trim().slice(0, 1000) } : {}) },
         replyTo: isMessageId(body.replyTo) ? body.replyTo : null
       });
       context.waitUntil(publishMessage(message));
       return json(200, { message });
+    }
+    if (body.action === 'sticker') {
+      const sticker = stickerById(String(body.id || ''));
+      if (!sticker) return json(400, { error: 'Unknown sticker.' });
+      const message = await postMessage({
+        author: user.name, room, text: `${sticker.emoji} ${sticker.label}`, sticker: sticker.id,
+        replyTo: isMessageId(body.replyTo) ? body.replyTo : null
+      });
+      context.waitUntil(publishMessage(message));
+      return json(200, { message });
+    }
+    if (body.action === 'catchup') {
+      return json(200, await catchUpSummary(user, room, body.since));
     }
     if (body.action === 'schedule') {
       const scheduled = await scheduleMessage({ user: user.name, room, text: body.text, replyTo: body.replyTo, sendAt: body.sendAt });
@@ -174,7 +210,13 @@ export default async (req, context) => {
     }
 
     // Smart detect (plain rules, no AI): plans become calendar events and group questions become polls.
-    const smart = body.smart === false || body.image ? null : analyzeMessage(body.text);
+    let thread = null;
+    if (body.thread) {
+      if (!isMessageId(body.thread)) return json(400, { error: 'Invalid thread.' });
+      await threadRoot(body.thread, room);
+      thread = body.thread;
+    }
+    const smart = body.smart === false || body.image || thread ? null : analyzeMessage(body.text);
     if (smart && (smart.event || smart.polls.length)) {
       const posted = [];
       const replyTo = isMessageId(body.replyTo) ? body.replyTo : null;
@@ -208,6 +250,7 @@ export default async (req, context) => {
       room,
       text: body.text,
       image: body.image || null,
+      thread,
       replyTo: isMessageId(body.replyTo) ? body.replyTo : null
     });
     await clearTyping(user.name, room);

@@ -19,6 +19,27 @@ const MAX_AUDIO_BYTES = 2.5 * 1024 * 1024;
 export const MAX_VOICE_SECONDS = 300;
 export const MAX_SCHEDULED_PER_USER = 20;
 
+// The family sticker pack: big picture + a short label. Ids are what gets stored and sent.
+export const STICKERS = [
+  { id: 'bravo', emoji: '👏', label: 'Bravo!' },
+  { id: 'break-a-leg', emoji: '🎭', label: 'Break a leg!' },
+  { id: 'curtain-up', emoji: '🎬', label: 'Curtain up!' },
+  { id: 'standing-o', emoji: '🙌', label: 'Standing ovation' },
+  { id: 'on-my-way', emoji: '🚗', label: 'On my way' },
+  { id: 'running-late', emoji: '⏰', label: 'Running late' },
+  { id: 'dinner', emoji: '🍝', label: 'Dinner time' },
+  { id: 'love-you', emoji: '❤️', label: 'Love you' },
+  { id: 'thank-you', emoji: '🙏', label: 'Thank you' },
+  { id: 'congrats', emoji: '🎉', label: 'Congrats!' },
+  { id: 'need-help', emoji: '🆘', label: 'Need a hand' },
+  { id: 'good-night', emoji: '🌙', label: 'Good night' },
+  { id: 'good-morning', emoji: '☀️', label: 'Good morning' },
+  { id: 'rehearsal', emoji: '🎤', label: 'Rehearsal time' },
+  { id: 'hug', emoji: '🤗', label: 'Big hug' },
+  { id: 'cheers', emoji: '🥂', label: 'Cheers!' }
+];
+export const stickerById = (id) => STICKERS.find((x) => x.id === id) || null;
+
 const messages = () => getStore({ name: 'group-chat', consistency: 'strong' });
 const media = () => getStore({ name: 'group-media', consistency: 'strong' });
 
@@ -129,9 +150,9 @@ export async function getImage(id) {
 }
 
 // Stores a message and returns it. `author` is a family name or AI_NAME.
-export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, onBehalfOf, room = DEFAULT_ROOM }) {
+export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, onBehalfOf, sticker, thread, room = DEFAULT_ROOM }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
-  if (!clean && !image && !poll && !voice) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
+  if (!clean && !image && !poll && !voice && !sticker) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
 
   let reply = null;
   if (replyTo) {
@@ -153,10 +174,76 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user',
     ...(poll ? { poll } : {}),
     ...(voice ? { voice } : {}),
     ...(link ? { link } : {}),
-    ...(onBehalfOf ? { onBehalfOf } : {})
+    ...(onBehalfOf ? { onBehalfOf } : {}),
+    ...(sticker ? { sticker } : {}),
+    ...(thread ? { thread } : {})
   };
   await messages().setJSON(keyOf(message.id, room), message, { onlyIfNew: true });
+  if (thread) await bumpThread(thread, room, author, message.createdAt);
   return message;
+}
+
+// --- Threads: side conversations under one message ---
+// A reply in a thread is a normal message with message.thread = <root id>. The root keeps threadCount and threadLast.
+
+// Checks that `rootId` can have a thread (it exists in this chat and is itself not a thread reply).
+export async function threadRoot(rootId, room = DEFAULT_ROOM) {
+  const found = await getMessage(rootId, room);
+  if (!found || found.message.thread || found.message.kind === 'system') throw Object.assign(new Error('That message can’t have a thread.'), { status: 404 });
+  return found.message;
+}
+
+async function bumpThread(rootId, room, user, at) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const found = await getMessage(rootId, room);
+    if (!found) return;
+    const root = found.message;
+    root.threadCount = (root.threadCount || 0) + 1;
+    root.threadLast = { user, at };
+    const { modified } = await messages().setJSON(keyOf(rootId, room), root, { onlyIfMatch: found.etag });
+    if (modified) return;
+  }
+}
+
+export async function listThread(rootId, room = DEFAULT_ROOM) {
+  const root = await threadRoot(rootId, room);
+  const replies = (await since(rootId, 500, room)).filter((m) => m.thread === rootId);
+  return { root, replies };
+}
+
+// Who is in a thread: the person who started it and everyone who has replied.
+export async function threadParticipants(rootId, room = DEFAULT_ROOM) {
+  try {
+    const { root, replies } = await listThread(rootId, room);
+    return [...new Set([root.user, ...replies.map((m) => m.user)])];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Looks through a chat's history for messages matching the words, optionally from one person and between two dates.
+export async function searchMessages(room, { q = '', user = '', from = '', to = '', limit = 100 } = {}) {
+  const words = String(q).toLowerCase().split(/\s+/).filter(Boolean);
+  const hits = [];
+  let scanned = 0;
+  const allDays = await days(room);
+  for (const day of allDays) {
+    if (to && day > to) continue;
+    if (from && day < from) break;
+    const ids = (await idsForDay(day, room)).reverse();
+    const list = await load(ids, room);
+    scanned += list.length;
+    for (const m of list.reverse()) {
+      if (m.kind === 'system') continue;
+      if (user && m.user !== user) continue;
+      const hay = `${m.text || ''} ${(m.voice && m.voice.transcript) || ''}`.toLowerCase();
+      if (words.length && !words.every((w) => hay.includes(w))) continue;
+      hits.push(m);
+      if (hits.length >= limit) return { hits, scanned, complete: false };
+    }
+    if (scanned > 3000) return { hits, scanned, complete: false };
+  }
+  return { hits, scanned, complete: true };
 }
 
 export async function deleteMessage(id, room = DEFAULT_ROOM) {
@@ -187,9 +274,17 @@ export async function toggleReaction(id, user, emoji, room = DEFAULT_ROOM) {
 // Push notifications for a new message: mentioned people get "X mentioned you",
 // everyone else a normal message notification. The author is never notified.
 export async function notifyMessage(message) {
-  const preview = message.text ? message.text.slice(0, 140) : 'Sent a photo';
+  const preview = message.text ? message.text.slice(0, 140) : message.sticker ? 'Sent a sticker' : 'Sent a photo';
   const body = message.image && message.text ? `📷 ${preview}` : preview;
-  const everyone = roomMembers(message.room || DEFAULT_ROOM);
+  let everyone = roomMembers(message.room || DEFAULT_ROOM);
+  let threadTitle = '';
+  if (message.thread) {
+    // A thread reply goes to the people in that thread (and anyone @mentioned), not the whole chat.
+    const inThread = await threadParticipants(message.thread, message.room || DEFAULT_ROOM);
+    const mentionedNames = message.mentions.includes('everyone') ? everyone : message.mentions;
+    everyone = everyone.filter((n) => inThread.includes(n) || mentionedNames.includes(n));
+    threadTitle = ' in a thread';
+  }
   const mentioned = message.mentions.includes('everyone')
     ? everyone
     : message.mentions.filter((m) => everyone.includes(m));
@@ -198,7 +293,7 @@ export async function notifyMessage(message) {
   const url = message.room && message.room !== DEFAULT_ROOM ? `/group/?room=${message.room}` : '/group/';
   await Promise.all([
     mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: skip, kind: 'mention' }) : 0,
-    others.length ? sendPush(others, { title: message.user, body, url }, { exclude: skip, kind: 'message' }) : 0
+    others.length ? sendPush(others, { title: `${message.user}${threadTitle}`, body, url }, { exclude: skip, kind: 'message' }) : 0
   ]);
 }
 
@@ -219,7 +314,7 @@ export function transcriptOf(list) {
     const when = new Date(m.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: familyTimeZone() });
     const reply = m.replyTo ? ` (replying to ${m.replyTo.user}: "${m.replyTo.text.slice(0, 80)}")` : '';
     const poll = m.poll ? ` [poll options: ${m.poll.options.map((o) => `${o.text} (${o.votes.length})`).join(', ')}${m.poll.closed ? '; closed' : ''}]` : '';
-    return `[${when}] ${m.user}${reply}: ${m.text || ''}${m.image ? ' [photo]' : ''}${m.voice ? ' [voice message]' : ''}${poll}`;
+    return `[${when}] ${m.user}${reply}: ${m.text || ''}${m.image ? ' [photo]' : ''}${m.voice ? ` [voice message${m.voice.transcript ? `: "${m.voice.transcript.slice(0, 300)}"` : ''}]` : ''}${m.sticker ? ' [sticker]' : ''}${poll}`;
   }).join('\n');
 }
 

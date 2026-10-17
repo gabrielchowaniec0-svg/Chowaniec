@@ -76,7 +76,7 @@
         confirmed: new Set(),
         caret: { start: 0, end: 0 },
         sheetOpen: false,
-        search: { q: '', busy: false, timer: null },
+        search: { q: '', busy: false, timer: null, user: '', from: '', to: '', remote: null },
         theme: 'auto'
     };
 
@@ -414,6 +414,12 @@
                 if (!isMine(m)) freshFromOthers++;
                 if (m.kind === 'ai') aiArrived = true;
             }
+            if (m.thread && !state.byId.has(m.id)) {
+                const root = state.byId.get(m.thread);
+                if (root && (!root.threadLast || String(root.threadLast.at) < String(m.createdAt))) {
+                    state.byId.set(root.id, { ...root, threadCount: (root.threadCount || 0) + 1, threadLast: { user: m.user, at: m.createdAt } });
+                }
+            }
             state.byId.set(m.id, m);
         });
         if (aiArrived) state.aiThinkingUntil = 0;
@@ -442,6 +448,13 @@
     function applyExtras(data) {
         if (!data) return;
         if (Array.isArray(data.presence)) state.presence = data.presence.filter((p) => p && p.user);
+        if (!state.openRead && Array.isArray(data.presence)) {
+            const mine = state.presence.find((p) => sameName(p.user, myName()));
+            if (mine) {
+                state.openRead = { id: mine.lastReadId || null };
+                window.dispatchEvent(new Event('chowaniec-group-opened'));
+            }
+        }
         if (Object.prototype.hasOwnProperty.call(data, 'pinned')) state.pinned = data.pinned || null;
         renderHeader();
         renderPinned();
@@ -567,7 +580,7 @@
         const avatar = mine ? '' : `<div class="av-slot">${flags.end ? avatarHtml(m.user, '', { ai: m.kind === 'ai' }) : ''}</div>`;
         const swipe = m._pending ? '' : `<span class="swipe-ic" aria-hidden="true"><i data-lucide="reply"></i></span>`;
 
-        return `<div class="${classes.join(' ')}" data-id="${escapeHtml(m.id)}">${swipe}${avatar}<div class="msg-col">${name}<div class="${bubbleCls.join(' ')}" data-bubble="1" data-id="${escapeHtml(m.id)}" title="${escapeHtml(fullTime(t))}">${inner}</div>${reacts}${status}</div>${m._pending ? '' : hoverActionsHtml(m.id)}</div>`;
+        return `<div class="${classes.join(' ')}" data-id="${escapeHtml(m.id)}">${swipe}${avatar}<div class="msg-col">${name}<div class="${bubbleCls.join(' ')}" data-bubble="1" data-id="${escapeHtml(m.id)}" title="${escapeHtml(fullTime(t))}">${inner}</div>${reacts}${m.threadCount ? `<button type="button" class="thread-chip" data-x="thread-open" data-id="${escapeHtml(m.id)}"><i data-lucide="messages-square"></i>${m.threadCount === 1 ? '1 reply' : m.threadCount + ' replies'}</button>` : ''}${status}</div>${m._pending ? '' : hoverActionsHtml(m.id)}</div>`;
     }
 
     function pendingAsMessage(p) {
@@ -609,7 +622,7 @@
     }
 
     function buildItems() {
-        const all = state.messages.concat(state.pending.map(pendingAsMessage));
+        const all = state.messages.concat(state.pending.map(pendingAsMessage)).filter((m) => !m.thread);
         const items = [];
         const groupKey = (m) => (m.kind === 'system' ? null : `${m.kind || 'user'}|${String(m.user || '').toLowerCase()}`);
         const continues = (a, b) => !!a && !!b && a.kind !== 'system' && b.kind !== 'system' &&
@@ -635,7 +648,7 @@
                 end: !continues(m, next),
                 mentionsMe: mentionsMe(m)
             };
-            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, m.onBehalfOf, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice]);
+            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, m.onBehalfOf, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice, m.sticker, m.threadCount]);
             items.push({ key: `m:${m.id}`, sig, t, id: m.id, html: messageHtml(m, flags) });
             if (receipt && receipt.id === m.id) {
                 items.push({ key: 'receipt', sig: 'r|' + receipt.seen.join(','), html: receiptHtml(receipt) });
@@ -1786,6 +1799,7 @@
         closeEmoji();
         state.sheetOpen = true;
         renderSheet();
+        fillSearchUsers();
         renderThemeSeg();
         show($('sheet-backdrop'), 'block');
         const sheet = $('info-sheet');
@@ -1888,12 +1902,39 @@
         return s;
     }
 
+    function fillSearchUsers() {
+        const sel = $('search-user');
+        if (!sel || sel.options.length > 1) return;
+        state.people.forEach((p) => { const n = typeof p === 'string' ? p : p.name; if (n && !isAiName(n)) sel.add(new Option(n, n)); });
+    }
+    const filtersOn = () => !!(state.search.user || state.search.from || state.search.to);
+    const filterKey = () => [state.search.q.trim().toLowerCase(), state.search.user, state.search.from, state.search.to].join('|');
+
+    // With a person or dates chosen we ask the server, which looks through the whole history.
+    async function searchRemote() {
+        const key = filterKey();
+        if (!filtersOn()) { state.search.remote = null; renderSearch(); return; }
+        state.search.remote = { key, hits: null };
+        renderSearch();
+        const qs = new URLSearchParams({ search: state.search.q.trim(), user: state.search.user, from: state.search.from, to: state.search.to });
+        try {
+            const data = await api(`${API}?${qs}`);
+            if (state.search.remote && state.search.remote.key === key) state.search.remote = { key, hits: data.hits || [], complete: data.complete !== false };
+        } catch (e) {
+            state.search.remote = null;
+            toast(e.message || 'Search failed.', 'error');
+        }
+        if (state.sheetOpen) renderSearch();
+    }
+
     function renderSearch() {
         const q = state.search.q.trim().toLowerCase();
         const res = $('search-results');
         const sections = $('sheet-sections');
         $('search-field').classList.toggle('has-value', !!state.search.q);
-        if (!q) {
+        $('search-filters').classList.toggle('has-filter', filtersOn());
+        fillSearchUsers();
+        if (!q && !filtersOn()) {
             res.classList.add('hidden');
             res.innerHTML = '';
             sections.classList.remove('hidden');
@@ -1901,16 +1942,24 @@
         }
         sections.classList.add('hidden');
         res.classList.remove('hidden');
-        const hits = searchMatches(q);
+        const remote = filtersOn() ? state.search.remote : null;
+        if (filtersOn() && (!remote || remote.hits === null)) {
+            res.innerHTML = `<div class="search-foot"><span class="inline-flex items-center gap-2"><i data-lucide="loader-circle" class="w-4 h-4 spin"></i> Searching the whole chat…</span></div>`;
+            icons(res);
+            return;
+        }
+        const hits = remote ? remote.hits : searchMatches(q);
         const oldest = state.messages[0];
         let html = `<div class="sec-title"><span>${hits.length === 1 ? '1 result' : hits.length + ' results'}</span></div>`;
         if (hits.length) {
-            html += `<div class="card">${hits.slice(0, 200).map((m) => `<button type="button" class="hit" data-act="search-hit" data-id="${escapeHtml(m.id)}">${avatarHtml(m.user, 'av-md', { ai: m.kind === 'ai' })}<span class="min-w-0 flex-1"><span class="top"><b class="${m.kind === 'ai' ? '' : 'acc-text ' + personClass(m.user)}">${escapeHtml(displayName(m))}</b><time>${escapeHtml(shortWhen(ts(m)))}</time></span><span class="tx">${highlight(hitSnippet(m.text, q), q)}</span></span></button>`).join('')}</div>`;
+            html += `<div class="card">${hits.slice(0, 200).map((m) => `<button type="button" class="hit" data-act="search-hit" data-id="${escapeHtml(m.id)}">${avatarHtml(m.user, 'av-md', { ai: m.kind === 'ai' })}<span class="min-w-0 flex-1"><span class="top"><b class="${m.kind === 'ai' ? '' : 'acc-text ' + personClass(m.user)}">${escapeHtml(displayName(m))}</b><time>${escapeHtml(shortWhen(ts(m)))}</time></span><span class="tx">${q ? highlight(hitSnippet(m.text, q), q) : escapeHtml(hitSnippet(m.text, q))}</span></span></button>`).join('')}</div>`;
         } else {
             html += `<div class="card"><p class="muted-note">No messages match “${escapeHtml(state.search.q.trim())}”${state.hasMore ? ' in the loaded history yet' : ''}.</p></div>`;
         }
         html += `<div class="search-foot">`;
-        if (state.search.busy) {
+        if (remote) {
+            html += `<span>${remote.complete ? 'Searched the whole chat' : 'Showing the newest matches'}</span>`;
+        } else if (state.search.busy) {
             html += `<span class="inline-flex items-center gap-2"><i data-lucide="loader-circle" class="w-4 h-4 spin"></i> Searching older messages…</span>`;
         } else if (state.hasMore) {
             html += `<span>Searched back to ${escapeHtml(oldest ? dayLabel(ts(oldest)) : 'the start')}</span><button type="button" class="btn btn-ghost" data-act="search-older"><i data-lucide="history"></i>Search older messages</button>`;
@@ -2251,7 +2300,18 @@
             state.search.q = si.value;
             $('search-field').classList.toggle('has-value', !!si.value);
             clearTimeout(state.search.timer);
-            state.search.timer = setTimeout(renderSearch, 120);
+            state.search.timer = setTimeout(filtersOn() ? searchRemote : renderSearch, filtersOn() ? 350 : 120);
+        });
+        const onFilter = () => {
+            state.search.user = $('search-user').value;
+            state.search.from = $('search-from').value;
+            state.search.to = $('search-to').value;
+            searchRemote();
+        };
+        ['search-user', 'search-from', 'search-to'].forEach((id) => $(id).addEventListener('change', onFilter));
+        $('search-filter-clear').addEventListener('click', () => {
+            $('search-user').value = ''; $('search-from').value = ''; $('search-to').value = '';
+            onFilter();
         });
         si.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(state.search.timer); renderSearch(); si.blur(); } });
         $('search-clear').addEventListener('click', () => { si.value = ''; state.search.q = ''; renderSearch(); si.focus(); });
