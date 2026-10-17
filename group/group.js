@@ -626,7 +626,7 @@
                 items.push({ key: `day:${dayKey(t)}`, sig: label, html: `<div class="day-sep" role="separator"><span>${escapeHtml(label)}</span></div>` });
             }
             if (m.kind === 'system') {
-                items.push({ key: `m:${m.id}`, sig: `sys|${m.text}`, t, html: `<div class="sys-row" data-id="${escapeHtml(m.id)}"><span>${formatText(m.text, m.mentions)}</span></div>` });
+                items.push({ key: `m:${m.id}`, sig: `sys|${m.text}|${m.link ? m.link.href : ''}`, t, html: `<div class="sys-row" data-id="${escapeHtml(m.id)}"><span>${formatText(m.text, m.mentions)}${m.link && /^\/[a-z]/.test(m.link.href || '') ? ` <a class="sys-link" href="${escapeHtml(m.link.href)}">${escapeHtml(m.link.label || 'Open')}</a>` : ''}</span></div>` });
                 continue;
             }
             const flags = {
@@ -1073,14 +1073,18 @@
         p.status = 'sending';
         render('auto');
         const body = { text: p.text };
+        try { if (localStorage.getItem('chowaniec_group_smart') === 'off') body.smart = false; } catch (e) { /* ignore */ }
         if (p.imageData) body.image = p.imageData;
         if (p.replyTo) body.replyTo = p.replyTo.id;
         try {
             const data = await api(API, { method: 'POST', body });
             state.pending = state.pending.filter((x) => x !== p);
             if (data && data.message) {
-                state.confirmed.add(data.message.id);
-                upsert([data.message]);
+                const all = Array.isArray(data.messages) && data.messages.length ? data.messages : [data.message];
+                all.forEach((m) => state.confirmed.add(m.id));
+                upsert(all);
+                const last = all[all.length - 1];
+                if (last && (!state.latestId || last.id > state.latestId)) state.latestId = last.id;
             }
             render('auto');
         } catch (e) {
