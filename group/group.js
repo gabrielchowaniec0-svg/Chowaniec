@@ -648,7 +648,7 @@
                 end: !continues(m, next),
                 mentionsMe: mentionsMe(m)
             };
-            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, m.onBehalfOf, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice, m.sticker, m.threadCount]);
+            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, m.onBehalfOf, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice, m.sticker, m.threadCount, m.sheet, window.GroupExtras && window.GroupExtras.sig ? window.GroupExtras.sig(m) : '']);
             items.push({ key: `m:${m.id}`, sig, t, id: m.id, html: messageHtml(m, flags) });
             if (receipt && receipt.id === m.id) {
                 items.push({ key: 'receipt', sig: 'r|' + receipt.seen.join(','), html: receiptHtml(receipt) });
@@ -2442,7 +2442,8 @@
     window.ChowaniecGroup = {
         API, state, api, toast, icons, render, upsert, findMessage, setReply, clearComposer, closeActions, closeEmoji,
         escapeHtml, sameName, myName, isMine, mediaUrl, show, hide, ts,
-        clickSuppressed: () => suppressClick
+        clickSuppressed: () => suppressClick,
+        room: () => ROOM
     };
 
     window.returnToHub = function () {

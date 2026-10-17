@@ -710,10 +710,12 @@
         if (inPlusMenu) {
             const pollBtn = e.target.closest('#btn-poll');
             const stickerBtn = e.target.closest('#btn-sticker');
+            const sheetBtn = e.target.closest('#btn-sheet');
             if (e.target.closest('#btn-smart')) { toggleSmart(); return; }
             setPlus(false);
             if (pollBtn) openPollModal();
             if (stickerBtn) openStickers();
+            if (sheetBtn) openSheetForm();
             return;
         }
         if (!$('plus-popup').classList.contains('hidden')) setPlus(false);
@@ -732,6 +734,10 @@
                 playVoice(t.dataset.mid, frac);
                 break;
             }
+            case 'slot-claim': slotAction('claim', t.dataset.sid, t.dataset.slot); break;
+            case 'slot-release': slotAction('release', t.dataset.sid, t.dataset.slot); break;
+            case 'sheet-close': closeSheetForm(); break;
+            case 'sheet-create': createSheet(); break;
             case 'thread-open': G.closeActions(); openThread(t.dataset.id); break;
             case 'thread-close': closeThread(); break;
             case 'thread-send': sendThreadReply(); break;
@@ -822,6 +828,69 @@
         } catch (e) { if (e.status !== 401) G.toast(e.message || 'Couldn’t send the sticker.', 'error'); }
     }
 
+    // ---------------------------------------------------------------- sign-up sheets
+
+    const SIGNUP = '/.netlify/functions/signup';
+    const sheets = {};
+    let sheetTimer = null;
+    async function loadSheets() {
+        try {
+            const data = await G.api(`${SIGNUP}?room=${encodeURIComponent(G.room())}`);
+            let changed = false;
+            (data.sheets || []).forEach((sh) => { if (JSON.stringify(sheets[sh.id]) !== JSON.stringify(sh)) { sheets[sh.id] = sh; changed = true; } });
+            if (changed) G.render('auto');
+        } catch (e) { /* ignore */ }
+    }
+    function sheetSig(m) { const sh = m.sheet && sheets[m.sheet]; return sh ? sh.slots.map((x) => x.claimedBy || '').join('|') + sh.title : ''; }
+    function sheetHtml(m) {
+        const sh = sheets[m.sheet];
+        if (!sh) return `<div class="sheet"><b>${esc(m.text)}</b><span class="sheet-note">Loading…</span></div>`;
+        const me = G.myName();
+        const open = sh.slots.filter((x) => !x.claimedBy).length;
+        return `<div class="sheet"><b>📝 ${esc(sh.title)}</b><span class="sheet-note">${open ? `${open} of ${sh.slots.length} still open` : 'All spots taken'}</span>` +
+            sh.slots.map((x) => {
+                const mine = x.claimedBy && G.sameName(x.claimedBy, me);
+                return `<div class="slot ${x.claimedBy ? 'taken' : ''}"><span class="slot-label">${esc(x.label)}</span>` +
+                    (x.claimedBy ? `<span class="slot-who">${mine ? 'You' : esc(x.claimedBy)}</span>${mine ? `<button type="button" class="slot-btn" data-x="slot-release" data-sid="${esc(sh.id)}" data-slot="${esc(x.id)}">Give back</button>` : ''}`
+                        : `<button type="button" class="slot-btn go" data-x="slot-claim" data-sid="${esc(sh.id)}" data-slot="${esc(x.id)}">I’ll do it</button>`) + `</div>`;
+            }).join('') + `</div>`;
+    }
+    async function slotAction(kind, sid, slot) {
+        try {
+            const data = await G.api(SIGNUP, { method: 'POST', body: { action: kind, id: sid, slot } });
+            sheets[data.sheet.id] = data.sheet;
+            G.render('auto');
+        } catch (e) { G.toast(e.message || 'Couldn’t update.', 'error'); loadSheets(); }
+    }
+    function openSheetForm() {
+        closeSheetForm();
+        const el = document.createElement('div');
+        el.id = 'signup-form';
+        el.className = 'x-sheet';
+        el.innerHTML = `<div class="x-sheet-head"><b>New sign-up sheet</b><button type="button" data-x="sheet-close" aria-label="Close">✕</button></div>` +
+            `<form id="signup-new" class="sheet-new" autocomplete="off"><label>What is it for?<input id="signup-title" type="text" maxlength="100"></label>` +
+            `<label>Slots, one per line<textarea id="signup-slots" rows="5"></textarea></label><button type="button" class="thread-send" data-x="sheet-create">Post sheet</button></form>`;
+        document.body.appendChild(el);
+        $('signup-new').addEventListener('submit', (e) => e.preventDefault());
+    }
+    function closeSheetForm() { const el = $('signup-form'); if (el) el.remove(); }
+    async function createSheet() {
+        const title = $('signup-title').value.trim();
+        const slots = $('signup-slots').value.split('\n').map((x) => x.trim()).filter(Boolean);
+        if (!title || !slots.length) { G.toast('Add a name and at least one slot.', 'error'); return; }
+        try {
+            const data = await G.api(SIGNUP, { method: 'POST', body: { action: 'create', title, slots } });
+            sheets[data.sheet.id] = data.sheet;
+            closeSheetForm();
+            G.state.confirmed.add(data.message.id); G.upsert([data.message]); G.render('bottom');
+        } catch (e) { G.toast(e.message || 'Couldn’t create the sheet.', 'error'); }
+    }
+    window.addEventListener('chowaniec-group-started', () => {
+        loadSheets();
+        clearInterval(sheetTimer);
+        sheetTimer = setInterval(() => { if (document.visibilityState === 'visible') loadSheets(); }, 8000);
+    });
+
     // ---------------------------------------------------------------- threads
 
     const thread = { id: null, timer: null, seen: new Set() };
@@ -906,11 +975,13 @@
     window.GroupExtras = {
         richHtml(m) {
             if (m && m.poll && Array.isArray(m.poll.options)) return pollHtml(m);
+            if (m && m.sheet) return sheetHtml(m);
             if (m && m.sticker && stickerOf(m.sticker)) return stickerHtml(m);
             if (m && m.voice && m.voice.id) return voiceHtml(m);
             return '';
         },
-        richClass(m) { return m.poll ? 'rich-poll' : m.sticker ? 'rich-sticker' : 'rich-voice'; },
+        richClass(m) { return m.poll ? 'rich-poll' : m.sheet ? 'rich-poll' : m.sticker ? 'rich-sticker' : 'rich-voice'; },
+        sig: sheetSig,
         menuItems(m) {
             let out = '';
             if (canClosePoll(m)) out += `<button type="button" role="menuitem" data-x="close-poll" data-id="${esc(m.id)}" class="mi"><i data-lucide="lock"></i>Close poll</button>`;

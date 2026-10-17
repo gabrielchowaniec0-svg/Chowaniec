@@ -16,7 +16,7 @@ export const CAPABILITIES = {
 };
 
 export const TOOL_CAPABILITY = {
-  post_to_group: 'post', schedule_group_message: 'post', create_poll: 'post',
+  post_to_group: 'post', schedule_group_message: 'post', create_poll: 'post', create_signup_sheet: 'post',
   add_calendar_event: 'calendar',
   notify_meeting: 'notify',
   create_note: 'notes', append_to_note: 'notes',
@@ -116,4 +116,14 @@ export async function listLog(limit = 100, daysBack = 30) {
     out.push(...entries.sort((a, b) => (a.at < b.at ? 1 : -1)));
   }
   return out.slice(0, limit);
+}
+
+// Does something at most once per key (true the first time, false afterwards).
+export async function claimOnce(key) {
+  try {
+    const { modified } = await store().setJSON(`auto/${key}`, { at: new Date().toISOString() }, { onlyIfNew: true });
+    return !!modified;
+  } catch (e) {
+    return false;
+  }
 }

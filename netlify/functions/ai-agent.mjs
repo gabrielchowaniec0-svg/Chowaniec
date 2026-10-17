@@ -5,6 +5,7 @@
 //   GET ?id=<id>        -> { conversation }
 //   DELETE ?id=<id>     -> { ok }
 // Model: AI_AGENT_MODEL (default Claude Opus 5.5). Tools act with the caller's permissions.
+import { createSheet } from '../lib/signup-store.mjs';
 import { whyBlocked, logAction, TOOL_CAPABILITY } from '../lib/ai-policy.mjs';
 import { getStore } from '@netlify/blobs';
 import crypto from 'node:crypto';
@@ -38,7 +39,8 @@ const COMMANDS = {
   recap: 'Read the recent messages of every group chat I am in (list_chats, then read_group_chat) and give me a short catch-up: what was discussed, any plans, dates, questions for me, and anything I should reply to. Say which chat each item came from.',
   'meeting-recap': 'Write a recap of a meeting. Use get_meeting_material (the meeting code I give, a #meeting reference, or otherwise the most recent meeting I attended) to read its notes and transcript. Write a short recap: 2 to 3 sentences, then decisions, to-dos with owners, and important dates, only what was actually said. Include a link to the meeting notes, and to any notes I attached with # (they are listed under "Attached notes"). Then ask which chat to post it in, suggesting the chat that matches who attended, and call offer_quick_answers with a button for that chat and one for "Don\'t post". When I choose, post it with post_to_group.',
   calendar: 'Add the following to the family calendar with add_calendar_event (pick the audience from my chats; ask me if unclear). Then confirm and link to it.',
-  poll: 'Create a poll in a group chat with create_poll from the following. Then confirm.'
+  poll: 'Create a poll in a group chat with create_poll from the following. Then confirm.',
+  signup: 'Create a sign-up sheet in a group chat with create_signup_sheet from the following (a title and the slots people can claim; ask me if the chat is unclear). Then confirm.'
 };
 
 // --- Tools ---
@@ -101,6 +103,21 @@ const TOOLS = [
       type: 'object',
       properties: { chat: { type: 'string', description: 'Chat id from list_chats.' }, text: { type: 'string' } },
       required: ['chat', 'text'],
+      additionalProperties: false
+    },
+    strict: true
+  },
+  {
+    name: 'create_signup_sheet',
+    description: 'Post a sign-up sheet in a group chat (sent as Chowaniec AI on behalf of this person): a list of slots, such as "Bring drinks" or "Pick up the cake", that people tap to claim. 1 to 20 short slots.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        chat: { type: 'string', description: 'Chat id from list_chats.' },
+        title: { type: 'string' },
+        slots: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['chat', 'title', 'slots'],
       additionalProperties: false
     },
     strict: true
@@ -249,6 +266,7 @@ const INPUTS = {
   read_group_chat: z.object({ chat: z.string().max(40), limit: z.number().int().min(1).max(100) }),
   post_to_group: z.object({ chat: z.string().max(40), text: z.string().min(1).max(4000) }),
   schedule_group_message: z.object({ chat: z.string().max(40), text: z.string().min(1).max(4000), send_at: z.string().max(60) }),
+  create_signup_sheet: z.object({ chat: z.string().max(40), title: z.string().max(100), slots: z.array(z.string().max(80)).min(1).max(20) }),
   create_poll: z.object({ chat: z.string().max(40), question: z.string().max(300), options: z.array(z.string().max(200)).min(2).max(8), multi: z.boolean() }),
   add_calendar_event: z.object({
     title: z.string().min(1).max(200), date: z.string().max(10), time: z.string().max(5), end_time: z.string().max(5),
@@ -273,6 +291,7 @@ const LABELS = {
   post_to_group: 'Posting to a group chat',
   schedule_group_message: 'Scheduling a message',
   create_poll: 'Creating a poll',
+  create_signup_sheet: 'Creating a sign-up sheet',
   add_calendar_event: 'Adding to the calendar',
   list_calendar: 'Checking the calendar',
   search_everything: 'Searching everything',
@@ -368,6 +387,14 @@ async function runToolInner(name, input, user, turn) {
     await notifyMessage(message);
     const link = room === 'everyone' ? '/group/' : `/group/?room=${room}`;
     return { result: { ok: true, posted: message.text, sent_as: AI_NAME }, summary: poll ? 'Posted a poll' : 'Posted to the group chat', url: link, action: { label: 'Open the chat', url: link } };
+  }
+  if (name === 'create_signup_sheet') {
+    const room = resolveRoom(input.chat, user);
+    guardPost(turn, room);
+    const { sheet, message } = await createSheet(user, { title: input.title, slots: input.slots, room, asAi: true });
+    await notifyMessage(message);
+    const link = room === 'everyone' ? '/group/' : `/group/?room=${room}`;
+    return { result: { ok: true, title: sheet.title, slots: sheet.slots.map((x) => x.label) }, summary: `Posted a sign-up sheet "${sheet.title}"`, url: link, action: { label: 'Open the chat', url: link } };
   }
   if (name === 'schedule_group_message') {
     const room = resolveRoom(input.chat, user);

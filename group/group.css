@@ -908,3 +908,14 @@ mark { background: var(--mark); color: var(--mark-fg); border-radius: 3px; paddi
 .search-filters .btn { display: none; }
 .search-filters.has-filter .btn { display: inline-flex; }
 .v-aa { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 9999px; border: 1px solid currentColor; opacity: 0.55; min-width: 34px; margin-left: auto; margin-right: 6px; }
+.sheet { display: flex; flex-direction: column; gap: 6px; min-width: 230px; }
+.sheet-note { font-size: 12px; opacity: .7; }
+.slot { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); min-height: 44px; }
+.slot-label { flex: 1; font-size: 14.5px; }
+.slot.taken .slot-label { opacity: .75; }
+.slot-who { font-size: 12.5px; font-weight: 700; }
+.slot-btn { min-height: 36px; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 700; border: 1px solid var(--line); background: var(--surface); }
+.slot-btn.go { background: var(--accent, #7c5cff); color: #fff; border-color: transparent; }
+.sheet-new { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 18px; }
+.sheet-new label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
+.sheet-new input, .sheet-new textarea { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: inherit; font-size: 16px; }

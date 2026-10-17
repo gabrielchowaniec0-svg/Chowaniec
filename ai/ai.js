@@ -15,13 +15,14 @@
         { name: 'meeting-recap', args: 'optional code', desc: 'Recap the latest meeting you were in and post it to a chat', server: true },
         { name: 'calendar', args: 'event details', desc: 'Add something to the family calendar', server: true },
         { name: 'poll', args: 'question and answers', desc: 'Create a poll in a group chat', server: true },
+        { name: 'signup', args: 'title and slots', desc: 'Create a sign-up sheet people can tap to claim', server: true },
         { name: 'new', args: '', desc: 'Start a new chat', server: false },
         { name: 'help', args: '', desc: 'Show what I can do', server: false },
         { name: 'clear', args: '', desc: 'Clear this chat from view', server: false }
     ];
     const COMMAND_ICONS = {
         summarize: 'scroll-text', note: 'notebook-pen', meet: 'video', group: 'messages-square',
-        remind: 'bell-ring', recap: 'history', 'meeting-recap': 'clipboard-list', calendar: 'calendar-days', poll: 'chart-no-axes-column', new: 'square-pen', help: 'circle-help', clear: 'eraser'
+        remind: 'bell-ring', recap: 'history', 'meeting-recap': 'clipboard-list', calendar: 'calendar-days', poll: 'chart-no-axes-column', signup: 'clipboard-check', new: 'square-pen', help: 'circle-help', clear: 'eraser'
     };
 
     const SUGGESTIONS = [
@@ -1035,6 +1036,7 @@
             if (cmd.name === 'group' && !message) return toast('Write a message after /group', 'error');
             if (cmd.name === 'calendar' && !message) return toast('Say what to add after /calendar', 'error');
             if (cmd.name === 'poll' && !message) return toast('Write the question and answers after /poll', 'error');
+            if (cmd.name === 'signup' && !message) return toast('Write the title and the slots after /signup', 'error');
             if (cmd.name === 'remind' && !mentions.length) return toast('Mention someone with @ to remind', 'error');
         }
 

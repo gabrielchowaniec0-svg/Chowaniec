@@ -150,9 +150,9 @@ export async function getImage(id) {
 }
 
 // Stores a message and returns it. `author` is a family name or AI_NAME.
-export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, onBehalfOf, sticker, thread, room = DEFAULT_ROOM }) {
+export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, onBehalfOf, sticker, thread, sheet, room = DEFAULT_ROOM }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
-  if (!clean && !image && !poll && !voice && !sticker) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
+  if (!clean && !image && !poll && !voice && !sticker && !sheet) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
 
   let reply = null;
   if (replyTo) {
@@ -176,6 +176,7 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user',
     ...(link ? { link } : {}),
     ...(onBehalfOf ? { onBehalfOf } : {}),
     ...(sticker ? { sticker } : {}),
+    ...(sheet ? { sheet } : {}),
     ...(thread ? { thread } : {})
   };
   await messages().setJSON(keyOf(message.id, room), message, { onlyIfNew: true });

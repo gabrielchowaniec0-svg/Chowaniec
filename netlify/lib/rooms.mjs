@@ -10,6 +10,7 @@ const ROOMS = [
   { id: 'core', name: 'Vicky, Gabriel & Nicole', blurb: 'Only Vicky, Gabriel and Nicole', members: () => ['Victoria', 'Gabriel', 'Nicole'].filter((n) => familyNames().includes(n)) }
 ];
 
+export const ROOM_IDS = ROOMS.map((r) => r.id);
 export const isRoomId = (id) => ROOMS.some((r) => r.id === id);
 export const roomMembers = (id) => (ROOMS.find((r) => r.id === id) || ROOMS[0]).members();
 export const canAccessRoom = (name, id) => isRoomId(id) && roomMembers(id).includes(name);
