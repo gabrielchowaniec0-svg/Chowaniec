@@ -12,7 +12,7 @@
 import { getUser, json } from '../lib/auth.mjs';
 import {
   AI_NAME, isMessageId, latest, since, before, getMessage, getImage, postMessage, deleteMessage,
-  toggleReaction, notifyMessage, transcriptOf, touchPresence, setTyping, setRead, listPresence,
+  toggleReaction, notifyMessage, transcriptOf, touchPresence, setTyping, clearTyping, setRead, listPresence,
   getPinned, pinMessage, unpin
 } from '../lib/group-store.mjs';
 import { aiConfigured, aiClient, textOf } from '../lib/ai.mjs';
@@ -133,6 +133,7 @@ export default async (req, context) => {
       image: body.image || null,
       replyTo: isMessageId(body.replyTo) ? body.replyTo : null
     });
+    await clearTyping(user.name);
     // Notifications and the AI's reply run after the response is sent.
     context.waitUntil(notifyMessage(message));
     if (message.mentions.includes('AI')) context.waitUntil(replyAsAi(message));

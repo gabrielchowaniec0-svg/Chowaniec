@@ -222,6 +222,11 @@ export function setTyping(user) {
   return updatePresence(user, (p) => ({ ...p, lastSeen: new Date(now).toISOString(), typingUntil: new Date(now + TYPING_MS).toISOString() }));
 }
 
+// Sending a message ends that person's typing indicator straight away.
+export function clearTyping(user) {
+  return updatePresence(user, (p) => (p.typingUntil ? { ...p, typingUntil: null } : null));
+}
+
 // Read receipts only move forward (ids sort by time).
 export function setRead(user, id) {
   return updatePresence(user, (p) => {
