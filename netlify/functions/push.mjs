@@ -6,7 +6,7 @@
 //   DELETE { id }                -> { ok }   forget one of this person's devices by id
 //   POST { action: 'test' }      -> { sent } send a test notification to the caller's devices
 import { getUser, json } from '../lib/auth.mjs';
-import { pushConfig, saveSubscription, removeSubscription, removeDeviceById, listDevices, sendPush } from '../lib/push.mjs';
+import { pushConfig, missingPushSettings, saveSubscription, removeSubscription, removeDeviceById, listDevices, sendPush } from '../lib/push.mjs';
 
 export default async (req) => {
   const user = getUser(req);
@@ -16,7 +16,7 @@ export default async (req) => {
   if (req.method === 'GET' && new URL(req.url).searchParams.get('devices')) {
     return json(200, { devices: config ? await listDevices(user.name) : [] });
   }
-  if (req.method === 'GET') return json(200, { enabled: !!config, publicKey: config ? config.publicKey : null });
+  if (req.method === 'GET') return json(200, { enabled: !!config, publicKey: config ? config.publicKey : null, missing: config ? [] : missingPushSettings() });
   if (!config) return json(503, { error: 'Notifications are not set up on the server yet.' });
 
   let body;
