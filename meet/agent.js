@@ -14,6 +14,7 @@ const AGENT_COMMAND_SILENCE_MS = 2500;
 const AGENT_WAKE_ONLY_WAIT_MS = 5000;
 const CHECKIN_TIMEOUT_MS = 90 * 1000;
 const NOTES_ENDPOINT = '/.netlify/functions/notes';
+const RECAP_ENDPOINT = '/.netlify/functions/meeting-recap';
 
 let agent = freshAgentState();
 let agentListeningRemotely = false;   // someone in the call has the Agent running
@@ -472,6 +473,93 @@ async function syncNotesToNotebook() {
   scheduleAgentRender();
 }
 
+// --- Meeting recap (posted to a group chat as Chowaniec AI) ---
+// Everyone reports when they join, so the recap goes to the most private chat that includes everyone who attended.
+// The host can pick a different chat, or turn the recap off, in the Agent panel.
+
+const agentRecap = { chat: 'auto', info: null, busy: false, message: '' };
+
+function recapStorageKey() { return `chowaniec_meet_recap_chat_${currentMeetingCode}`; }
+
+function recapHeaders() {
+  return { 'Content-Type': 'application/json', 'X-Chowaniec-Key': signedInKey() };
+}
+
+function reportMeetingJoined() {
+  if (!currentMeetingCode) return;
+  fetch(RECAP_ENDPOINT, { method: 'POST', headers: recapHeaders(), body: JSON.stringify({ action: 'joined', code: currentMeetingCode }), keepalive: true }).catch(() => {});
+  try { agentRecap.chat = localStorage.getItem(recapStorageKey()) || 'auto'; } catch (e) { agentRecap.chat = 'auto'; }
+}
+
+async function loadRecapInfo() {
+  if (!isHostUser() || !currentMeetingCode) return;
+  try {
+    const res = await fetch(`${RECAP_ENDPOINT}?code=${encodeURIComponent(currentMeetingCode)}`, { headers: recapHeaders(), cache: 'no-store' });
+    if (res.ok) { agentRecap.info = await res.json(); scheduleAgentRender(); }
+  } catch (e) { /* the card still works with its defaults */ }
+}
+
+function setRecapChat(value) {
+  agentRecap.chat = value;
+  try { localStorage.setItem(recapStorageKey(), value); } catch (e) { /* ignore */ }
+  scheduleAgentRender();
+}
+
+// Sends the recap now. From the "Post recap now" button the person sees the result; on leaving it runs in the background.
+async function postRecapNow(background) {
+  if (agentRecap.chat === 'none' || !currentMeetingCode || agentRecap.busy) return;
+  agentRecap.busy = true;
+  agentRecap.message = '';
+  scheduleAgentRender();
+  if (agent.notes && background !== true) await syncNotesToNotebook();
+  try {
+    const res = await fetch(RECAP_ENDPOINT, {
+      method: 'POST', headers: recapHeaders(), keepalive: background === true,
+      body: JSON.stringify({ action: 'post', code: currentMeetingCode, chat: agentRecap.chat })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'The recap could not be posted.');
+    agentRecap.message = 'Recap posted to the chat.';
+    if (!background) toast('Recap posted to the chat.');
+  } catch (e) {
+    agentRecap.message = e.message;
+    if (!background) toast(e.message);
+  } finally {
+    agentRecap.busy = false;
+    scheduleAgentRender();
+  }
+}
+
+// Called when the host who ran the Agent leaves: save the notes, then post the recap without making them wait.
+async function postRecapOnLeave() {
+  if (agentRecap.chat === 'none' || !agent.notes) return;
+  try { await Promise.race([syncNotesToNotebook(), new Promise((r) => setTimeout(r, 4000))]); } catch (e) { /* the recap uses the saved note */ }
+  postRecapNow(true);
+}
+
+function renderRecapSection() {
+  if (!isHostUser()) return '';
+  const info = agentRecap.info;
+  const chats = (info && info.chats) || [{ id: 'everyone', name: 'Everyone' }];
+  const suggested = info ? chats.find((c) => c.id === info.suggested) : null;
+  const options = [
+    `<option value="auto"${agentRecap.chat === 'auto' ? ' selected' : ''}>Automatic${suggested ? `: ${escapeHtml(suggested.name)}` : ''}</option>`,
+    ...chats.map((c) => `<option value="${escapeHtml(c.id)}"${agentRecap.chat === c.id ? ' selected' : ''}>${escapeHtml(c.name)}</option>`),
+    `<option value="none"${agentRecap.chat === 'none' ? ' selected' : ''}>Don't post a recap</option>`
+  ].join('');
+  return `
+    <div class="p-4 rounded-xl bg-white/5 border border-white/5 space-y-3">
+      <span class="text-xs font-medium text-white">Meeting Recap</span>
+      <p class="text-[11px] text-zinc-500 leading-relaxed">When you leave, the AI posts a short recap in a group chat. Automatic picks the chat that matches who attended${info && info.attendees.length ? ` (${escapeHtml(info.attendees.join(', '))})` : ''}.</p>
+      <label class="block text-[10px] font-mono uppercase tracking-widest text-zinc-500" for="recap-chat">Post to</label>
+      <select id="recap-chat" onchange="setRecapChat(this.value)" class="w-full py-2.5 px-3 rounded-lg bg-white/10 text-xs text-white border border-white/10">${options}</select>
+      <button onclick="postRecapNow()" ${agentRecap.busy || agentRecap.chat === 'none' || !agent.notes ? 'disabled' : ''} class="w-full py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs text-white disabled:opacity-40">${agentRecap.busy ? 'Posting...' : 'Post recap now'}</button>
+      ${!agent.notes ? '<p class="text-[11px] text-zinc-500">The recap needs the Agent\'s notes. Start the Agent first.</p>' : ''}
+      ${info && info.posted ? `<p class="text-[11px] text-zinc-400">Last posted ${escapeHtml(formatClock(info.posted.at))}.</p>` : ''}
+      ${agentRecap.message ? `<p class="text-[11px] text-zinc-300">${escapeHtml(agentRecap.message)}</p>` : ''}
+    </div>`;
+}
+
 // --- Start / stop ---
 
 function startAgent() {
@@ -600,6 +688,8 @@ function renderAgentPanel() {
       </div>
 
       ${renderCheckInSection()}
+
+      ${renderRecapSection()}
 
       ${agent.savedNoteId ? `
         <a href="/notes/?id=${encodeURIComponent(agent.savedNoteId)}" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-sky-300">

@@ -1027,6 +1027,8 @@
     }
 
     function handleMeetingJoined() {
+      reportMeetingJoined();
+      loadRecapInfo();
       refreshRoles();
       syncLocalMediaState();
       preferSpeakerOutput();
@@ -1112,6 +1114,7 @@
         callFrame.stopTranscription();
         agentDetach();
         downloadAgentNotes();
+        postRecapOnLeave();
       }
       if (callFrame) {
         try {

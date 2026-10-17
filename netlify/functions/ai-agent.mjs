@@ -17,6 +17,7 @@ import { resolveRoom, roomsFor, roomMembers } from '../lib/rooms.mjs';
 import { createEvent, listEvents, describeWhen, todayLocal, addDays } from '../lib/calendar-store.mjs';
 import { searchEverything } from '../lib/search.mjs';
 import { notifyMeeting } from './meeting-notify.mjs';
+import { getAttendance, latestMeetingFor, meetingNote, chatForAttendees, isMeetingCode } from '../lib/meeting-recap.mjs';
 
 const { dailyRequest } = common;
 const MAX_TOOL_ROUNDS = 8;
@@ -34,6 +35,7 @@ const COMMANDS = {
   group: 'Post the following to the "everyone" group chat with post_to_group. It is sent by you (Chowaniec AI) on my behalf, so make clear it is from me, and keep my wording (only fix obvious typos). Then confirm.',
   remind: 'Post a reminder to the "everyone" group chat with post_to_group that @mentions the person or people I mention, so they get notified. It is sent by you on my behalf. Keep it short and friendly. Then confirm.',
   recap: 'Read the recent messages of every group chat I am in (list_chats, then read_group_chat) and give me a short catch-up: what was discussed, any plans, dates, questions for me, and anything I should reply to. Say which chat each item came from.',
+  'meeting-recap': 'Write a recap of a meeting. Use get_meeting_material (the meeting code I give, a #meeting reference, or otherwise the most recent meeting I attended) to read its notes and transcript. Write a short recap: 2 to 3 sentences, then decisions, to-dos with owners, and important dates, only what was actually said. Include a link to the meeting notes, and to any notes I attached with # (they are listed under "Attached notes"). Then ask which chat to post it in, suggesting the chat that matches who attended, and call offer_quick_answers with a button for that chat and one for "Don\'t post". When I choose, post it with post_to_group.',
   calendar: 'Add the following to the family calendar with add_calendar_event (pick the audience from my chats; ask me if unclear). Then confirm and link to it.',
   poll: 'Create a poll in a group chat with create_poll from the following. Then confirm.'
 };
@@ -164,6 +166,12 @@ const TOOLS = [
     strict: true
   },
   {
+    name: 'get_meeting_material',
+    description: 'Read the shared notes and transcript of a meeting this person attended, to write a recap. Leave code empty for the most recent meeting they attended. Returns who attended, the chat that matches the attendees, and links to the notes.',
+    input_schema: { type: 'object', properties: { code: { type: 'string', description: 'Meeting code, or empty for the most recent.' } }, required: ['code'], additionalProperties: false },
+    strict: true
+  },
+  {
     name: 'search_everything',
     description: 'Search notes, group chats this person is in, meeting briefings and calendar events at once. Returns the best matches in each.',
     input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'], additionalProperties: false },
@@ -247,6 +255,7 @@ const INPUTS = {
   }),
   list_calendar: z.object({ from: z.string().max(10), to: z.string().max(10) }),
   search_everything: z.object({ query: z.string().max(200) }),
+  get_meeting_material: z.object({ code: z.string().max(128) }),
   notify_meeting: z.object({ code: z.string().max(128), everyone: z.boolean(), people: z.array(z.string().max(40)).max(10) }),
   offer_quick_answers: z.object({ answers: z.array(z.object({ label: z.string().min(1).max(40), reply: z.string().min(1).max(400) })).min(2).max(4) }),
   create_meeting: z.object({ topics: z.string().max(1500), important: z.string().max(1000), starts_at: z.string().max(60) }),
@@ -266,6 +275,7 @@ const LABELS = {
   add_calendar_event: 'Adding to the calendar',
   list_calendar: 'Checking the calendar',
   search_everything: 'Searching everything',
+  get_meeting_material: 'Reading the meeting notes',
   notify_meeting: 'Notifying people about the meeting',
   offer_quick_answers: 'Preparing quick answers',
   create_meeting: 'Creating a meeting',
@@ -276,7 +286,7 @@ class ToolError extends Error {}
 
 // What this turn has read, so private chats can't leak into other chats (see `guardPost`).
 function newTurn() {
-  return { readRooms: new Set(), quickAnswers: null, origin: 'https://chowaniec.net' };
+  return { readRooms: new Set(), quickAnswers: null, attachedNotes: [], origin: 'https://chowaniec.net' };
 }
 
 // The AI may not carry what it read in one chat into a chat with people who weren't in that one.
@@ -371,6 +381,25 @@ async function runToolInner(name, input, user, turn) {
     const events = await listEvents(user, from, ok(input.to) ? input.to : addDays(from, 30));
     return { result: { events: events.slice(0, 40).map((e) => ({ id: e.id, title: e.title, when: describeWhen(e), location: e.location, for_chat: e.room })) }, summary: `Found ${events.length} event${events.length === 1 ? '' : 's'}` };
   }
+  if (name === 'get_meeting_material') {
+    const wanted = input.code.trim();
+    const record = wanted ? await getAttendance(isMeetingCode(wanted) ? wanted : '') : await latestMeetingFor(user.name);
+    if (!record || !record.attendees || !record.attendees[user.name]) throw new ToolError(wanted ? 'You weren\'t in that meeting, so I can\'t read its notes.' : 'I can\'t find a recent meeting you attended.');
+    const note = await meetingNote(record.code);
+    if (!note) throw new ToolError('There are no saved notes for that meeting yet. A host needs to start the Meeting Agent during the meeting.');
+    const suggested = chatForAttendees(record.attendees);
+    // A non-host can only post the recap where everyone present is. Hosts may choose any of their chats.
+    if (!user.host) turn.readRooms.add(suggested);
+    const md = String(note.markdown || '');
+    return {
+      result: {
+        code: record.code, attendees: Object.keys(record.attendees), suggested_chat: suggested,
+        notes_title: note.title, notes_link: `https://chowaniec.net/notes/?id=${note.id}`,
+        notes_and_transcript: md.length > 40000 ? `${md.slice(0, 20000)}\n…\n${md.slice(-18000)}` : md
+      },
+      summary: `Read the notes for ${record.code}`, url: `/notes/?id=${note.id}`
+    };
+  }
   if (name === 'search_everything') {
     const found = await searchEverything(user, input.query);
     // Anything read from a chat counts as read, so it can't be pasted into a different chat.
@@ -425,6 +454,7 @@ async function referenceContext(user, references, turn) {
     if (ref && ref.type === 'note') {
       const found = await readNote(String(ref.id || ''));
       if (found && canView(user, found.note)) {
+        turn.attachedNotes.push({ title: found.note.title, url: `https://chowaniec.net/notes/?id=${found.note.id}` });
         parts.push(`<note id="${found.note.id}" title="${found.note.title.replace(/"/g, "'")}">\n${found.note.markdown.slice(0, 30000)}\n</note>`);
       }
     } else if (ref && ref.type === 'group') {
@@ -438,6 +468,7 @@ async function referenceContext(user, references, turn) {
       parts.push(`<meeting code="${ref.code}">\n${brief ? JSON.stringify(brief) : 'No briefing saved.'}\n</meeting>`);
     }
   }
+  if (turn.attachedNotes.length) parts.push(`Attached notes (link to these in anything you post): ${turn.attachedNotes.map((n) => `${n.title}: ${n.url}`).join(' | ')}`);
   return parts.join('\n\n');
 }
 

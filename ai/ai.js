@@ -12,6 +12,7 @@
         { name: 'group', args: 'message', desc: 'Post to the family group chat (sent by me for you)', server: true },
         { name: 'remind', args: '@person message', desc: 'Remind someone in the group chat', server: true },
         { name: 'recap', args: '', desc: 'Catch up on the group chats you are in', server: true },
+        { name: 'meeting-recap', args: 'optional code', desc: 'Recap the latest meeting you were in and post it to a chat', server: true },
         { name: 'calendar', args: 'event details', desc: 'Add something to the family calendar', server: true },
         { name: 'poll', args: 'question and answers', desc: 'Create a poll in a group chat', server: true },
         { name: 'new', args: '', desc: 'Start a new chat', server: false },
@@ -20,7 +21,7 @@
     ];
     const COMMAND_ICONS = {
         summarize: 'scroll-text', note: 'notebook-pen', meet: 'video', group: 'messages-square',
-        remind: 'bell-ring', recap: 'history', calendar: 'calendar-days', poll: 'chart-no-axes-column', new: 'square-pen', help: 'circle-help', clear: 'eraser'
+        remind: 'bell-ring', recap: 'history', 'meeting-recap': 'clipboard-list', calendar: 'calendar-days', poll: 'chart-no-axes-column', new: 'square-pen', help: 'circle-help', clear: 'eraser'
     };
 
     const SUGGESTIONS = [
@@ -955,7 +956,7 @@
 
     // --- COMMAND PARSING & SEND ---
     function parseCommand(text) {
-        const m = /^\s*\/([a-z]+)(?=\s|$)\s*/i.exec(text);
+        const m = /^\s*\/([a-z-]+)(?=\s|$)\s*/i.exec(text);
         if (!m) return { cmd: null, rest: text };
         const cmd = COMMANDS.find((c) => c.name === m[1].toLowerCase());
         if (!cmd) return { cmd: null, rest: text };
