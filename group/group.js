@@ -72,6 +72,8 @@
         theme: 'auto'
     };
 
+    let suppressClick = false;   // swallow the click that follows a long-press, swipe or double-tap
+
     const $ = (id) => document.getElementById(id);
     const isFinePointer = () => window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const reducedMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -510,13 +512,16 @@
 
         const hasImage = !!(m.image || m._localImage);
         const text = String(m.text || '');
-        const emojiCount = !hasImage && !m.replyTo ? emojiOnlyCount(text) : 0;
+        const ex = window.GroupExtras;
+        const rich = ex && ex.richHtml ? ex.richHtml(m, { mine }) : '';     // polls and voice messages
+        const emojiCount = !hasImage && !m.replyTo && !rich ? emojiOnlyCount(text) : 0;
         const photoOnly = hasImage && !text && !m.replyTo;
         const bubbleCls = ['bubble'];
         if (hasImage) bubbleCls.push('has-image');
         if (photoOnly) bubbleCls.push('photo-only');
         if (emojiCount) bubbleCls.push('emoji-only', 'e' + emojiCount);
         if (flags.mentionsMe) bubbleCls.push('mentions-me');
+        if (rich) bubbleCls.push('rich', ex.richClass(m));
         if (flags.end && !emojiCount && !photoOnly) bubbleCls.push('tail');
 
         const time = escapeHtml(timeLabel(t));
@@ -531,7 +536,8 @@
             const src = m._localImage || mediaUrl(m.image);
             inner += `<button type="button" class="msg-img-btn shimmer" data-act="lightbox" data-src="${escapeHtml(src)}" data-caption="${escapeHtml(displayName(m) + ' · ' + fullTime(t))}" title="Open photo"><img src="${escapeHtml(src)}" alt="Photo from ${escapeHtml(displayName(m))}" loading="lazy" decoding="async"></button>`;
         }
-        if (text) inner += `<span class="msg-text">${formatText(text, m.mentions)}${emojiCount ? '' : `<span class="stamp-gap" aria-hidden="true">${time}</span>`}</span>`;
+        if (rich) inner += rich;
+        else if (text) inner += `<span class="msg-text">${formatText(text, m.mentions)}${emojiCount ? '' : `<span class="stamp-gap" aria-hidden="true">${time}</span>`}</span>`;
         inner += `<span class="stamp">${time}</span>`;
 
         let status = '';
@@ -617,7 +623,7 @@
                 end: !continues(m, next),
                 mentionsMe: mentionsMe(m)
             };
-            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, flags, dayLabel(t), timeLabel(t), state.people.length]);
+            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice]);
             items.push({ key: `m:${m.id}`, sig, t, id: m.id, html: messageHtml(m, flags) });
             if (receipt && receipt.id === m.id) {
                 items.push({ key: 'receipt', sig: 'r|' + receipt.seen.join(','), html: receiptHtml(receipt) });
@@ -729,6 +735,7 @@
         renderJump();
         maybeSendRead();
         if (state.sheetOpen) renderSheetPhotos();
+        if (window.GroupExtras && window.GroupExtras.afterRender) window.GroupExtras.afterRender();
     }
 
     function renderOlder() {
@@ -1303,6 +1310,7 @@
         }
         if (m._pending === 'failed') items += item('retry', 'rotate-cw', 'Retry sending');
         if (m.text) items += item('copy', 'copy', 'Copy text');
+        if (window.GroupExtras && window.GroupExtras.menuItems && !pendingMsg) items += window.GroupExtras.menuItems(m);
         if (canDelete(m)) items += item('delete', 'trash-2', pendingMsg ? 'Discard' : 'Delete', 'danger');
         html += `<div class="menu-items">${items}</div>`;
         return html;
@@ -1982,7 +1990,6 @@
         // ----- Touch gestures: long-press (actions), swipe right (reply), double-tap (❤️) -----
         let pressTimer = null;
         let pressVisual = null;
-        let suppressClick = false;
         let g = null;              // current gesture
         let lastTap = null;
         const clearPressTimers = () => { clearTimeout(pressTimer); pressTimer = null; clearTimeout(pressVisual); pressVisual = null; };
@@ -2011,7 +2018,7 @@
             g = {
                 id: row.dataset.id, row, bubble, tapTarget, x: e.clientX, y: e.clientY, t: Date.now(), mode: null, dx: 0,
                 canReply: !!m && !m._pending && m.kind !== 'system',
-                interactive: !!e.target.closest('a, .msg-img-btn, .reply-quote, .react-chip, .msg-status, .hover-actions')
+                interactive: !!e.target.closest('a, .msg-img-btn, .reply-quote, .react-chip, .msg-status, .hover-actions, [data-x]')
             };
             if (!bubble) return;
             pressVisual = setTimeout(() => { if (g && !g.mode) row.classList.add('press'); }, 140);
@@ -2305,7 +2312,29 @@
         setInterval(() => { if (state.sheetOpen) renderSheetMembers(); }, 30000);
         scheduleMidnightRefresh();
         poll();
+        window.dispatchEvent(new Event('chowaniec-group-started'));
     }
+
+    function clearComposer() {
+        const ta = $('composer-input');
+        ta.value = '';
+        state.caret = { start: 0, end: 0 };
+        state.image = null;
+        state.replyTo = null;
+        state.typingSentAt = 0;
+        closeMention();
+        closeEmoji();
+        autosize();
+        updateSendButton();
+        renderAttachments();
+    }
+
+    // What group/extras.js (polls, voice messages, scheduled messages) is allowed to use.
+    window.ChowaniecGroup = {
+        API, state, api, toast, icons, render, upsert, findMessage, setReply, clearComposer, closeActions, closeEmoji,
+        escapeHtml, sameName, myName, isMine, mediaUrl, show, hide, ts,
+        clickSuppressed: () => suppressClick
+    };
 
     window.returnToHub = function () {
         const isLocal =

@@ -1,6 +1,7 @@
 // Chowaniec Group chat storage (Netlify Blobs) and notifications.
 // Messages: group-chat store, key msg/<YYYY-MM-DD>/<id>, where id = <13-digit ms>-<random>
-// so keys sort by time. Photos: group-media store, key <mediaId>.
+// so keys sort by time. Photos and voice messages: group-media store, key <mediaId>.
+// Scheduled messages wait in the group-chat store under sched/<user>/<sendAt>-<random>.
 import { getStore } from '@netlify/blobs';
 import crypto from 'node:crypto';
 import { familyNames } from './auth.mjs';
@@ -12,6 +13,10 @@ const ID_PATTERN = /^\d{13}-[a-f0-9]{8}$/;
 const MEDIA_PATTERN = /^[a-f0-9]{32}$/;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const AUDIO_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/aac', 'audio/x-m4a', 'audio/wav', 'audio/x-wav'];
+const MAX_AUDIO_BYTES = 2.5 * 1024 * 1024;
+export const MAX_VOICE_SECONDS = 300;
+export const MAX_SCHEDULED_PER_USER = 20;
 
 const messages = () => getStore({ name: 'group-chat', consistency: 'strong' });
 const media = () => getStore({ name: 'group-media', consistency: 'strong' });
@@ -101,6 +106,20 @@ async function saveImage(dataUrl) {
   return id;
 }
 
+// Voice messages arrive as a data URL from the phone's recorder (e.g. data:audio/webm;codecs=opus;base64,...).
+export async function saveAudio(dataUrl) {
+  const match = /^data:(audio\/[\w.+-]+)(?:;[\w.=+-]+)*;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || '');
+  const type = match && match[1].toLowerCase();
+  if (!match || !AUDIO_TYPES.includes(type)) throw Object.assign(new Error('That voice message couldn’t be read.'), { status: 400 });
+  const bytes = Buffer.from(match[2], 'base64');
+  if (bytes.length < 200) throw Object.assign(new Error('That voice message is empty.'), { status: 400 });
+  if (bytes.length > MAX_AUDIO_BYTES) throw Object.assign(new Error('That voice message is too long.'), { status: 413 });
+  const id = crypto.randomBytes(16).toString('hex');
+  await media().set(id, bytes, { metadata: { contentType: type } });
+  return id;
+}
+
+// Photos and voice messages share one store; the stored content type tells them apart.
 export async function getImage(id) {
   if (!isMediaId(id)) return null;
   const entry = await media().getWithMetadata(id, { type: 'arrayBuffer' });
@@ -108,9 +127,9 @@ export async function getImage(id) {
 }
 
 // Stores a message and returns it. `author` is a family name or AI_NAME.
-export async function postMessage({ author, text, image, replyTo, kind = 'user' }) {
+export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
-  if (!clean && !image) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
+  if (!clean && !image && !poll && !voice) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
 
   let reply = null;
   if (replyTo) {
@@ -127,7 +146,9 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user' 
     mentions: parseMentions(clean),
     replyTo: reply,
     image: image ? await saveImage(image) : null,
-    reactions: {}
+    reactions: {},
+    ...(poll ? { poll } : {}),
+    ...(voice ? { voice } : {})
   };
   await messages().setJSON(keyOf(message.id), message, { onlyIfNew: true });
   return message;
@@ -138,6 +159,7 @@ export async function deleteMessage(id) {
   if (!found) return;
   await messages().delete(keyOf(id));
   if (found.message.image) await media().delete(found.message.image);
+  if (found.message.voice) await media().delete(found.message.voice.id);
 }
 
 // Toggles `user`'s reaction, retrying if someone else reacted at the same moment.
@@ -190,7 +212,8 @@ export function transcriptOf(list) {
   return list.map((m) => {
     const when = new Date(m.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: familyTimeZone() });
     const reply = m.replyTo ? ` (replying to ${m.replyTo.user}: "${m.replyTo.text.slice(0, 80)}")` : '';
-    return `[${when}] ${m.user}${reply}: ${m.text || ''}${m.image ? ' [photo]' : ''}`;
+    const poll = m.poll ? ` [poll options: ${m.poll.options.map((o) => `${o.text} (${o.votes.length})`).join(', ')}${m.poll.closed ? '; closed' : ''}]` : '';
+    return `[${when}] ${m.user}${reply}: ${m.text || ''}${m.image ? ' [photo]' : ''}${m.voice ? ' [voice message]' : ''}${poll}`;
   }).join('\n');
 }
 
@@ -267,4 +290,132 @@ export async function pinMessage(id, user) {
 
 export async function unpin() {
   await messages().delete('meta/pinned');
+}
+
+
+// --- Polls ---
+// A poll is a normal message with message.poll = { question, multi, closed, options: [{ id, text, votes: [names] }] }.
+
+export function buildPoll(question, options, multi) {
+  const q = String(question || '').trim().slice(0, 200);
+  const texts = (Array.isArray(options) ? options : []).map((o) => String(o || '').trim().slice(0, 100)).filter(Boolean);
+  if (!q) throw Object.assign(new Error('Add a question for the poll.'), { status: 400 });
+  if (texts.length < 2) throw Object.assign(new Error('Add at least two answers.'), { status: 400 });
+  if (texts.length > 8) throw Object.assign(new Error('A poll can have up to 8 answers.'), { status: 400 });
+  if (new Set(texts.map((t) => t.toLowerCase())).size !== texts.length) throw Object.assign(new Error('Each answer needs to be different.'), { status: 400 });
+  return { question: q, multi: !!multi, closed: false, options: texts.map((text, i) => ({ id: `o${i + 1}`, text, votes: [] })) };
+}
+
+// Adds or removes `user`'s vote. Single-choice polls move the vote; multi-choice polls toggle.
+export async function votePoll(id, user, optionId) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const found = await getMessage(id);
+    if (!found || !found.message.poll) return null;
+    const message = found.message;
+    const poll = message.poll;
+    if (poll.closed) throw Object.assign(new Error('This poll is closed.'), { status: 409 });
+    const option = poll.options.find((o) => o.id === optionId);
+    if (!option) throw Object.assign(new Error('That answer isn’t in this poll.'), { status: 400 });
+    const had = option.votes.includes(user);
+    if (!poll.multi) poll.options.forEach((o) => { o.votes = o.votes.filter((v) => v !== user); });
+    if (poll.multi) option.votes = had ? option.votes.filter((v) => v !== user) : [...option.votes, user];
+    else if (!had) option.votes.push(user);
+    const { modified } = await messages().setJSON(keyOf(id), message, { onlyIfMatch: found.etag });
+    if (modified) return message;
+  }
+  throw Object.assign(new Error('Lots of votes at once. Try again.'), { status: 409 });
+}
+
+export async function closePoll(id, user, isHost) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const found = await getMessage(id);
+    if (!found || !found.message.poll) return null;
+    const message = found.message;
+    if (message.user !== user && !isHost) throw Object.assign(new Error('Only the person who made the poll or a host can close it.'), { status: 403 });
+    message.poll.closed = true;
+    message.poll.closedAt = new Date().toISOString();
+    const { modified } = await messages().setJSON(keyOf(id), message, { onlyIfMatch: found.etag });
+    if (modified) return message;
+  }
+  throw Object.assign(new Error('Please try again.'), { status: 409 });
+}
+
+// --- Scheduled messages ---
+// sched/<user>/<sendAt 13 digits>-<random>: { id, user, text, replyTo (message id or null), sendAt, createdAt, claimedAt? }
+// meta/next-sched: { at } — the earliest pending send time, so chat polls can skip the listing when nothing is due.
+
+const schedPrefix = (user) => `sched/${encodeURIComponent(user)}/`;
+const SCHED_CLAIM_MS = 2 * 60 * 1000;
+
+async function setNextSched(at) {
+  if (at == null) await messages().delete('meta/next-sched');
+  else await messages().setJSON('meta/next-sched', { at });
+}
+
+export async function nextScheduledAt() {
+  const hint = await messages().get('meta/next-sched', { type: 'json' });
+  return hint ? hint.at : null;
+}
+
+export async function scheduleMessage({ user, text, replyTo, sendAt }) {
+  const clean = String(text || '').trim().slice(0, MAX_TEXT);
+  if (!clean) throw Object.assign(new Error('Write a message to schedule.'), { status: 400 });
+  const when = Date.parse(sendAt);
+  const now = Date.now();
+  if (isNaN(when)) throw Object.assign(new Error('Pick a date and time.'), { status: 400 });
+  if (when < now + 30 * 1000) throw Object.assign(new Error('Pick a time in the future.'), { status: 400 });
+  if (when > now + 366 * 24 * 60 * 60 * 1000) throw Object.assign(new Error('Pick a time within the next year.'), { status: 400 });
+  const { blobs } = await messages().list({ prefix: schedPrefix(user) });
+  if (blobs.length >= MAX_SCHEDULED_PER_USER) throw Object.assign(new Error(`You can have up to ${MAX_SCHEDULED_PER_USER} scheduled messages.`), { status: 409 });
+  const id = `${String(when).padStart(13, '0')}-${crypto.randomBytes(4).toString('hex')}`;
+  const record = { id, user, text: clean, replyTo: isMessageId(replyTo) ? replyTo : null, sendAt: new Date(when).toISOString(), createdAt: new Date(now).toISOString() };
+  await messages().setJSON(`${schedPrefix(user)}${id}`, record);
+  const next = await nextScheduledAt();
+  if (next == null || when < next) await setNextSched(when);
+  return record;
+}
+
+export async function listScheduled(user) {
+  const { blobs } = await messages().list({ prefix: schedPrefix(user) });
+  const list = (await Promise.all(blobs.map((b) => messages().get(b.key, { type: 'json' })))).filter(Boolean);
+  return list.sort((a, b) => (a.sendAt < b.sendAt ? -1 : 1));
+}
+
+export async function cancelScheduled(user, id) {
+  if (!/^\d{13}-[a-f0-9]{8}$/.test(id || '')) return false;
+  const key = `${schedPrefix(user)}${id}`;
+  const exists = await messages().get(key, { type: 'json' });
+  if (!exists) return false;
+  await messages().delete(key);
+  return true;
+}
+
+// Sends every scheduled message whose time has come. `publish(message)` does the notifications.
+export async function deliverDue(publish) {
+  const { blobs } = await messages().list({ prefix: 'sched/' });
+  const now = Date.now();
+  let delivered = 0;
+  let nextAt = null;
+  for (const b of blobs) {
+    const id = b.key.split('/').pop();
+    const at = Number(id.slice(0, 13));
+    if (at > now) { nextAt = nextAt == null ? at : Math.min(nextAt, at); continue; }
+    const entry = await messages().getWithMetadata(b.key, { type: 'json' });
+    if (!entry) continue;
+    const record = entry.data;
+    if (record.claimedAt && now - record.claimedAt < SCHED_CLAIM_MS) continue;   // another request is sending it
+    const claim = await messages().setJSON(b.key, { ...record, claimedAt: now }, { onlyIfMatch: entry.etag });
+    if (!claim.modified) continue;
+    try {
+      const message = await postMessage({ author: record.user, text: record.text, replyTo: record.replyTo });
+      await messages().delete(b.key);
+      delivered++;
+      await publish(message);
+    } catch (err) {
+      console.error('Scheduled message failed:', err.message);   // stays claimed; retried after two minutes
+      nextAt = nextAt == null ? now + SCHED_CLAIM_MS : Math.min(nextAt, now + SCHED_CLAIM_MS);
+    }
+  }
+  await setNextSched(nextAt);
+  return delivered;
 }

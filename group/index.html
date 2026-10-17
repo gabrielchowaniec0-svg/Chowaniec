@@ -100,17 +100,24 @@
                     <!-- Emoji picker -->
                     <div id="emoji-popup" role="dialog" aria-label="Emoji" class="pop hidden"></div>
 
+                    <!-- Plus menu: photo, camera, poll -->
+                    <div id="plus-popup" role="menu" aria-label="Add to message" class="pop hidden">
+                        <button id="btn-photo" type="button" role="menuitem" class="mi"><i data-lucide="image-plus"></i>Photo</button>
+                        <button id="btn-camera" type="button" role="menuitem" class="mi"><i data-lucide="camera"></i>Take a photo</button>
+                        <button id="btn-poll" type="button" role="menuitem" class="mi"><i data-lucide="chart-no-axes-column"></i>Poll</button>
+                    </div>
+
+                    <!-- Scheduled-messages chip (filled in by extras.js) -->
+                    <div id="sched-chip-slot"></div>
+
                     <!-- Attachments: reply chip + image preview -->
                     <div id="attach-row" class="hidden"></div>
 
                     <form id="composer" class="composer" autocomplete="off">
                         <input id="file-input" type="file" accept="image/*" class="sr-only" tabindex="-1" aria-hidden="true">
                         <input id="camera-input" type="file" accept="image/*" capture="environment" class="sr-only" tabindex="-1" aria-hidden="true">
-                        <button id="btn-photo" type="button" title="Add a photo" aria-label="Add a photo" class="cbtn">
-                            <i data-lucide="image-plus"></i>
-                        </button>
-                        <button id="btn-camera" type="button" title="Take a photo" aria-label="Take a photo" class="cbtn">
-                            <i data-lucide="camera"></i>
+                        <button id="btn-plus" type="button" title="Add a photo, poll and more" aria-label="Add a photo, poll and more" aria-haspopup="menu" aria-expanded="false" class="cbtn">
+                            <i data-lucide="plus"></i>
                         </button>
                         <div class="pill">
                             <label for="composer-input" class="sr-only">Message the family</label>
@@ -120,9 +127,20 @@
                                 <i data-lucide="smile"></i>
                             </button>
                         </div>
-                        <button id="btn-send" type="submit" title="Send" aria-label="Send" disabled class="send">
+                        <button id="btn-mic" type="button" title="Record a voice message" aria-label="Record a voice message" class="micbtn">
+                            <i data-lucide="mic"></i>
+                        </button>
+                        <button id="btn-send" type="submit" title="Send (hold to schedule)" aria-label="Send. Hold to schedule for later." disabled class="send">
                             <i data-lucide="arrow-up"></i>
                         </button>
+                        <!-- Voice recorder (shown while recording) -->
+                        <div id="rec-bar" class="rec-bar" role="group" aria-label="Voice message recorder">
+                            <button id="rec-cancel" type="button" class="rec-x" title="Discard recording" aria-label="Discard recording"><i data-lucide="trash-2"></i></button>
+                            <span class="rec-dot" aria-hidden="true"></span>
+                            <span id="rec-time" class="rec-time" aria-live="off">0:00</span>
+                            <span id="rec-label" class="rec-label">Recording</span>
+                            <button id="rec-send" type="button" class="rec-go" title="Send voice message" aria-label="Send voice message"><i data-lucide="arrow-up"></i></button>
+                        </div>
                     </form>
                 </div>
             </footer>
@@ -232,5 +250,6 @@
     <div id="toast" role="status" aria-live="polite" class="toast hidden"></div>
 
     <script src="group.js"></script>
+    <script src="extras.js"></script>
 </body>
 </html>
