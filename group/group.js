@@ -9,7 +9,9 @@
     try {
         ROOM = new URLSearchParams(location.search).get('room') || localStorage.getItem(ROOM_KEY) || 'everyone';
     } catch (e) { ROOM = 'everyone'; }
-    if (!/^[a-z-]{1,20}$/.test(ROOM)) ROOM = 'everyone';
+    if (!/^[a-z-]{1,40}$/.test(ROOM)) ROOM = 'everyone';
+    const IS_DM = /^dm-[a-z]+-[a-z]+$/.test(ROOM);
+    const dmRoomFor = (a, b) => { const x = String(a).toLowerCase(); const y = String(b).toLowerCase(); return x < y ? `dm-${x}-${y}` : `dm-${y}-${x}`; };
     const POLL_VISIBLE_MS = 3000;
     const POLL_HIDDEN_MS = 30000;
     const FULL_SYNC_MS = 20000;           // re-read the latest 50 to pick up reactions & deletions
@@ -76,7 +78,7 @@
         confirmed: new Set(),
         caret: { start: 0, end: 0 },
         sheetOpen: false,
-        search: { q: '', busy: false, timer: null },
+        search: { q: '', busy: false, timer: null, user: '', from: '', to: '', remote: null },
         theme: 'auto'
     };
 
@@ -159,7 +161,7 @@
     function avatarHtml(name, size, opts) {
         const o = opts || {};
         const sz = size ? ' ' + size : '';
-        if (o.ai || isAiName(name)) return `<span class="av ai-av${sz}" aria-hidden="true"><i data-lucide="sparkles"></i></span>`;
+        if (o.ai || isAiName(name)) return `<span class="av ai-av${sz}" aria-hidden="true">${window.ChowaniecRobot ? window.ChowaniecRobot.face() : '<i data-lucide="sparkles"></i>'}</span>`;
         if (o.everyone) return `<span class="av all-av${sz}" aria-hidden="true"><i data-lucide="users"></i></span>`;
         return `<span class="av ${personClass(name)}${sz}" data-user="${escapeHtml(String(name || '').toLowerCase())}" aria-hidden="true">${escapeHtml(initial(name))}<span class="dot"></span></span>`;
     }
@@ -236,10 +238,17 @@
     }
 
     // ---------- text formatting (escape everything; only http/https links) ----------
+    // Nicknames the family uses (the server understands these too).
+    const ALIASES = { victoria: ['vicky'], gabriel: ['gabe'], liliana: ['lily'], amelia: ['mimi'], emilia: ['emilka', 'pawlik'] };
+    const aliasesOf = (name) => ALIASES[String(name || '').toLowerCase()] || [];
     function knownMentionNames() {
         const set = new Set(state.people.map((n) => n.toLowerCase()));
+        state.people.forEach((n) => aliasesOf(n).forEach((a) => set.add(a)));
         set.add('everyone');
         set.add('ai');
+        set.add('agent');
+        set.add('bob');
+        set.add('important');
         return set;
     }
 
@@ -272,6 +281,7 @@
         const known = knownMentionNames();
         (extraNames || []).forEach((n) => known.add(String(n).toLowerCase()));
         const me = state.user ? state.user.name.toLowerCase() : '';
+        const myAliases = aliasesOf(me);
         const re = /(https?:\/\/[^\s<>"'`]+)|@([A-Za-z][A-Za-z0-9_-]*)/gi;
         let out = '';
         let last = 0;
@@ -289,7 +299,9 @@
                 }
                 const href = safeHttpUrl(url);
                 out += escapeHtml(src.slice(last, idx));
-                if (href) out += `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+                const site = href && /^https?:\/\/(?:[\w.-]*chowaniec\.net|localhost(?::\d+)?|127\.0\.0\.1(?::\d+)?|[\w.-]*netlify\.app)\/(notes|calendar|meet|group)\/?\?/i.exec(href);
+                const nice = site ? { notes: '📝 Open note', calendar: '📅 Open event', meet: '🎥 Join meeting', group: '💬 Open chat' }[site[1].toLowerCase()] : '';
+                if (href) out += `<a href="${escapeHtml(href)}"${site ? '' : ' target="_blank" rel="noopener noreferrer"'}>${escapeHtml(nice || url)}</a>`;
                 else out += escapeHtml(url);
                 out += escapeHtml(trail);
                 last = idx + x[0].length;
@@ -298,7 +310,7 @@
                 const name = x[2];
                 if (/[\w@]/.test(prev) || !known.has(name.toLowerCase())) continue;
                 const lower = name.toLowerCase();
-                const isMe = lower === me || (lower === 'everyone');
+                const isMe = lower === me || myAliases.includes(lower) || lower === 'everyone' || lower === 'important';
                 out += escapeHtml(src.slice(last, idx));
                 out += `<span class="mention${isMe ? ' me' : ''}">@${escapeHtml(name)}</span>`;
                 last = idx + x[0].length;
@@ -414,6 +426,12 @@
                 if (!isMine(m)) freshFromOthers++;
                 if (m.kind === 'ai') aiArrived = true;
             }
+            if (m.thread && !state.byId.has(m.id)) {
+                const root = state.byId.get(m.thread);
+                if (root && (!root.threadLast || String(root.threadLast.at) < String(m.createdAt))) {
+                    state.byId.set(root.id, { ...root, threadCount: (root.threadCount || 0) + 1, threadLast: { user: m.user, at: m.createdAt } });
+                }
+            }
             state.byId.set(m.id, m);
         });
         if (aiArrived) state.aiThinkingUntil = 0;
@@ -442,6 +460,13 @@
     function applyExtras(data) {
         if (!data) return;
         if (Array.isArray(data.presence)) state.presence = data.presence.filter((p) => p && p.user);
+        if (!state.openRead && Array.isArray(data.presence)) {
+            const mine = state.presence.find((p) => sameName(p.user, myName()));
+            if (mine) {
+                state.openRead = { id: mine.lastReadId || null };
+                window.dispatchEvent(new Event('chowaniec-group-opened'));
+            }
+        }
         if (Object.prototype.hasOwnProperty.call(data, 'pinned')) state.pinned = data.pinned || null;
         renderHeader();
         renderPinned();
@@ -533,12 +558,14 @@
         if (photoOnly) bubbleCls.push('photo-only');
         if (emojiCount) bubbleCls.push('emoji-only', 'e' + emojiCount);
         if (flags.mentionsMe) bubbleCls.push('mentions-me');
+        if (m.important) bubbleCls.push('important');
         if (rich) bubbleCls.push('rich', ex.richClass(m));
         if (flags.end && !emojiCount && !photoOnly) bubbleCls.push('tail');
 
         const time = escapeHtml(timeLabel(t));
         // NB: the bubble is white-space: pre-wrap, so its inner HTML must not contain stray whitespace.
         let inner = '';
+        if (m.important) inner += `<span class="imp-flag">🚨 Important</span>`;
         if (m.replyTo && typeof m.replyTo === 'object') {
             const rt = m.replyTo;
             const rtText = rt.text ? snippet(rt.text, 140) : 'Photo';
@@ -561,13 +588,13 @@
         let name = '';
         if (!mine && flags.start) {
             name = m.kind === 'ai'
-                ? `<div class="msg-name"><i data-lucide="sparkles" class="w-3 h-3"></i>${escapeHtml(displayName(m))}</div>`
+                ? `<div class="msg-name"><i data-lucide="sparkles" class="w-3 h-3"></i>${escapeHtml(displayName(m))}${m.onBehalfOf ? ` <span class="msg-for">for ${escapeHtml(m.onBehalfOf)}</span>` : ''}</div>`
                 : `<div class="msg-name acc-text ${personClass(m.user)}">${escapeHtml(displayName(m))}</div>`;
         }
         const avatar = mine ? '' : `<div class="av-slot">${flags.end ? avatarHtml(m.user, '', { ai: m.kind === 'ai' }) : ''}</div>`;
         const swipe = m._pending ? '' : `<span class="swipe-ic" aria-hidden="true"><i data-lucide="reply"></i></span>`;
 
-        return `<div class="${classes.join(' ')}" data-id="${escapeHtml(m.id)}">${swipe}${avatar}<div class="msg-col">${name}<div class="${bubbleCls.join(' ')}" data-bubble="1" data-id="${escapeHtml(m.id)}" title="${escapeHtml(fullTime(t))}">${inner}</div>${reacts}${status}</div>${m._pending ? '' : hoverActionsHtml(m.id)}</div>`;
+        return `<div class="${classes.join(' ')}" data-id="${escapeHtml(m.id)}">${swipe}${avatar}<div class="msg-col">${name}<div class="${bubbleCls.join(' ')}" data-bubble="1" data-id="${escapeHtml(m.id)}" title="${escapeHtml(fullTime(t))}">${inner}</div>${reacts}${m.threadCount ? `<button type="button" class="thread-chip" data-x="thread-open" data-id="${escapeHtml(m.id)}"><i data-lucide="messages-square"></i>${m.threadCount === 1 ? '1 reply' : m.threadCount + ' replies'}</button>` : ''}${status}</div>${m._pending ? '' : hoverActionsHtml(m.id)}</div>`;
     }
 
     function pendingAsMessage(p) {
@@ -609,7 +636,7 @@
     }
 
     function buildItems() {
-        const all = state.messages.concat(state.pending.map(pendingAsMessage));
+        const all = state.messages.concat(state.pending.map(pendingAsMessage)).filter((m) => !m.thread);
         const items = [];
         const groupKey = (m) => (m.kind === 'system' ? null : `${m.kind || 'user'}|${String(m.user || '').toLowerCase()}`);
         const continues = (a, b) => !!a && !!b && a.kind !== 'system' && b.kind !== 'system' &&
@@ -635,7 +662,7 @@
                 end: !continues(m, next),
                 mentionsMe: mentionsMe(m)
             };
-            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice]);
+            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, m.onBehalfOf, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice, m.sticker, m.threadCount, m.sheet, m.important, window.GroupExtras && window.GroupExtras.sig ? window.GroupExtras.sig(m) : '']);
             items.push({ key: `m:${m.id}`, sig, t, id: m.id, html: messageHtml(m, flags) });
             if (receipt && receipt.id === m.id) {
                 items.push({ key: 'receipt', sig: 'r|' + receipt.seen.join(','), html: receiptHtml(receipt) });
@@ -799,11 +826,16 @@
         const me = myName();
         const onlineOthers = state.presence.filter((p) => p.online && !sameName(p.user, me) && !isAiName(p.user)).length;
         const n = state.people.length;
+        if (state.dm) {
+            const other = state.dm.ai ? 0 : state.presence.filter((p) => p.online && sameName(p.user, state.dm.name)).length;
+            return { html: other ? '<span class="on">Online</span>' : escapeHtml(state.dm.ai ? 'Your private chat with the AI' : 'Direct message'), typing: false };
+        }
         const base = n ? `${n} members` : 'Family chat';
         return { html: onlineOthers ? `${escapeHtml(base)}, <span class="on">${onlineOthers} online</span>` : escapeHtml(base), typing: false };
     }
 
     function groupAvatarHtml(size) {
+        if (state.dm) return avatarHtml(state.dm.name, size, { ai: state.dm.ai });
         const me = myName();
         const others = state.people.filter((n) => !sameName(n, me));
         const pick = (others.length ? others : state.people).slice(0, 2);
@@ -815,6 +847,10 @@
         const line = $('member-line');
         const sub = subtitleHtml();
         line.innerHTML = sub.html;
+        if (state.dm) {
+            const w = document.querySelector('.hdr-text .wordmark');
+            if (w && w.dataset.dm !== state.dm.name) { w.dataset.dm = state.dm.name; w.textContent = state.dm.name; }
+        }
         line.classList.toggle('typing', sub.typing);
         line.title = state.people.join(', ');
         const ga = $('group-avatar');
@@ -1054,7 +1090,7 @@
             status: 'sending'
         };
         state.pending.push(p);
-        if (/(^|[^\w@])@ai\b/i.test(text)) state.aiThinkingUntil = Date.now() + 60000;
+        if (/(^|[^\w@])@(ai|bob)\b/i.test(text) || (state.dm && state.dm.ai)) state.aiThinkingUntil = Date.now() + 60000;
         ta.value = '';
         state.caret = { start: 0, end: 0 };
         state.image = null;
@@ -1090,7 +1126,7 @@
         } catch (e) {
             p.status = 'failed';
             p.error = e.message;
-            if (/@ai\b/i.test(p.text)) state.aiThinkingUntil = 0;
+            if (/@(ai|bob)\b/i.test(p.text) || (state.dm && state.dm.ai)) state.aiThinkingUntil = 0;
             render('auto');
             if (e.status !== 401) toast(e.message || 'Message not sent', 'error');
         }
@@ -1172,8 +1208,9 @@
     // ---------- mentions autocomplete ----------
     function mentionOptions() {
         const me = myName();
-        const opts = state.people.filter((n) => !sameName(n, me)).map((n) => ({ name: n, hint: '', kind: 'person' }));
+        const opts = state.people.filter((n) => !sameName(n, me)).map((n) => ({ name: n, hint: '', kind: 'person', aliases: aliasesOf(n) }));
         opts.push({ name: 'everyone', hint: 'Notify the whole family', kind: 'everyone' });
+        if (state.user && state.user.host) opts.push({ name: 'important', hint: 'Urgent ping that gets through quiet hours', kind: 'important' });
         opts.push({ name: 'AI', hint: 'Ask Chowaniec AI', kind: 'ai' });
         return opts;
     }
@@ -1187,8 +1224,9 @@
         if (!x) return closeMention();
         const query = x[2].toLowerCase();
         const all = mentionOptions();
-        const starts = all.filter((o) => o.name.toLowerCase().startsWith(query));
-        const contains = all.filter((o) => !o.name.toLowerCase().startsWith(query) && o.name.toLowerCase().includes(query));
+        const words = (o) => [o.name.toLowerCase()].concat((o.aliases || []).map((a) => a.toLowerCase()));
+        const starts = all.filter((o) => words(o).some((w) => w.startsWith(query)));
+        const contains = all.filter((o) => !words(o).some((w) => w.startsWith(query)) && words(o).some((w) => w.includes(query)));
         const options = starts.concat(contains);
         if (!options.length) return closeMention();
         const prevIndex = state.mention && state.mention.query === query ? state.mention.index : 0;
@@ -1204,9 +1242,11 @@
         const online = onlineNames();
         pop.innerHTML = `<p class="pop-title">Mention</p>` + m.options.map((o, i) => {
             const av = o.kind === 'ai' ? avatarHtml(AI_NAME, 'av-md', { ai: true })
+                : o.kind === 'important' ? avatarHtml('', 'av-md', { everyone: true })
                 : o.kind === 'everyone' ? avatarHtml('', 'av-md', { everyone: true })
                     : avatarHtml(o.name, 'av-md');
-            const hint = o.hint || (online.has(o.name.toLowerCase()) ? 'Online' : '');
+            const nick = (o.aliases || []).find((a) => a.startsWith(m.query)) || '';
+            const hint = o.hint || (nick && !o.name.toLowerCase().startsWith(m.query) ? `Also called ${nick.charAt(0).toUpperCase() + nick.slice(1)}` : '') || (online.has(o.name.toLowerCase()) ? 'Online' : '');
             const active = i === m.index;
             return `<button type="button" role="option" aria-selected="${active}" data-mention="${escapeHtml(o.name)}" class="opt">
                 ${av}<span class="min-w-0 flex-1"><span class="font-medium">@${escapeHtml(o.name)}</span>${hint ? `<span class="hint truncate">${escapeHtml(hint)}</span>` : ''}</span>
@@ -1786,6 +1826,7 @@
         closeEmoji();
         state.sheetOpen = true;
         renderSheet();
+        fillSearchUsers();
         renderThemeSeg();
         show($('sheet-backdrop'), 'block');
         const sheet = $('info-sheet');
@@ -1846,7 +1887,8 @@
             else if (e.online) { st = 'Online'; on = true; }
             else if (e.p && e.p.lastSeen) st = lastSeenLabel(e.p.lastSeen);
             else st = 'Hasn’t opened the chat yet';
-            return `<div class="member" data-member="${escapeHtml(e.name)}">${avatarHtml(e.name, 'av-lg')}<div class="min-w-0 flex-1"><div class="nm">${escapeHtml(e.name)}${e.isMe ? '<span class="you">You</span>' : ''}</div><div class="st${on ? ' on' : ''}">${escapeHtml(st)}</div></div></div>`;
+            const dmBtn = !e.isMe && !IS_DM && !isAiName(e.name) ? `<a class="member-msg" href="/group/?room=${dmRoomFor(myName(), e.name)}" aria-label="Message ${escapeHtml(e.name)}"><i data-lucide="message-circle"></i>Message</a>` : '';
+            return `<div class="member" data-member="${escapeHtml(e.name)}">${avatarHtml(e.name, 'av-lg')}<div class="min-w-0 flex-1"><div class="nm">${escapeHtml(e.name)}${e.isMe ? '<span class="you">You</span>' : ''}</div><div class="st${on ? ' on' : ''}">${escapeHtml(st)}</div></div>${dmBtn}</div>`;
         }).join('');
         // You are always shown as online in your own list.
         const meEl = $('sheet-members').querySelector('.av[data-user="' + (window.CSS && CSS.escape ? CSS.escape(myName().toLowerCase()) : myName().toLowerCase()) + '"]');
@@ -1888,12 +1930,39 @@
         return s;
     }
 
+    function fillSearchUsers() {
+        const sel = $('search-user');
+        if (!sel || sel.options.length > 1) return;
+        state.people.forEach((p) => { const n = typeof p === 'string' ? p : p.name; if (n && !isAiName(n)) sel.add(new Option(n, n)); });
+    }
+    const filtersOn = () => !!(state.search.user || state.search.from || state.search.to);
+    const filterKey = () => [state.search.q.trim().toLowerCase(), state.search.user, state.search.from, state.search.to].join('|');
+
+    // With a person or dates chosen we ask the server, which looks through the whole history.
+    async function searchRemote() {
+        const key = filterKey();
+        if (!filtersOn()) { state.search.remote = null; renderSearch(); return; }
+        state.search.remote = { key, hits: null };
+        renderSearch();
+        const qs = new URLSearchParams({ search: state.search.q.trim(), user: state.search.user, from: state.search.from, to: state.search.to });
+        try {
+            const data = await api(`${API}?${qs}`);
+            if (state.search.remote && state.search.remote.key === key) state.search.remote = { key, hits: data.hits || [], complete: data.complete !== false };
+        } catch (e) {
+            state.search.remote = null;
+            toast(e.message || 'Search failed.', 'error');
+        }
+        if (state.sheetOpen) renderSearch();
+    }
+
     function renderSearch() {
         const q = state.search.q.trim().toLowerCase();
         const res = $('search-results');
         const sections = $('sheet-sections');
         $('search-field').classList.toggle('has-value', !!state.search.q);
-        if (!q) {
+        $('search-filters').classList.toggle('has-filter', filtersOn());
+        fillSearchUsers();
+        if (!q && !filtersOn()) {
             res.classList.add('hidden');
             res.innerHTML = '';
             sections.classList.remove('hidden');
@@ -1901,16 +1970,24 @@
         }
         sections.classList.add('hidden');
         res.classList.remove('hidden');
-        const hits = searchMatches(q);
+        const remote = filtersOn() ? state.search.remote : null;
+        if (filtersOn() && (!remote || remote.hits === null)) {
+            res.innerHTML = `<div class="search-foot"><span class="inline-flex items-center gap-2"><i data-lucide="loader-circle" class="w-4 h-4 spin"></i> Searching the whole chat…</span></div>`;
+            icons(res);
+            return;
+        }
+        const hits = remote ? remote.hits : searchMatches(q);
         const oldest = state.messages[0];
         let html = `<div class="sec-title"><span>${hits.length === 1 ? '1 result' : hits.length + ' results'}</span></div>`;
         if (hits.length) {
-            html += `<div class="card">${hits.slice(0, 200).map((m) => `<button type="button" class="hit" data-act="search-hit" data-id="${escapeHtml(m.id)}">${avatarHtml(m.user, 'av-md', { ai: m.kind === 'ai' })}<span class="min-w-0 flex-1"><span class="top"><b class="${m.kind === 'ai' ? '' : 'acc-text ' + personClass(m.user)}">${escapeHtml(displayName(m))}</b><time>${escapeHtml(shortWhen(ts(m)))}</time></span><span class="tx">${highlight(hitSnippet(m.text, q), q)}</span></span></button>`).join('')}</div>`;
+            html += `<div class="card">${hits.slice(0, 200).map((m) => `<button type="button" class="hit" data-act="search-hit" data-id="${escapeHtml(m.id)}">${avatarHtml(m.user, 'av-md', { ai: m.kind === 'ai' })}<span class="min-w-0 flex-1"><span class="top"><b class="${m.kind === 'ai' ? '' : 'acc-text ' + personClass(m.user)}">${escapeHtml(displayName(m))}</b><time>${escapeHtml(shortWhen(ts(m)))}</time></span><span class="tx">${q ? highlight(hitSnippet(m.text, q), q) : escapeHtml(hitSnippet(m.text, q))}</span></span></button>`).join('')}</div>`;
         } else {
             html += `<div class="card"><p class="muted-note">No messages match “${escapeHtml(state.search.q.trim())}”${state.hasMore ? ' in the loaded history yet' : ''}.</p></div>`;
         }
         html += `<div class="search-foot">`;
-        if (state.search.busy) {
+        if (remote) {
+            html += `<span>${remote.complete ? 'Searched the whole chat' : 'Showing the newest matches'}</span>`;
+        } else if (state.search.busy) {
             html += `<span class="inline-flex items-center gap-2"><i data-lucide="loader-circle" class="w-4 h-4 spin"></i> Searching older messages…</span>`;
         } else if (state.hasMore) {
             html += `<span>Searched back to ${escapeHtml(oldest ? dayLabel(ts(oldest)) : 'the start')}</span><button type="button" class="btn btn-ghost" data-act="search-older"><i data-lucide="history"></i>Search older messages</button>`;
@@ -2251,7 +2328,18 @@
             state.search.q = si.value;
             $('search-field').classList.toggle('has-value', !!si.value);
             clearTimeout(state.search.timer);
-            state.search.timer = setTimeout(renderSearch, 120);
+            state.search.timer = setTimeout(filtersOn() ? searchRemote : renderSearch, filtersOn() ? 350 : 120);
+        });
+        const onFilter = () => {
+            state.search.user = $('search-user').value;
+            state.search.from = $('search-from').value;
+            state.search.to = $('search-to').value;
+            searchRemote();
+        };
+        ['search-user', 'search-from', 'search-to'].forEach((id) => $(id).addEventListener('change', onFilter));
+        $('search-filter-clear').addEventListener('click', () => {
+            $('search-user').value = ''; $('search-from').value = ''; $('search-to').value = '';
+            onFilter();
         });
         si.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(state.search.timer); renderSearch(); si.blur(); } });
         $('search-clear').addEventListener('click', () => { si.value = ''; state.search.q = ''; renderSearch(); si.focus(); });
@@ -2309,7 +2397,23 @@
     }
 
     // Finds the chats this person is in, shows the switcher, and limits @mentions to this chat's members.
+    async function loadDm() {
+        try {
+            const data = await api(`${API}?dminfo=1`);
+            if (!data.dm) throw new Error('missing');
+            state.dm = data.dm;
+            state.people = data.dm.members;
+        } catch (e) { location.replace('/messages/'); return; }
+        const back = $('btn-back');
+        if (back) back.onclick = () => { location.href = '/messages/'; };
+        const bar = $('room-bar');
+        if (bar) bar.classList.add('hidden');
+        document.title = `${state.dm.name} · Messages`;
+        renderHeader();
+    }
+
     async function loadRooms() {
+        if (IS_DM) return loadDm();
         try {
             const data = await api(`${API}?rooms=1`);
             state.rooms = Array.isArray(data.rooms) ? data.rooms : [];
@@ -2346,6 +2450,7 @@
         state.started = true;
         state.people = loadPeople();
         state.rooms = [];
+        state.dm = null;
         loadRooms();
         state.theme = readTheme();
         applyTheme();
@@ -2382,7 +2487,8 @@
     window.ChowaniecGroup = {
         API, state, api, toast, icons, render, upsert, findMessage, setReply, clearComposer, closeActions, closeEmoji,
         escapeHtml, sameName, myName, isMine, mediaUrl, show, hide, ts,
-        clickSuppressed: () => suppressClick
+        clickSuppressed: () => suppressClick,
+        room: () => ROOM
     };
 
     window.returnToHub = function () {

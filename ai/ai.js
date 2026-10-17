@@ -9,16 +9,21 @@
         { name: 'summarize', args: '#note', desc: 'Summarize a note', server: true },
         { name: 'note', args: 'text', desc: 'Save a new note', server: true },
         { name: 'meet', args: 'topic', desc: 'Create a meeting link', server: true },
-        { name: 'group', args: 'message', desc: 'Post to the family group chat', server: true },
+        { name: 'group', args: 'message', desc: 'Post to the family group chat (sent by me for you)', server: true },
         { name: 'remind', args: '@person message', desc: 'Remind someone in the group chat', server: true },
-        { name: 'recap', args: '', desc: 'Catch up on the group chat', server: true },
+        { name: 'recap', args: '', desc: 'Catch up on the group chats you are in', server: true },
+        { name: 'meeting-recap', args: 'optional code', desc: 'Recap the latest meeting you were in and post it to a chat', server: true },
+        { name: 'calendar', args: 'event details', desc: 'Add something to the family calendar', server: true },
+        { name: 'poll', args: 'question and answers', desc: 'Create a poll in a group chat', server: true },
+        { name: 'messages', args: 'person and what to tell them', desc: 'Send a direct message, or catch up on yours', server: true },
+        { name: 'signup', args: 'title and slots', desc: 'Create a sign-up sheet people can tap to claim', server: true },
         { name: 'new', args: '', desc: 'Start a new chat', server: false },
         { name: 'help', args: '', desc: 'Show what I can do', server: false },
         { name: 'clear', args: '', desc: 'Clear this chat from view', server: false }
     ];
     const COMMAND_ICONS = {
         summarize: 'scroll-text', note: 'notebook-pen', meet: 'video', group: 'messages-square',
-        remind: 'bell-ring', recap: 'history', new: 'square-pen', help: 'circle-help', clear: 'eraser'
+        remind: 'bell-ring', recap: 'history', 'meeting-recap': 'clipboard-list', calendar: 'calendar-days', poll: 'chart-no-axes-column', signup: 'clipboard-check', messages: 'message-circle', new: 'square-pen', help: 'circle-help', clear: 'eraser'
     };
 
     const SUGGESTIONS = [
@@ -372,9 +377,10 @@
             const conv = data.conversation || {};
             $('messages').innerHTML = '';
             if (conv.title) upsertConversation(id, conv.title, false);
-            (conv.messages || []).forEach((m) => {
+            const all = conv.messages || [];
+            all.forEach((m, i) => {
                 if (m.role === 'user') addUserMessage(m.text || '', null);
-                else addAssistantFinal(m.text || '', m.actions || []);
+                else addAssistantFinal(m.text || '', m.actions || [], i === all.length - 1 ? m.quickAnswers : null);
             });
             updateWelcome();
             scrollToBottom(true);
@@ -497,13 +503,14 @@
         row.className = 'flex gap-3 fade-in';
         row.setAttribute('data-role', 'assistant');
         row.innerHTML = `
-            <div class="w-8 h-8 shrink-0 rounded-full bg-black text-white flex items-center justify-center mt-0.5"><i data-lucide="sparkles" class="w-4 h-4"></i></div>
+            <div class="w-8 h-8 shrink-0 rounded-full bg-violet-600 flex items-center justify-center mt-0.5 p-1 bob-avatar">${window.ChowaniecRobot ? window.ChowaniecRobot.face() : ''}</div>
             <div class="flex-1 min-w-0 space-y-3">
                 <div data-slot="tools" class="hidden flex-wrap gap-2"></div>
                 <div data-slot="typing" class="hidden typing-dots items-center gap-1 h-7"><span></span><span></span><span></span></div>
                 <div data-slot="body" class="md-preview"></div>
                 <div data-slot="error" class="hidden"></div>
                 <div data-slot="actions" class="hidden flex-wrap gap-2"></div>
+                <div data-slot="quick" class="hidden flex-wrap gap-2" role="group" aria-label="Quick answers"></div>
                 <div data-slot="footer" class="hidden items-center gap-1 -ml-2"></div>
             </div>`;
         $('messages').appendChild(row);
@@ -516,6 +523,7 @@
             body: slot('body'),
             error: slot('error'),
             actions: slot('actions'),
+            quick: slot('quick'),
             footer: slot('footer'),
             text: '',
             toolChips: []
@@ -558,6 +566,41 @@
         icons();
     }
 
+    // Tappable answers the AI offers under its reply. Tapping one sends it as the person's next message.
+    function renderQuickAnswers(view, answers) {
+        const list = (Array.isArray(answers) ? answers : []).filter((a) => a && a.label && a.reply).slice(0, 4);
+        view.quick.innerHTML = '';
+        if (!list.length) {
+            view.quick.classList.add('hidden');
+            view.quick.classList.remove('flex');
+            return;
+        }
+        list.forEach((a) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('data-quick', '');
+            btn.className = 'min-h-[44px] px-5 py-2 rounded-full border border-gray-300 bg-white text-sm font-medium text-gray-800 hover:border-black hover:text-black transition-colors max-w-full';
+            btn.textContent = a.label;
+            btn.addEventListener('click', () => {
+                if (state.stream) return;
+                view.quick.querySelectorAll('button').forEach((b) => { b.disabled = true; b.classList.add('opacity-40'); });
+                btn.classList.remove('opacity-40');
+                btn.classList.add('bg-black', 'text-white', 'border-black');
+                const input = $('composer-input');
+                input.value = a.reply;
+                send();
+            });
+            view.quick.appendChild(btn);
+        });
+        view.quick.classList.remove('hidden');
+        view.quick.classList.add('flex');
+    }
+
+    // Quick answers only make sense for the newest reply: older ones are answered or stale.
+    function clearOldQuickAnswers() {
+        document.querySelectorAll('[data-slot="quick"]').forEach((el) => { el.innerHTML = ''; el.classList.add('hidden'); el.classList.remove('flex'); });
+    }
+
     function renderFooter(view) {
         view.footer.innerHTML = '';
         const btn = document.createElement('button');
@@ -586,11 +629,12 @@
         icons();
     }
 
-    function addAssistantFinal(text, actions) {
+    function addAssistantFinal(text, actions, quickAnswers) {
         const view = assistantShell();
         view.text = String(text || '');
         setMarkdownHtml(view.body, view.text);
         renderActions(view, actions);
+        renderQuickAnswers(view, quickAnswers);
         if (view.text) renderFooter(view);
         state.messages.push({ role: 'assistant', text: view.text, actions, el: view.row });
         icons();
@@ -782,6 +826,7 @@
                 if (typeof msg.text === 'string' && msg.text) view.text = msg.text;
                 flushRender(view);
                 renderActions(view, msg.actions);
+                renderQuickAnswers(view, msg.quickAnswers);
                 ctx.actions = msg.actions || [];
                 break;
             }
@@ -797,6 +842,7 @@
 
     async function runStream(request) {
         state.lastRequest = request;
+        clearOldQuickAnswers();
         const view = assistantShell();
         view.typing.classList.remove('hidden');
         view.typing.classList.add('flex');
@@ -814,6 +860,7 @@
         if (request.command) body.command = request.command;
         if (request.references && request.references.length) body.references = request.references;
         if (request.mentions && request.mentions.length) body.mentions = request.mentions;
+        body.chat = chatChoice();
 
         try {
             const res = await fetch(AGENT_URL, {
@@ -912,7 +959,7 @@
 
     // --- COMMAND PARSING & SEND ---
     function parseCommand(text) {
-        const m = /^\s*\/([a-z]+)(?=\s|$)\s*/i.exec(text);
+        const m = /^\s*\/([a-z-]+)(?=\s|$)\s*/i.exec(text);
         if (!m) return { cmd: null, rest: text };
         const cmd = COMMANDS.find((c) => c.name === m[1].toLowerCase());
         if (!cmd) return { cmd: null, rest: text };
@@ -989,6 +1036,9 @@
             if (cmd.name === 'summarize' && !hasNote && !message) return toast('Add a note with # to summarize', 'error');
             if (cmd.name === 'note' && !message) return toast('Write the note text after /note', 'error');
             if (cmd.name === 'group' && !message) return toast('Write a message after /group', 'error');
+            if (cmd.name === 'calendar' && !message) return toast('Say what to add after /calendar', 'error');
+            if (cmd.name === 'poll' && !message) return toast('Write the question and answers after /poll', 'error');
+            if (cmd.name === 'signup' && !message) return toast('Write the title and the slots after /signup', 'error');
             if (cmd.name === 'remind' && !mentions.length) return toast('Mention someone with @ to remind', 'error');
         }
 
@@ -1421,6 +1471,31 @@
     }
 
     let started = false;
+    // ---------- which group chat the AI posts to (the one without Emilia unless you change it) ----------
+    const CHAT_KEY = 'chowaniec_ai_chat';
+    function chatChoice() {
+        const sel = document.getElementById('chat-pick');
+        if (sel && sel.value) return sel.value;
+        try { return localStorage.getItem(CHAT_KEY) || 'no-emilia'; } catch (e) { return 'no-emilia'; }
+    }
+    async function loadChatPicker() {
+        const sel = document.getElementById('chat-pick');
+        if (!sel) return;
+        try {
+            const data = await api('/.netlify/functions/group?rooms=1');
+            const rooms = data.rooms || [];
+            if (rooms.length < 2) return;
+            let saved = 'no-emilia';
+            try { saved = localStorage.getItem(CHAT_KEY) || 'no-emilia'; } catch (e) { /* ignore */ }
+            if (!rooms.some((r) => r.id === saved)) saved = (rooms.find((r) => r.id === 'no-emilia') || rooms[0]).id;
+            sel.innerHTML = rooms.map((r) => `<option value="${r.id}">${String(r.name).replace(/[<>&"]/g, '')}</option>`).join('');
+            sel.value = saved;
+            sel.addEventListener('change', () => { try { localStorage.setItem(CHAT_KEY, sel.value); } catch (e) { /* ignore */ } });
+            const wrap = document.getElementById('chat-pick-wrap');
+            wrap.classList.remove('hidden'); wrap.classList.add('flex');
+        } catch (e) { /* the picker just stays hidden */ }
+    }
+
     async function start() {
         if (started) return;
         state.user = getUser();
@@ -1432,6 +1507,9 @@
         state.people = loadPeople();
         configureSanitizer();
         bindEvents();
+        loadChatPicker();
+        const hb = document.getElementById('hdr-bob');
+        if (hb && window.ChowaniecRobot) hb.innerHTML = window.ChowaniecRobot.face();
         renderUserChip();
         renderSuggestions();
         renderConversations();

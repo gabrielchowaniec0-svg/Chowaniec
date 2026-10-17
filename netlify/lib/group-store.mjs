@@ -4,9 +4,9 @@
 // Scheduled messages wait in the group-chat store under sched/<user>/<sendAt>-<random>.
 import { getStore } from '@netlify/blobs';
 import crypto from 'node:crypto';
-import { familyNames } from './auth.mjs';
+import { familyNames, resolveName, isHostName } from './auth.mjs';
 import { sendPush } from './push.mjs';
-import { DEFAULT_ROOM, prefixOf, roomMembers } from './rooms.mjs';
+import { DEFAULT_ROOM, prefixOf, roomMembers, isDmId, isAiDm } from './rooms.mjs';
 
 export const MAX_TEXT = 4000;
 export const AI_NAME = 'Chowaniec AI';
@@ -18,6 +18,27 @@ const AUDIO_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audi
 const MAX_AUDIO_BYTES = 2.5 * 1024 * 1024;
 export const MAX_VOICE_SECONDS = 300;
 export const MAX_SCHEDULED_PER_USER = 20;
+
+// The family sticker pack: big picture + a short label. Ids are what gets stored and sent.
+export const STICKERS = [
+  { id: 'bravo', emoji: '👏', label: 'Bravo!' },
+  { id: 'break-a-leg', emoji: '🎭', label: 'Break a leg!' },
+  { id: 'curtain-up', emoji: '🎬', label: 'Curtain up!' },
+  { id: 'standing-o', emoji: '🙌', label: 'Standing ovation' },
+  { id: 'on-my-way', emoji: '🚗', label: 'On my way' },
+  { id: 'running-late', emoji: '⏰', label: 'Running late' },
+  { id: 'dinner', emoji: '🍝', label: 'Dinner time' },
+  { id: 'love-you', emoji: '❤️', label: 'Love you' },
+  { id: 'thank-you', emoji: '🙏', label: 'Thank you' },
+  { id: 'congrats', emoji: '🎉', label: 'Congrats!' },
+  { id: 'need-help', emoji: '🆘', label: 'Need a hand' },
+  { id: 'good-night', emoji: '🌙', label: 'Good night' },
+  { id: 'good-morning', emoji: '☀️', label: 'Good morning' },
+  { id: 'rehearsal', emoji: '🎤', label: 'Rehearsal time' },
+  { id: 'hug', emoji: '🤗', label: 'Big hug' },
+  { id: 'cheers', emoji: '🥂', label: 'Cheers!' }
+];
+export const stickerById = (id) => STICKERS.find((x) => x.id === id) || null;
 
 const messages = () => getStore({ name: 'group-chat', consistency: 'strong' });
 const media = () => getStore({ name: 'group-media', consistency: 'strong' });
@@ -82,21 +103,23 @@ export async function getMessage(id, room = DEFAULT_ROOM) {
   return entry ? { message: entry.data, etag: entry.etag } : null;
 }
 
-// Finds @Name, @everyone and @AI mentions (case-insensitive).
+// Finds @Name (or nickname), @everyone, @important and @AI mentions (case-insensitive).
+// @important pings everyone, so it is returned as 'everyone' here; use hasImportant() to tell them apart.
 export function parseMentions(text) {
-  const names = familyNames();
   const found = new Set();
   for (const match of text.matchAll(/@([A-Za-z][\w-]*)/g)) {
     const word = match[1].toLowerCase();
-    if (word === 'everyone') found.add('everyone');
-    else if (word === 'ai' || word === 'agent') found.add('AI');
+    if (word === 'everyone' || word === 'important') found.add('everyone');
+    else if (word === 'ai' || word === 'agent' || word === 'bob') found.add('AI');
     else {
-      const name = names.find((n) => n.toLowerCase() === word);
+      const name = resolveName(word);
       if (name) found.add(name);
     }
   }
   return [...found];
 }
+
+export const hasImportant = (text) => /(^|[^\w])@important\b/i.test(String(text || ''));
 
 async function saveImage(dataUrl, room = DEFAULT_ROOM) {
   const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || '');
@@ -129,9 +152,13 @@ export async function getImage(id) {
 }
 
 // Stores a message and returns it. `author` is a family name or AI_NAME.
-export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, room = DEFAULT_ROOM }) {
+export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, onBehalfOf, sticker, thread, sheet, important, room = DEFAULT_ROOM }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
-  if (!clean && !image && !poll && !voice) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
+  const wantsImportant = kind !== 'system' && !!(important || hasImportant(clean));
+  if (wantsImportant && !isHostName(onBehalfOf || author)) {
+    throw Object.assign(new Error('Only Victoria, Gabriel or Nicole can send an @important ping.'), { status: 403 });
+  }
+  if (!clean && !image && !poll && !voice && !sticker && !sheet) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
 
   let reply = null;
   if (replyTo) {
@@ -152,10 +179,79 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user',
     reactions: {},
     ...(poll ? { poll } : {}),
     ...(voice ? { voice } : {}),
-    ...(link ? { link } : {})
+    ...(link ? { link } : {}),
+    ...(onBehalfOf ? { onBehalfOf } : {}),
+    ...(sticker ? { sticker } : {}),
+    ...(sheet ? { sheet } : {}),
+    ...(wantsImportant ? { important: true } : {}),
+    ...(thread ? { thread } : {})
   };
   await messages().setJSON(keyOf(message.id, room), message, { onlyIfNew: true });
+  if (thread) await bumpThread(thread, room, author, message.createdAt);
   return message;
+}
+
+// --- Threads: side conversations under one message ---
+// A reply in a thread is a normal message with message.thread = <root id>. The root keeps threadCount and threadLast.
+
+// Checks that `rootId` can have a thread (it exists in this chat and is itself not a thread reply).
+export async function threadRoot(rootId, room = DEFAULT_ROOM) {
+  const found = await getMessage(rootId, room);
+  if (!found || found.message.thread || found.message.kind === 'system') throw Object.assign(new Error('That message can’t have a thread.'), { status: 404 });
+  return found.message;
+}
+
+async function bumpThread(rootId, room, user, at) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const found = await getMessage(rootId, room);
+    if (!found) return;
+    const root = found.message;
+    root.threadCount = (root.threadCount || 0) + 1;
+    root.threadLast = { user, at };
+    const { modified } = await messages().setJSON(keyOf(rootId, room), root, { onlyIfMatch: found.etag });
+    if (modified) return;
+  }
+}
+
+export async function listThread(rootId, room = DEFAULT_ROOM) {
+  const root = await threadRoot(rootId, room);
+  const replies = (await since(rootId, 500, room)).filter((m) => m.thread === rootId);
+  return { root, replies };
+}
+
+// Who is in a thread: the person who started it and everyone who has replied.
+export async function threadParticipants(rootId, room = DEFAULT_ROOM) {
+  try {
+    const { root, replies } = await listThread(rootId, room);
+    return [...new Set([root.user, ...replies.map((m) => m.user)])];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Looks through a chat's history for messages matching the words, optionally from one person and between two dates.
+export async function searchMessages(room, { q = '', user = '', from = '', to = '', limit = 100 } = {}) {
+  const words = String(q).toLowerCase().split(/\s+/).filter(Boolean);
+  const hits = [];
+  let scanned = 0;
+  const allDays = await days(room);
+  for (const day of allDays) {
+    if (to && day > to) continue;
+    if (from && day < from) break;
+    const ids = (await idsForDay(day, room)).reverse();
+    const list = await load(ids, room);
+    scanned += list.length;
+    for (const m of list.reverse()) {
+      if (m.kind === 'system') continue;
+      if (user && m.user !== user) continue;
+      const hay = `${m.text || ''} ${(m.voice && m.voice.transcript) || ''}`.toLowerCase();
+      if (words.length && !words.every((w) => hay.includes(w))) continue;
+      hits.push(m);
+      if (hits.length >= limit) return { hits, scanned, complete: false };
+    }
+    if (scanned > 3000) return { hits, scanned, complete: false };
+  }
+  return { hits, scanned, complete: true };
 }
 
 export async function deleteMessage(id, room = DEFAULT_ROOM) {
@@ -186,17 +282,38 @@ export async function toggleReaction(id, user, emoji, room = DEFAULT_ROOM) {
 // Push notifications for a new message: mentioned people get "X mentioned you",
 // everyone else a normal message notification. The author is never notified.
 export async function notifyMessage(message) {
-  const preview = message.text ? message.text.slice(0, 140) : 'Sent a photo';
+  const preview = message.text ? message.text.slice(0, 140) : message.sticker ? 'Sent a sticker' : 'Sent a photo';
   const body = message.image && message.text ? `📷 ${preview}` : preview;
-  const everyone = roomMembers(message.room || DEFAULT_ROOM);
+  let everyone = roomMembers(message.room || DEFAULT_ROOM);
+  let threadTitle = '';
+  if (message.thread) {
+    // A thread reply goes to the people in that thread (and anyone @mentioned), not the whole chat.
+    const inThread = await threadParticipants(message.thread, message.room || DEFAULT_ROOM);
+    const mentionedNames = message.mentions.includes('everyone') ? everyone : message.mentions;
+    everyone = everyone.filter((n) => inThread.includes(n) || mentionedNames.includes(n));
+    threadTitle = ' in a thread';
+  }
   const mentioned = message.mentions.includes('everyone')
     ? everyone
     : message.mentions.filter((m) => everyone.includes(m));
   const others = everyone.filter((n) => !mentioned.includes(n));
+  const skip = message.onBehalfOf || message.user;   // the person an AI message was sent for already knows
   const url = message.room && message.room !== DEFAULT_ROOM ? `/group/?room=${message.room}` : '/group/';
+  if (isAiDm(message.room)) return;                      // the AI's own chat: replyAsAi notifies the person
+  if (isDmId(message.room)) {
+    // A direct message: always treated like a mention (it is for them), never a group-style notification.
+    const to = everyone.filter((n) => n !== skip);
+    if (to.length) await sendPush(to, { title: message.onBehalfOf ? `${AI_NAME} for ${message.onBehalfOf}` : message.user, body, url, tag: `dm-${message.room}` }, { exclude: skip, kind: message.important ? 'important' : 'mention' });
+    return;
+  }
+  if (message.important) {
+    // Everyone in the chat is pinged, whatever their notification mode (only a full "off" is respected).
+    await sendPush(everyone, { title: `🚨 Important from ${message.onBehalfOf || message.user}`, body, url, tag: `important-${message.id}`, requireInteraction: true }, { exclude: skip, kind: 'important' });
+    return;
+  }
   await Promise.all([
-    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: message.user, kind: 'mention' }) : 0,
-    others.length ? sendPush(others, { title: message.user, body, url }, { exclude: message.user, kind: 'message' }) : 0
+    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: skip, kind: 'mention' }) : 0,
+    others.length ? sendPush(others, { title: `${message.user}${threadTitle}`, body, url }, { exclude: skip, kind: 'message' }) : 0
   ]);
 }
 
@@ -217,7 +334,7 @@ export function transcriptOf(list) {
     const when = new Date(m.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: familyTimeZone() });
     const reply = m.replyTo ? ` (replying to ${m.replyTo.user}: "${m.replyTo.text.slice(0, 80)}")` : '';
     const poll = m.poll ? ` [poll options: ${m.poll.options.map((o) => `${o.text} (${o.votes.length})`).join(', ')}${m.poll.closed ? '; closed' : ''}]` : '';
-    return `[${when}] ${m.user}${reply}: ${m.text || ''}${m.image ? ' [photo]' : ''}${m.voice ? ' [voice message]' : ''}${poll}`;
+    return `[${when}] ${m.user}${reply}: ${m.text || ''}${m.image ? ' [photo]' : ''}${m.voice ? ` [voice message${m.voice.transcript ? `: "${m.voice.transcript.slice(0, 300)}"` : ''}]` : ''}${m.sticker ? ' [sticker]' : ''}${poll}`;
   }).join('\n');
 }
 
@@ -361,8 +478,9 @@ export async function nextScheduledAt() {
   return hint ? hint.at : null;
 }
 
-export async function scheduleMessage({ user, text, replyTo, sendAt, room = DEFAULT_ROOM }) {
+export async function scheduleMessage({ user, text, replyTo, sendAt, room = DEFAULT_ROOM, asAi = false }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
+  if (hasImportant(clean) && !isHostName(user)) throw Object.assign(new Error('Only Victoria, Gabriel or Nicole can send an @important ping.'), { status: 403 });
   if (!clean) throw Object.assign(new Error('Write a message to schedule.'), { status: 400 });
   const when = Date.parse(sendAt);
   const now = Date.now();
@@ -372,7 +490,7 @@ export async function scheduleMessage({ user, text, replyTo, sendAt, room = DEFA
   const { blobs } = await messages().list({ prefix: schedPrefix(user) });
   if (blobs.length >= MAX_SCHEDULED_PER_USER) throw Object.assign(new Error(`You can have up to ${MAX_SCHEDULED_PER_USER} scheduled messages.`), { status: 409 });
   const id = `${String(when).padStart(13, '0')}-${crypto.randomBytes(4).toString('hex')}`;
-  const record = { id, user, room, text: clean, replyTo: isMessageId(replyTo) ? replyTo : null, sendAt: new Date(when).toISOString(), createdAt: new Date(now).toISOString() };
+  const record = { id, user, room, ...(asAi ? { asAi: true } : {}), text: clean, replyTo: isMessageId(replyTo) ? replyTo : null, sendAt: new Date(when).toISOString(), createdAt: new Date(now).toISOString() };
   await messages().setJSON(`${schedPrefix(user)}${id}`, record);
   const next = await nextScheduledAt();
   if (next == null || when < next) await setNextSched(when);
@@ -411,7 +529,10 @@ export async function deliverDue(publish) {
     const claim = await messages().setJSON(b.key, { ...record, claimedAt: now }, { onlyIfMatch: entry.etag });
     if (!claim.modified) continue;
     try {
-      const message = await postMessage({ author: record.user, text: record.text, replyTo: record.replyTo, room: record.room || DEFAULT_ROOM });
+      const message = await postMessage({
+        author: record.asAi ? AI_NAME : record.user, kind: record.asAi ? 'ai' : 'user', onBehalfOf: record.asAi ? record.user : undefined,
+        text: record.text, replyTo: record.replyTo, room: record.room || DEFAULT_ROOM
+      });
       await messages().delete(b.key);
       delivered++;
       await publish(message);

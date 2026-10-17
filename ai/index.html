@@ -126,7 +126,7 @@
                         <i data-lucide="panel-left" class="w-5 h-5"></i>
                     </button>
                     <div class="flex items-center gap-2.5 sm:gap-3 min-h-[40px] min-w-0 ml-1 lg:ml-0">
-                        <div class="w-8 h-8 shrink-0 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans">
+                        <div id="hdr-bob" class="w-8 h-8 shrink-0 bg-violet-600 rounded-full flex items-center justify-center p-1 text-white text-xs font-sans">
                             CN
                         </div>
                         <div class="font-serif tracking-wide text-xl whitespace-nowrap">
@@ -193,6 +193,10 @@
 
                 <!-- Composer -->
                 <div class="shrink-0 bg-gradient-to-t from-[#fafafa] via-[#fafafa] to-[#fafafa]/0 pt-1 px-3 sm:px-6 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                    <div id="chat-pick-wrap" class="max-w-[780px] mx-auto mb-2 hidden items-center gap-2 text-xs text-gray-500">
+                        <label for="chat-pick" class="font-mono uppercase tracking-widest text-[10px] text-gray-400">Post to</label>
+                        <select id="chat-pick" class="min-h-[36px] rounded-full border border-gray-200 bg-white px-3 text-xs text-gray-700"></select>
+                    </div>
                     <form id="composer" class="max-w-[780px] mx-auto relative" autocomplete="off">
                         <!-- Autocomplete popup -->
                         <div id="ac-popup" role="listbox" aria-label="Suggestions" class="hidden absolute left-0 right-0 bottom-full mb-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden z-40">
@@ -244,6 +248,7 @@
         </div>
     </div>
 
+    <script src="/robot.js"></script>
     <script src="ai.js"></script>
 </body>
 </html>

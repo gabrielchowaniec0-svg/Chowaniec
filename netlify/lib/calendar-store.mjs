@@ -58,6 +58,7 @@ export function addDays(date, n) {
 }
 
 // "Fri, Oct 23 at 6:00 PM" for notifications and chat notes.
+export const timeOfDay = (event) => describeWhen(event).replace(/^.* at /, '').replace(/^.*\(all day\)$/, 'all day');
 export function describeWhen(event) {
   const day = new Date(`${event.date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
   if (!event.time) return `${day} (all day)`;
@@ -111,7 +112,7 @@ export async function createEvent(user, input, { via = 'manual', notify = true }
   const fields = cleanEvent(input);
   if (!canAccessRoom(user.name, fields.room)) throw bad('You’re not in that chat.', 403);
   const id = `${fields.date}_${crypto.randomBytes(4).toString('hex')}`;
-  const event = { id, ...fields, createdBy: user.name, createdVia: via, createdAt: new Date().toISOString(), reminded: false };
+  const event = { id, ...fields, createdBy: user.name, createdVia: via, createdAt: new Date().toISOString(), reminded: false, rsvp: via === 'manual' ? { [user.name]: 'going' } : {} };
   event.remindAt = remindAtFor(event);
   await store().setJSON(keyOf(id), event, { onlyIfNew: true });
   if (event.remindAt) await bumpNextRemind(Date.parse(event.remindAt));
@@ -164,6 +165,54 @@ export async function updateEvent(user, id, input) {
   if (next.remindAt && !next.reminded) await bumpNextRemind(Date.parse(next.remindAt));
   if (timeChanged) await announce(user.name, next, 'changed');
   return next;
+}
+
+// --- RSVP: event.rsvp = { <name>: 'going' | 'maybe' | 'no' } ---
+export const RSVP_CHOICES = ['going', 'maybe', 'no'];
+
+export async function rsvpEvent(user, id, response) {
+  if (response !== '' && !RSVP_CHOICES.includes(response)) throw bad('Choose Going, Maybe or Can’t go.');
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (!isEventId(id)) throw bad('Event not found.', 404);
+    const entry = await store().getWithMetadata(keyOf(id), { type: 'json' });
+    const event = entry && entry.data;
+    if (!event || !canSee(user, event)) throw bad('Event not found.', 404);
+    const rsvp = { ...(event.rsvp || {}) };
+    if (response) rsvp[user.name] = response; else delete rsvp[user.name];
+    const { modified } = await store().setJSON(keyOf(id), { ...event, rsvp }, { onlyIfMatch: entry.etag });
+    if (modified) return { ...event, rsvp };
+  }
+  throw bad('Please try again.', 409);
+}
+
+const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+function span(event) {
+  if (!event.time) return null;
+  const start = toMin(event.time);
+  const end = event.endTime && toMin(event.endTime) > start ? toMin(event.endTime) : start + 60;
+  return [start, end];
+}
+
+// Other events on the same day that overlap this one and that this person is going to (or added themselves).
+export async function clashesFor(user, event) {
+  const mine = span(event);
+  if (!mine) return [];
+  const { blobs } = await store().list({ prefix: `event/${event.date}/` });
+  const others = (await Promise.all(blobs.map((b) => store().get(b.key, { type: 'json' })))).filter(Boolean);
+  return others.filter((o) => {
+    if (o.id === event.id || !canSee(user, o)) return false;
+    const theirs = span(o);
+    if (!theirs || !(mine[0] < theirs[1] && theirs[0] < mine[1])) return false;
+    const answer = (o.rsvp || {})[user.name];
+    return answer === 'going' || (!answer && o.createdBy === user.name);
+  }).map((o) => ({ id: o.id, title: o.title, time: o.time, endTime: o.endTime }));
+}
+
+// All events on one day, whoever they are for (used by the scheduler's briefings and digests).
+export async function eventsOn(date) {
+  const { blobs } = await store().list({ prefix: `event/${date}/` });
+  return (await Promise.all(blobs.map((b) => store().get(b.key, { type: 'json' })))).filter(Boolean)
+    .sort((a, b) => `${a.time || ''}` < `${b.time || ''}` ? -1 : 1);
 }
 
 export async function deleteEvent(user, id) {
