@@ -2,15 +2,20 @@
 //   GET                          -> { enabled, publicKey }
 //   POST { subscription }        -> { ok }   save this device
 //   DELETE { endpoint }          -> { ok }   forget this device
+//   GET ?devices=1               -> { devices }  this person's saved devices
+//   DELETE { id }                -> { ok }   forget one of this person's devices by id
 //   POST { action: 'test' }      -> { sent } send a test notification to the caller's devices
 import { getUser, json } from '../lib/auth.mjs';
-import { pushConfig, saveSubscription, removeSubscription, sendPush } from '../lib/push.mjs';
+import { pushConfig, saveSubscription, removeSubscription, removeDeviceById, listDevices, sendPush } from '../lib/push.mjs';
 
 export default async (req) => {
   const user = getUser(req);
   if (!user) return json(401, { error: 'Please sign in again.' });
   const config = pushConfig();
 
+  if (req.method === 'GET' && new URL(req.url).searchParams.get('devices')) {
+    return json(200, { devices: config ? await listDevices(user.name) : [] });
+  }
   if (req.method === 'GET') return json(200, { enabled: !!config, publicKey: config ? config.publicKey : null });
   if (!config) return json(503, { error: 'Notifications are not set up on the server yet.' });
 
@@ -22,6 +27,10 @@ export default async (req) => {
   }
 
   if (req.method === 'DELETE') {
+    if (typeof body.id === 'string') {
+      await removeDeviceById(user.name, body.id);
+      return json(200, { ok: true });
+    }
     if (typeof body.endpoint !== 'string') return json(400, { error: 'Invalid request.' });
     await removeSubscription(user.name, body.endpoint);
     return json(200, { ok: true });
@@ -31,9 +40,9 @@ export default async (req) => {
     const sent = await sendPush([user.name], {
       title: 'Chowaniec',
       body: `Notifications are working, ${user.name}!`,
-      url: '/get-the-app/',
+      url: '/settings/notifications/',
       tag: 'test'
-    });
+    }, { kind: 'test' });
     return json(200, { sent });
   }
 

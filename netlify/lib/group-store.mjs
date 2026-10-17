@@ -191,8 +191,8 @@ export async function notifyMessage(message) {
   const others = everyone.filter((n) => !mentioned.includes(n));
   const url = '/group/';
   await Promise.all([
-    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: message.user }) : 0,
-    others.length ? sendPush(others, { title: message.user, body, url }, { exclude: message.user }) : 0
+    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: message.user, kind: 'mention' }) : 0,
+    others.length ? sendPush(others, { title: message.user, body, url }, { exclude: message.user, kind: 'message' }) : 0
   ]);
 }
 

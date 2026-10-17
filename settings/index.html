@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#000000">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <title>Settings</title>
+    <script>
+        (function () {
+            var pref = 'auto';
+            try { pref = localStorage.getItem('chowaniec_theme') || localStorage.getItem('chowaniec_group_theme') || 'auto'; } catch (e) {}
+            var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+    <script src="/pwa.js" defer></script>
+    <!-- Tailwind is only used by the shared passcode box -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../passwords.js"></script>
+    <script src="../auth-gate.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+    <link rel="stylesheet" href="/settings/settings.css">
+</head>
+<body>
+<div id="app-root">
+    <header class="topbar"><div class="topbar-in">
+        <a class="back" href="/" aria-label="Back to Chowaniec home">&#8592;</a>
+        <h1 class="serif">Settings</h1>
+    </div></header>
+
+    <main class="wrap" id="main">
+        <section class="card" aria-labelledby="h-you">
+            <h2 id="h-you">You</h2>
+            <div class="row">
+                <div class="avatar" id="you-avatar" aria-hidden="true"></div>
+                <div class="grow">
+                    <div class="t" id="you-name"></div>
+                    <div class="s" id="you-role"></div>
+                </div>
+            </div>
+            <p class="s" style="color:var(--muted);font-size:13px;margin-top:2px">Your name comes from your passcode, so it shows up the same way in group chat, notes and meetings.</p>
+        </section>
+
+        <section class="card" aria-labelledby="h-notif">
+            <h2 id="h-notif">Notifications</h2>
+            <a class="linkrow" href="/settings/notifications/">
+                <div class="grow"><div class="t" style="font-weight:500">Push notifications</div>
+                    <div class="s" id="notif-summary" style="font-size:13px;color:var(--muted);margin-top:2px">Checking&hellip;</div></div>
+                <span class="chev" aria-hidden="true">&#8250;</span>
+            </a>
+            <p style="color:var(--muted);font-size:13px">Turn them on, choose what you hear about, set quiet hours and manage your devices.</p>
+        </section>
+
+        <section class="card" aria-labelledby="h-look">
+            <h2 id="h-look">Display &amp; appearance</h2>
+            <div class="row">
+                <div class="grow"><div class="t">Theme</div><div class="s">Applies to Settings and Group Chat on this device.</div></div>
+                <div class="seg" id="theme-seg" role="group" aria-label="Theme">
+                    <button type="button" data-theme-choice="auto">Auto</button>
+                    <button type="button" data-theme-choice="light">Light</button>
+                    <button type="button" data-theme-choice="dark">Dark</button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="grow"><div class="t"><label for="sw-motion">Reduce animations</label></div><div class="s">Calmer screens with less movement, on every page of this device.</div></div>
+                <span class="switch"><input type="checkbox" id="sw-motion" role="switch"><span class="track"></span></span>
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="h-sec">
+            <h2 id="h-sec">Security</h2>
+            <div class="row">
+                <div class="grow"><div class="t">Signed in on this device</div><div class="s">You stay signed in here for up to 180 days, or until you sign out.</div></div>
+                <button type="button" class="btn danger" id="btn-signout">Sign out</button>
+            </div>
+            <a class="linkrow" href="/settings/notifications/#devices">
+                <div class="grow"><div class="t" style="font-weight:500">Your notification devices</div>
+                    <div class="s" style="font-size:13px;color:var(--muted);margin-top:2px">See and remove the phones and computers that receive your notifications.</div></div>
+                <span class="chev" aria-hidden="true">&#8250;</span>
+            </a>
+            <div class="row">
+                <div class="grow"><div class="t">Changing your passcode</div>
+                    <div class="s">Passcodes are set by the family heads for now, so ask one of them to change yours. Changing it yourself here is something we can add later.</div></div>
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="h-app">
+            <h2 id="h-app">More</h2>
+            <a class="linkrow" href="/get-the-app/">
+                <div class="grow"><div class="t" style="font-weight:500">Install the app</div>
+                    <div class="s" style="font-size:13px;color:var(--muted);margin-top:2px">Add Chowaniec to your phone's home screen.</div></div>
+                <span class="chev" aria-hidden="true">&#8250;</span>
+            </a>
+        </section>
+    </main>
+</div>
+<script src="/settings/settings.js"></script>
+<script>
+(function () {
+    var S = window.ChowaniecSettings, $ = S.$;
+    function start() {
+        var user = S.user() || {};
+        $('you-name').textContent = user.name || 'Guest';
+        $('you-avatar').textContent = (user.name || 'G').charAt(0).toUpperCase();
+        $('you-role').textContent = user.name === 'Guest' ? 'Guest' : user.host ? 'Head of the family' : 'Family member';
+
+        var pwa = window.ChowaniecPWA;
+        function paintTheme() {
+            document.querySelectorAll('#theme-seg [data-theme-choice]').forEach(function (b) {
+                b.setAttribute('aria-pressed', String(b.dataset.themeChoice === pwa.getTheme()));
+            });
+        }
+        paintTheme();
+        $('theme-seg').addEventListener('click', function (e) {
+            var b = e.target.closest('[data-theme-choice]');
+            if (!b) return;
+            pwa.setTheme(b.dataset.themeChoice);
+            paintTheme();
+        });
+        $('sw-motion').checked = pwa.getReduceMotion();
+        $('sw-motion').addEventListener('change', function (e) { pwa.setReduceMotion(e.target.checked); });
+
+        $('btn-signout').addEventListener('click', function () {
+            window.clearChowaniecSession();
+            location.href = '/';
+        });
+
+        var labels = {
+            enabled: ['On for this device', 'ok'], disabled: ['Off for this device', ''], denied: ['Blocked in your browser', 'bad'],
+            'needs-install': ['Install the app first', 'warn'], unsupported: ['Not supported here', ''],
+            'not-configured': ['Not set up yet', ''], error: ['Couldn’t check', 'warn']
+        };
+        pwa.pushStatus().then(function (st) {
+            var l = labels[st] || ['', ''];
+            $('notif-summary').textContent = l[0];
+            if (l[1]) $('notif-summary').style.color = 'var(--' + l[1] + ')';
+        }).catch(function () { $('notif-summary').textContent = ''; });
+    }
+    S.whenSignedIn(start);
+})();
+</script>
+</body>
+</html>

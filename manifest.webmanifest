@@ -17,6 +17,7 @@
     { "name": "Group Chat", "url": "/group/", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Chowaniec AI", "url": "/ai/", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Notes", "url": "/notes/", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Settings", "url": "/settings/", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Meet", "url": "/meet/", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

@@ -9,7 +9,7 @@
         // Apply the saved theme before first paint (Light / Dark / Auto from the chat-info sheet).
         (function () {
             var pref = 'auto';
-            try { pref = localStorage.getItem('chowaniec_group_theme') || 'auto'; } catch (e) { /* storage blocked */ }
+            try { pref = localStorage.getItem('chowaniec_theme') || localStorage.getItem('chowaniec_group_theme') || 'auto'; } catch (e) { /* storage blocked */ }
             var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
             document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
             var meta = document.querySelector('meta[name="theme-color"]');

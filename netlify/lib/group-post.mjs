@@ -25,7 +25,7 @@ export async function replyAsAi(trigger) {
     const text = response.stop_reason === 'refusal' ? "Sorry, I can't help with that one." : textOf(response);
     if (!text) return;
     const message = await postMessage({ author: AI_NAME, text, replyTo: trigger.id, kind: 'ai' });
-    await sendPush([trigger.user], { title: `${AI_NAME} replied`, body: message.text.slice(0, 140), url: '/group/' });
+    await sendPush([trigger.user], { title: `${AI_NAME} replied`, body: message.text.slice(0, 140), url: '/group/' }, { kind: 'mention' });
   } catch (err) {
     console.error('Group AI reply failed:', err.status || '', err.message);
   }
