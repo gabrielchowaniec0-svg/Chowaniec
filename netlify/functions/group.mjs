@@ -26,6 +26,8 @@ import {
   scheduleMessage, listScheduled, cancelScheduled, nextScheduledAt, deliverDue
 } from '../lib/group-store.mjs';
 import { publishMessage } from '../lib/group-post.mjs';
+import { analyzeMessage } from '../lib/smart-message.mjs';
+import { createEvent, describeWhen } from '../lib/calendar-store.mjs';
 import { resolveRoom, roomsFor, canAccessRoom } from '../lib/rooms.mjs';
 
 const EMOJI = ['❤️', '👍', '😂', '😮', '😢', '🎉'];
@@ -169,6 +171,36 @@ export default async (req, context) => {
       const message = await toggleReaction(String(body.id || ''), user.name, body.emoji, room);
       if (!message) return json(404, { error: 'Message not found.' });
       return json(200, { message });
+    }
+
+    // Smart detect (plain rules, no AI): plans become calendar events and group questions become polls.
+    const smart = body.smart === false || body.image ? null : analyzeMessage(body.text);
+    if (smart && (smart.event || smart.polls.length)) {
+      const posted = [];
+      const replyTo = isMessageId(body.replyTo) ? body.replyTo : null;
+      const pause = () => new Promise((r) => setTimeout(r, 3));   // keeps the messages in order
+      if (smart.text) posted.push(await postMessage({ author: user.name, room, text: smart.text, replyTo }));
+      if (smart.event) {
+        try {
+          const event = await createEvent(user, { ...smart.event, room }, { via: 'chat', notify: false });
+          await pause();
+          posted.push(await postMessage({
+            author: 'Chowaniec', room, kind: 'system',
+            text: `📅 ${user.name}’s plan was added to the calendar: ${event.title}, ${describeWhen(event)}`,
+            link: { href: `/calendar/?event=${event.id}`, label: 'Open calendar' }
+          }));
+        } catch (e) {
+          console.error('Smart event failed:', e.message);
+        }
+      }
+      for (const poll of smart.polls) {
+        await pause();
+        const built = buildPoll(poll.question, poll.options, poll.multi);
+        posted.push(await postMessage({ author: user.name, room, text: `📊 ${built.question}`, poll: built }));
+      }
+      await clearTyping(user.name, room);
+      for (const m of posted) if (m.kind !== 'system') context.waitUntil(publishMessage(m));
+      return json(200, { message: posted[0], messages: posted });
     }
 
     const message = await postMessage({

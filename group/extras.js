@@ -656,6 +656,24 @@
         return !!m.poll && !m.poll.closed && !!u && (G.isMine(m) || !!u.host);
     }
 
+    // "Smart detect" (plans -> calendar, questions -> polls) can be switched off per device.
+    function smartOn() {
+        try { return localStorage.getItem('chowaniec_group_smart') !== 'off'; } catch (e) { return true; }
+    }
+    function showSmart() {
+        const on = smartOn();
+        const label = $('smart-label');
+        if (label) label.textContent = `Smart detect: ${on ? 'on' : 'off'}`;
+        const btn = $('btn-smart');
+        if (btn) btn.setAttribute('aria-checked', String(on));
+    }
+    function toggleSmart() {
+        try { localStorage.setItem('chowaniec_group_smart', smartOn() ? 'off' : 'on'); } catch (e) { /* ignore */ }
+        showSmart();
+        G.toast(smartOn() ? 'Smart detect is on: plans go to the calendar and questions become polls.' : 'Smart detect is off.');
+    }
+    window.addEventListener('chowaniec-group-started', showSmart);
+
     function handleClick(e) {
         // A click that follows a long-press, swipe or double-tap is swallowed by group.js; skip it here too.
         if (G.clickSuppressed()) return;
@@ -666,6 +684,7 @@
         const inPlusMenu = e.target.closest && e.target.closest('#plus-popup');
         if (inPlusMenu) {
             const pollBtn = e.target.closest('#btn-poll');
+            if (e.target.closest('#btn-smart')) { toggleSmart(); return; }
             setPlus(false);
             if (pollBtn) openPollModal();
             return;
