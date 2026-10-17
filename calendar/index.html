@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#000000">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <script src="/pwa.js" defer></script>
+    <title>Chowaniec Calendar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
+    <script src="../passwords.js"></script>
+    <script src="../auth-gate.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+        body { font-family: 'Outfit', sans-serif; background-color: #fafafa; color: #111827; }
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .gone { display: none !important; }
+        .grid7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+        .day { position: relative; min-height: 52px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 6px; gap: 4px; font-size: 14px; color: #111827; background: transparent; border: 1px solid transparent; }
+        .day.other { color: #c4c7cc; }
+        .day.today { border-color: #d1d5db; font-weight: 600; }
+        .day.sel { background: #000; color: #fff; }
+        .day .dots { display: flex; gap: 3px; height: 6px; }
+        .day .dot { width: 6px; height: 6px; border-radius: 9999px; background: #6b7280; }
+        .day.sel .dot { background: #fff; }
+        .field label { display: block; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #9ca3af; font-family: 'JetBrains Mono', monospace; margin-bottom: 6px; }
+        .field input, .field select, .field textarea { width: 100%; min-height: 46px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 14px; font-size: 15px; background: #fff; outline: none; }
+        .field input:focus, .field select:focus, .field textarea:focus { border-color: #000; }
+        .ev { display: block; width: 100%; text-align: left; background: #fff; border: 1px solid #f3f4f6; border-radius: 18px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .ev:hover { border-color: #d1d5db; }
+        .ev.flash { border-color: #000; }
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 80; display: flex; align-items: flex-end; justify-content: center; }
+        @media (min-width: 640px) { .modal { align-items: center; padding: 16px; } }
+        .sheet { background: #fff; width: 100%; max-width: 440px; max-height: 92dvh; overflow-y: auto; border-radius: 24px 24px 0 0; padding: 22px; }
+        @media (min-width: 640px) { .sheet { border-radius: 24px; } }
+        .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
+        <div class="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-8 h-8 shrink-0 bg-black rounded-full flex items-center justify-center text-white text-xs">CN</div>
+                <div class="font-serif tracking-wide text-xl whitespace-nowrap">Chowaniec <span class="text-gray-400 italic font-light text-base">Calendar</span></div>
+            </div>
+            <button id="btn-new" type="button" class="shrink-0 min-h-[44px] px-5 rounded-full bg-black text-white text-xs font-medium hover:bg-gray-800 flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i> New Event</button>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-3xl mx-auto px-4 py-6 pb-28 w-full space-y-6">
+        <section class="bg-white rounded-3xl border border-gray-100 shadow-sm p-3 sm:p-5">
+            <div class="flex items-center justify-between mb-3">
+                <button id="prev" type="button" aria-label="Previous month" class="w-11 h-11 rounded-full hover:bg-gray-50 flex items-center justify-center"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                <h1 id="month-title" class="font-serif text-2xl"></h1>
+                <button id="next" type="button" aria-label="Next month" class="w-11 h-11 rounded-full hover:bg-gray-50 flex items-center justify-center"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+            </div>
+            <div class="grid7 text-center text-[10px] font-mono uppercase tracking-widest text-gray-400 mb-1">
+                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+            </div>
+            <div id="grid" class="grid7 gap-1"></div>
+        </section>
+
+        <section>
+            <div class="flex items-end justify-between mb-3">
+                <h2 id="list-title" class="font-serif text-xl"></h2>
+                <button id="show-upcoming" type="button" class="gone text-xs font-mono uppercase tracking-widest text-gray-400 hover:text-black min-h-[40px]">Show upcoming</button>
+            </div>
+            <div id="list" class="space-y-3"></div>
+        </section>
+    </main>
+
+    <!-- Event form -->
+    <div id="form-modal" class="modal gone" role="dialog" aria-modal="true" aria-labelledby="form-title">
+        <form id="form" class="sheet space-y-4" autocomplete="off">
+            <div class="flex justify-between items-start">
+                <h3 id="form-title" class="font-serif text-2xl">New event</h3>
+                <button type="button" id="form-close" aria-label="Close" class="w-10 h-10 -mr-2 rounded-full hover:bg-gray-50 flex items-center justify-center"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="field"><label for="f-title">What</label><input id="f-title" name="title" maxlength="120" required></div>
+            <div class="field"><label for="f-date">Day</label><input id="f-date" name="date" type="date" required></div>
+            <label class="flex items-center gap-3 text-sm min-h-[44px]"><input id="f-allday" type="checkbox" class="w-5 h-5 accent-black"> All day</label>
+            <div id="time-row" class="grid grid-cols-2 gap-3">
+                <div class="field"><label for="f-time">Starts</label><input id="f-time" name="time" type="time"></div>
+                <div class="field"><label for="f-end">Ends (optional)</label><input id="f-end" name="endTime" type="time"></div>
+            </div>
+            <div class="field"><label for="f-location">Where (optional)</label><input id="f-location" name="location" maxlength="120"></div>
+            <div class="field"><label for="f-notes">Notes (optional)</label><textarea id="f-notes" name="notes" rows="2" maxlength="1000"></textarea></div>
+            <div class="field"><label for="f-room">Who is it for</label><select id="f-room" name="room"></select></div>
+            <div class="field"><label for="f-remind">Reminder</label>
+                <select id="f-remind" name="remind">
+                    <option value="none">No reminder</option>
+                    <option value="0">At the start</option>
+                    <option value="15">15 minutes before</option>
+                    <option value="30">30 minutes before</option>
+                    <option value="60">1 hour before</option>
+                    <option value="120">2 hours before</option>
+                    <option value="1440">1 day before</option>
+                    <option value="2880">2 days before</option>
+                </select>
+            </div>
+            <p id="form-error" class="gone text-sm text-red-600" role="alert"></p>
+            <div class="flex gap-3 pt-1">
+                <button type="button" id="form-delete" class="gone min-h-[48px] px-5 rounded-xl border border-red-200 text-red-600 text-sm font-medium">Delete</button>
+                <button type="submit" id="form-save" class="flex-1 min-h-[48px] rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800">Save</button>
+            </div>
+        </form>
+    </div>
+
+    <div id="signin-modal" class="modal gone" style="align-items:center;padding:16px">
+        <div class="sheet" style="border-radius:24px;text-align:center">
+            <h3 class="font-serif text-xl mb-2">Please sign in again</h3>
+            <p class="text-xs text-gray-400 mb-4">Your session has expired.</p>
+            <button type="button" id="btn-signin" class="w-full min-h-[44px] bg-black text-white rounded-xl text-sm">Sign in again</button>
+        </div>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite" class="gone fixed left-1/2 -translate-x-1/2 bottom-24 z-[90] max-w-[calc(100vw-2rem)] bg-black text-white text-xs font-medium rounded-full px-5 py-3 shadow-xl"></div>
+
+    <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-6 right-6 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full flex items-center justify-center text-gray-600 hover:text-black z-50">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    </button>
+
+    <script src="calendar.js"></script>
+</body>
+</html>
