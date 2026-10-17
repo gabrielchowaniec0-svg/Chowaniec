@@ -6,6 +6,7 @@ import { getStore } from '@netlify/blobs';
 import crypto from 'node:crypto';
 import { familyNames } from './auth.mjs';
 import { sendPush } from './push.mjs';
+import { DEFAULT_ROOM, prefixOf, roomMembers } from './rooms.mjs';
 
 export const MAX_TEXT = 4000;
 export const AI_NAME = 'Chowaniec AI';
@@ -24,59 +25,60 @@ const media = () => getStore({ name: 'group-media', consistency: 'strong' });
 export const isMessageId = (id) => ID_PATTERN.test(id || '');
 export const isMediaId = (id) => MEDIA_PATTERN.test(id || '');
 const dayOf = (id) => new Date(Number(id.slice(0, 13))).toISOString().slice(0, 10);
-const keyOf = (id) => `msg/${dayOf(id)}/${id}`;
+const keyOf = (id, room = DEFAULT_ROOM) => `${prefixOf(room)}msg/${dayOf(id)}/${id}`;
 
 function newId() {
   return `${String(Date.now()).padStart(13, '0')}-${crypto.randomBytes(4).toString('hex')}`;
 }
 
 // Days that have messages, newest first.
-async function days() {
-  const { directories } = await messages().list({ prefix: 'msg/', directories: true });
-  return directories.map((d) => d.replace(/^msg\//, '').replace(/\/$/, '')).sort().reverse();
+async function days(room = DEFAULT_ROOM) {
+  const base = `${prefixOf(room)}msg/`;
+  const { directories } = await messages().list({ prefix: base, directories: true });
+  return directories.map((d) => d.slice(base.length).replace(/\/$/, '')).sort().reverse();
 }
 
-async function idsForDay(day) {
-  const { blobs } = await messages().list({ prefix: `msg/${day}/` });
+async function idsForDay(day, room = DEFAULT_ROOM) {
+  const { blobs } = await messages().list({ prefix: `${prefixOf(room)}msg/${day}/` });
   return blobs.map((b) => b.key.split('/').pop()).sort();
 }
 
-async function load(ids) {
-  const list = await Promise.all(ids.map((id) => messages().get(keyOf(id), { type: 'json' })));
+async function load(ids, room = DEFAULT_ROOM) {
+  const list = await Promise.all(ids.map((id) => messages().get(keyOf(id, room), { type: 'json' })));
   return list.filter(Boolean);
 }
 
-export async function latest(limit = 50) {
+export async function latest(limit = 50, room = DEFAULT_ROOM) {
   const collected = [];
-  for (const day of await days()) {
-    collected.unshift(...(await idsForDay(day)));
+  for (const day of await days(room)) {
+    collected.unshift(...(await idsForDay(day, room)));
     if (collected.length >= limit) break;
   }
-  return load(collected.slice(-limit));
+  return load(collected.slice(-limit), room);
 }
 
-export async function since(sinceId, limit = 200) {
+export async function since(sinceId, limit = 200, room = DEFAULT_ROOM) {
   const sinceDay = dayOf(sinceId);
-  const recentDays = (await days()).filter((d) => d >= sinceDay).reverse();
+  const recentDays = (await days(room)).filter((d) => d >= sinceDay).reverse();
   const ids = [];
-  for (const day of recentDays) ids.push(...(await idsForDay(day)).filter((id) => id > sinceId));
-  return load(ids.slice(0, limit));
+  for (const day of recentDays) ids.push(...(await idsForDay(day, room)).filter((id) => id > sinceId));
+  return load(ids.slice(0, limit), room);
 }
 
-export async function before(beforeId, limit = 50) {
+export async function before(beforeId, limit = 50, room = DEFAULT_ROOM) {
   const beforeDay = dayOf(beforeId);
-  const olderDays = (await days()).filter((d) => d <= beforeDay);
+  const olderDays = (await days(room)).filter((d) => d <= beforeDay);
   const collected = [];
   for (const day of olderDays) {
-    collected.unshift(...(await idsForDay(day)).filter((id) => id < beforeId));
+    collected.unshift(...(await idsForDay(day, room)).filter((id) => id < beforeId));
     if (collected.length > limit) break;
   }
-  return { messages: await load(collected.slice(-limit)), hasMore: collected.length > limit };
+  return { messages: await load(collected.slice(-limit), room), hasMore: collected.length > limit };
 }
 
-export async function getMessage(id) {
+export async function getMessage(id, room = DEFAULT_ROOM) {
   if (!isMessageId(id)) return null;
-  const entry = await messages().getWithMetadata(keyOf(id), { type: 'json' });
+  const entry = await messages().getWithMetadata(keyOf(id, room), { type: 'json' });
   return entry ? { message: entry.data, etag: entry.etag } : null;
 }
 
@@ -96,18 +98,18 @@ export function parseMentions(text) {
   return [...found];
 }
 
-async function saveImage(dataUrl) {
+async function saveImage(dataUrl, room = DEFAULT_ROOM) {
   const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || '');
   if (!match || !IMAGE_TYPES.includes(match[1])) throw Object.assign(new Error('Photos must be JPEG, PNG or WebP.'), { status: 400 });
   const bytes = Buffer.from(match[2], 'base64');
   if (bytes.length > MAX_IMAGE_BYTES) throw Object.assign(new Error('That photo is too large (max 2 MB).'), { status: 413 });
   const id = crypto.randomBytes(16).toString('hex');
-  await media().set(id, bytes, { metadata: { contentType: match[1] } });
+  await media().set(id, bytes, { metadata: { contentType: match[1], room } });
   return id;
 }
 
 // Voice messages arrive as a data URL from the phone's recorder (e.g. data:audio/webm;codecs=opus;base64,...).
-export async function saveAudio(dataUrl) {
+export async function saveAudio(dataUrl, room = DEFAULT_ROOM) {
   const match = /^data:(audio\/[\w.+-]+)(?:;[\w.=+-]+)*;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || '');
   const type = match && match[1].toLowerCase();
   if (!match || !AUDIO_TYPES.includes(type)) throw Object.assign(new Error('That voice message couldn’t be read.'), { status: 400 });
@@ -115,7 +117,7 @@ export async function saveAudio(dataUrl) {
   if (bytes.length < 200) throw Object.assign(new Error('That voice message is empty.'), { status: 400 });
   if (bytes.length > MAX_AUDIO_BYTES) throw Object.assign(new Error('That voice message is too long.'), { status: 413 });
   const id = crypto.randomBytes(16).toString('hex');
-  await media().set(id, bytes, { metadata: { contentType: type } });
+  await media().set(id, bytes, { metadata: { contentType: type, room } });
   return id;
 }
 
@@ -123,17 +125,17 @@ export async function saveAudio(dataUrl) {
 export async function getImage(id) {
   if (!isMediaId(id)) return null;
   const entry = await media().getWithMetadata(id, { type: 'arrayBuffer' });
-  return entry ? { bytes: entry.data, contentType: entry.metadata.contentType || 'image/jpeg' } : null;
+  return entry ? { bytes: entry.data, contentType: entry.metadata.contentType || 'image/jpeg', room: entry.metadata.room || DEFAULT_ROOM } : null;
 }
 
 // Stores a message and returns it. `author` is a family name or AI_NAME.
-export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice }) {
+export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, room = DEFAULT_ROOM }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
   if (!clean && !image && !poll && !voice) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
 
   let reply = null;
   if (replyTo) {
-    const found = await getMessage(replyTo);
+    const found = await getMessage(replyTo, room);
     if (found) reply = { id: found.message.id, user: found.message.user, text: found.message.text.slice(0, 200) };
   }
 
@@ -143,29 +145,30 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user',
     text: clean,
     createdAt: new Date().toISOString(),
     kind,
+    room,
     mentions: parseMentions(clean),
     replyTo: reply,
-    image: image ? await saveImage(image) : null,
+    image: image ? await saveImage(image, room) : null,
     reactions: {},
     ...(poll ? { poll } : {}),
     ...(voice ? { voice } : {})
   };
-  await messages().setJSON(keyOf(message.id), message, { onlyIfNew: true });
+  await messages().setJSON(keyOf(message.id, room), message, { onlyIfNew: true });
   return message;
 }
 
-export async function deleteMessage(id) {
-  const found = await getMessage(id);
+export async function deleteMessage(id, room = DEFAULT_ROOM) {
+  const found = await getMessage(id, room);
   if (!found) return;
-  await messages().delete(keyOf(id));
+  await messages().delete(keyOf(id, room));
   if (found.message.image) await media().delete(found.message.image);
   if (found.message.voice) await media().delete(found.message.voice.id);
 }
 
 // Toggles `user`'s reaction, retrying if someone else reacted at the same moment.
-export async function toggleReaction(id, user, emoji) {
+export async function toggleReaction(id, user, emoji, room = DEFAULT_ROOM) {
   for (let attempt = 0; attempt < 4; attempt++) {
-    const found = await getMessage(id);
+    const found = await getMessage(id, room);
     if (!found) return null;
     const message = found.message;
     const people = new Set(message.reactions[emoji] || []);
@@ -173,7 +176,7 @@ export async function toggleReaction(id, user, emoji) {
     else people.add(user);
     if (people.size) message.reactions[emoji] = [...people];
     else delete message.reactions[emoji];
-    const { modified } = await messages().setJSON(keyOf(id), message, { onlyIfMatch: found.etag });
+    const { modified } = await messages().setJSON(keyOf(id, room), message, { onlyIfMatch: found.etag });
     if (modified) return message;
   }
   throw Object.assign(new Error('Too many reactions at once. Try again.'), { status: 409 });
@@ -184,12 +187,12 @@ export async function toggleReaction(id, user, emoji) {
 export async function notifyMessage(message) {
   const preview = message.text ? message.text.slice(0, 140) : 'Sent a photo';
   const body = message.image && message.text ? `📷 ${preview}` : preview;
-  const everyone = familyNames();
+  const everyone = roomMembers(message.room || DEFAULT_ROOM);
   const mentioned = message.mentions.includes('everyone')
     ? everyone
     : message.mentions.filter((m) => everyone.includes(m));
   const others = everyone.filter((n) => !mentioned.includes(n));
-  const url = '/group/';
+  const url = message.room && message.room !== DEFAULT_ROOM ? `/group/?room=${message.room}` : '/group/';
   await Promise.all([
     mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: message.user, kind: 'mention' }) : 0,
     others.length ? sendPush(others, { title: message.user, body, url }, { exclude: message.user, kind: 'message' }) : 0
@@ -223,43 +226,43 @@ export function transcriptOf(list) {
 const ONLINE_MS = 60 * 1000;
 const SEEN_REFRESH_MS = 25 * 1000;
 const TYPING_MS = 6 * 1000;
-const presenceKey = (user) => `presence/${encodeURIComponent(user)}`;
+const presenceKey = (user, room = DEFAULT_ROOM) => `${prefixOf(room)}presence/${encodeURIComponent(user)}`;
 
-async function updatePresence(user, change) {
-  const key = presenceKey(user);
+async function updatePresence(user, change, room = DEFAULT_ROOM) {
+  const key = presenceKey(user, room);
   const current = (await messages().get(key, { type: 'json' })) || { user, lastSeen: null, typingUntil: null, lastReadId: null };
   const next = change(current);
   if (next) await messages().setJSON(key, next);
 }
 
 // Marks `user` as online; writes at most every 25s to keep polling cheap.
-export function touchPresence(user) {
+export function touchPresence(user, room = DEFAULT_ROOM) {
   return updatePresence(user, (p) => {
     if (p.lastSeen && Date.now() - Date.parse(p.lastSeen) < SEEN_REFRESH_MS) return null;
     return { ...p, lastSeen: new Date(Date.now()).toISOString() };
-  });
+  }, room);
 }
 
-export function setTyping(user) {
+export function setTyping(user, room = DEFAULT_ROOM) {
   const now = Date.now();
-  return updatePresence(user, (p) => ({ ...p, lastSeen: new Date(now).toISOString(), typingUntil: new Date(now + TYPING_MS).toISOString() }));
+  return updatePresence(user, (p) => ({ ...p, lastSeen: new Date(now).toISOString(), typingUntil: new Date(now + TYPING_MS).toISOString() }), room);
 }
 
 // Sending a message ends that person's typing indicator straight away.
-export function clearTyping(user) {
-  return updatePresence(user, (p) => (p.typingUntil ? { ...p, typingUntil: null } : null));
+export function clearTyping(user, room = DEFAULT_ROOM) {
+  return updatePresence(user, (p) => (p.typingUntil ? { ...p, typingUntil: null } : null), room);
 }
 
 // Read receipts only move forward (ids sort by time).
-export function setRead(user, id) {
+export function setRead(user, id, room = DEFAULT_ROOM) {
   return updatePresence(user, (p) => {
     if (p.lastReadId && p.lastReadId >= id) return null;
     return { ...p, lastReadId: id, lastSeen: new Date(Date.now()).toISOString() };
-  });
+  }, room);
 }
 
-export async function listPresence() {
-  const { blobs } = await messages().list({ prefix: 'presence/' });
+export async function listPresence(room = DEFAULT_ROOM) {
+  const { blobs } = await messages().list({ prefix: `${prefixOf(room)}presence/` });
   const now = Date.now();
   return (await Promise.all(blobs.map((b) => messages().get(b.key, { type: 'json' }))))
     .filter(Boolean)
@@ -272,24 +275,24 @@ export async function listPresence() {
     }));
 }
 
-export async function getPinned() {
-  return (await messages().get('meta/pinned', { type: 'json' })) || null;
+export async function getPinned(room = DEFAULT_ROOM) {
+  return (await messages().get(`${prefixOf(room)}meta/pinned`, { type: 'json' })) || null;
 }
 
-export async function pinMessage(id, user) {
-  const found = await getMessage(id);
+export async function pinMessage(id, user, room = DEFAULT_ROOM) {
+  const found = await getMessage(id, room);
   if (!found) return null;
   const { message } = found;
   const pinned = {
     id: message.id, user: message.user, text: message.text.slice(0, 300), image: message.image,
     pinnedBy: user, pinnedAt: new Date().toISOString()
   };
-  await messages().setJSON('meta/pinned', pinned);
+  await messages().setJSON(`${prefixOf(room)}meta/pinned`, pinned);
   return pinned;
 }
 
-export async function unpin() {
-  await messages().delete('meta/pinned');
+export async function unpin(room = DEFAULT_ROOM) {
+  await messages().delete(`${prefixOf(room)}meta/pinned`);
 }
 
 
@@ -307,9 +310,9 @@ export function buildPoll(question, options, multi) {
 }
 
 // Adds or removes `user`'s vote. Single-choice polls move the vote; multi-choice polls toggle.
-export async function votePoll(id, user, optionId) {
+export async function votePoll(id, user, optionId, room = DEFAULT_ROOM) {
   for (let attempt = 0; attempt < 4; attempt++) {
-    const found = await getMessage(id);
+    const found = await getMessage(id, room);
     if (!found || !found.message.poll) return null;
     const message = found.message;
     const poll = message.poll;
@@ -320,21 +323,21 @@ export async function votePoll(id, user, optionId) {
     if (!poll.multi) poll.options.forEach((o) => { o.votes = o.votes.filter((v) => v !== user); });
     if (poll.multi) option.votes = had ? option.votes.filter((v) => v !== user) : [...option.votes, user];
     else if (!had) option.votes.push(user);
-    const { modified } = await messages().setJSON(keyOf(id), message, { onlyIfMatch: found.etag });
+    const { modified } = await messages().setJSON(keyOf(id, room), message, { onlyIfMatch: found.etag });
     if (modified) return message;
   }
   throw Object.assign(new Error('Lots of votes at once. Try again.'), { status: 409 });
 }
 
-export async function closePoll(id, user, isHost) {
+export async function closePoll(id, user, isHost, room = DEFAULT_ROOM) {
   for (let attempt = 0; attempt < 4; attempt++) {
-    const found = await getMessage(id);
+    const found = await getMessage(id, room);
     if (!found || !found.message.poll) return null;
     const message = found.message;
     if (message.user !== user && !isHost) throw Object.assign(new Error('Only the person who made the poll or a host can close it.'), { status: 403 });
     message.poll.closed = true;
     message.poll.closedAt = new Date().toISOString();
-    const { modified } = await messages().setJSON(keyOf(id), message, { onlyIfMatch: found.etag });
+    const { modified } = await messages().setJSON(keyOf(id, room), message, { onlyIfMatch: found.etag });
     if (modified) return message;
   }
   throw Object.assign(new Error('Please try again.'), { status: 409 });
@@ -357,7 +360,7 @@ export async function nextScheduledAt() {
   return hint ? hint.at : null;
 }
 
-export async function scheduleMessage({ user, text, replyTo, sendAt }) {
+export async function scheduleMessage({ user, text, replyTo, sendAt, room = DEFAULT_ROOM }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
   if (!clean) throw Object.assign(new Error('Write a message to schedule.'), { status: 400 });
   const when = Date.parse(sendAt);
@@ -368,16 +371,16 @@ export async function scheduleMessage({ user, text, replyTo, sendAt }) {
   const { blobs } = await messages().list({ prefix: schedPrefix(user) });
   if (blobs.length >= MAX_SCHEDULED_PER_USER) throw Object.assign(new Error(`You can have up to ${MAX_SCHEDULED_PER_USER} scheduled messages.`), { status: 409 });
   const id = `${String(when).padStart(13, '0')}-${crypto.randomBytes(4).toString('hex')}`;
-  const record = { id, user, text: clean, replyTo: isMessageId(replyTo) ? replyTo : null, sendAt: new Date(when).toISOString(), createdAt: new Date(now).toISOString() };
+  const record = { id, user, room, text: clean, replyTo: isMessageId(replyTo) ? replyTo : null, sendAt: new Date(when).toISOString(), createdAt: new Date(now).toISOString() };
   await messages().setJSON(`${schedPrefix(user)}${id}`, record);
   const next = await nextScheduledAt();
   if (next == null || when < next) await setNextSched(when);
   return record;
 }
 
-export async function listScheduled(user) {
+export async function listScheduled(user, room = DEFAULT_ROOM) {
   const { blobs } = await messages().list({ prefix: schedPrefix(user) });
-  const list = (await Promise.all(blobs.map((b) => messages().get(b.key, { type: 'json' })))).filter(Boolean);
+  const list = (await Promise.all(blobs.map((b) => messages().get(b.key, { type: 'json' })))).filter((r) => r && (r.room || DEFAULT_ROOM) === room);
   return list.sort((a, b) => (a.sendAt < b.sendAt ? -1 : 1));
 }
 
@@ -407,7 +410,7 @@ export async function deliverDue(publish) {
     const claim = await messages().setJSON(b.key, { ...record, claimedAt: now }, { onlyIfMatch: entry.etag });
     if (!claim.modified) continue;
     try {
-      const message = await postMessage({ author: record.user, text: record.text, replyTo: record.replyTo });
+      const message = await postMessage({ author: record.user, text: record.text, replyTo: record.replyTo, room: record.room || DEFAULT_ROOM });
       await messages().delete(b.key);
       delivered++;
       await publish(message);

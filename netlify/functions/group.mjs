@@ -1,4 +1,6 @@
 // Chowaniec Group chat API.
+//   Every request takes a room (?room=<id> or body.room); the default is 'everyone'.
+//   GET ?rooms=1             -> { rooms }               the chats the caller is in
 //   GET                      -> { messages }            latest 50, oldest first
 //   GET ?since=<id>          -> { messages }            newer than id
 //   GET ?before=<id>         -> { messages, hasMore }   up to 50 older
@@ -24,6 +26,7 @@ import {
   scheduleMessage, listScheduled, cancelScheduled, nextScheduledAt, deliverDue
 } from '../lib/group-store.mjs';
 import { publishMessage } from '../lib/group-post.mjs';
+import { resolveRoom, roomsFor, canAccessRoom } from '../lib/rooms.mjs';
 
 const EMOJI = ['❤️', '👍', '😂', '😮', '😢', '🎉'];
 
@@ -33,11 +36,22 @@ export default async (req, context) => {
   const url = new URL(req.url);
 
   try {
+    if (req.method === 'GET' && url.searchParams.get('rooms')) return json(200, { rooms: roomsFor(user.name) });
+    let body = null;
+    if (req.method === 'POST') {
+      try {
+        body = await req.json();
+      } catch (e) {
+        return json(400, { error: 'Invalid request.' });
+      }
+    }
+    const room = resolveRoom(req.method === 'POST' ? (body && body.room) : url.searchParams.get('room'), user);
+
     if (req.method === 'GET') {
       const mediaId = url.searchParams.get('media');
       if (mediaId) {
         const image = await getImage(mediaId);
-        if (!image) return json(404, { error: 'Photo not found.' });
+        if (!image || !canAccessRoom(user.name, image.room)) return json(404, { error: 'Photo not found.' });
         const headers = { 'Content-Type': image.contentType, 'Cache-Control': 'private, max-age=31536000, immutable', 'Accept-Ranges': 'bytes' };
         // Voice messages are played with range requests (Safari insists on them).
         const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.get('range') || '');
@@ -54,83 +68,77 @@ export default async (req, context) => {
         }
         return new Response(image.bytes, { headers });
       }
-      if (url.searchParams.get('scheduled')) return json(200, { scheduled: await listScheduled(user.name) });
+      if (url.searchParams.get('scheduled')) return json(200, { scheduled: await listScheduled(user.name, room) });
       const sinceId = url.searchParams.get('since');
       const beforeId = url.searchParams.get('before');
       if ((sinceId && !isMessageId(sinceId)) || (beforeId && !isMessageId(beforeId))) {
         return json(400, { error: 'Invalid cursor.' });
       }
-      await touchPresence(user.name);
+      await touchPresence(user.name, room);
       // Send any scheduled messages that are due (the once-a-minute scheduler also does this).
       context.waitUntil(nextScheduledAt().then((at) => (at != null && at <= Date.now() ? deliverDue(publishMessage) : null)).catch((e) => console.error('Scheduled check failed:', e.message)));
       const [page, presence, pinned] = await Promise.all([
-        sinceId ? since(sinceId).then((messages) => ({ messages }))
-          : beforeId ? before(beforeId)
-            : latest(50).then((messages) => ({ messages })),
-        listPresence(),
-        getPinned()
+        sinceId ? since(sinceId, 200, room).then((messages) => ({ messages }))
+          : beforeId ? before(beforeId, 50, room)
+            : latest(50, room).then((messages) => ({ messages })),
+        listPresence(room),
+        getPinned(room)
       ]);
       return json(200, { ...page, presence, pinned });
     }
 
     if (req.method === 'DELETE') {
       const id = url.searchParams.get('id') || '';
-      const found = await getMessage(id);
+      const found = await getMessage(id, room);
       if (!found) return json(404, { error: 'Message not found.' });
       if (found.message.user !== user.name && !user.host) return json(403, { error: 'You can only delete your own messages.' });
-      await deleteMessage(id);
-      const pinned = await getPinned();
-      if (pinned && pinned.id === id) await unpin();
+      await deleteMessage(id, room);
+      const pinned = await getPinned(room);
+      if (pinned && pinned.id === id) await unpin(room);
       return json(200, { ok: true });
     }
 
     if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
-    let body;
-    try {
-      body = await req.json();
-    } catch (e) {
-      return json(400, { error: 'Invalid request.' });
-    }
 
     if (body.action === 'typing') {
-      await setTyping(user.name);
+      await setTyping(user.name, room);
       return json(200, { ok: true });
     }
     if (body.action === 'read') {
       if (!isMessageId(body.id)) return json(400, { error: 'Invalid message.' });
-      await setRead(user.name, body.id);
+      await setRead(user.name, body.id, room);
       return json(200, { ok: true });
     }
     if (body.action === 'pin') {
-      const pinned = await pinMessage(String(body.id || ''), user.name);
+      const pinned = await pinMessage(String(body.id || ''), user.name, room);
       if (!pinned) return json(404, { error: 'Message not found.' });
       return json(200, { pinned });
     }
     if (body.action === 'unpin') {
-      const pinned = await getPinned();
+      const pinned = await getPinned(room);
       if (pinned && pinned.pinnedBy !== user.name && !user.host) {
         return json(403, { error: 'Only the person who pinned it or a host can unpin.' });
       }
-      await unpin();
+      await unpin(room);
       return json(200, { pinned: null });
     }
 
     if (body.action === 'poll') {
       const poll = buildPoll(body.question, body.options, body.multi);
       const message = await postMessage({
-        author: user.name, text: `📊 ${poll.question}`, poll,
+        author: user.name, room, text: `📊 ${poll.question}`, poll,
         replyTo: isMessageId(body.replyTo) ? body.replyTo : null
       });
       context.waitUntil(publishMessage(message));
       return json(200, { message });
     }
     if (body.action === 'vote') {
-      const message = await votePoll(String(body.id || ''), user.name, String(body.option || ''));
+      const message = await votePoll(String(body.id || ''), user.name, String(body.option || ''), room);
       if (!message) return json(404, { error: 'Poll not found.' });
       return json(200, { message });
     }
     if (body.action === 'closepoll') {
-      const message = await closePoll(String(body.id || ''), user.name, user.host);
+      const message = await closePoll(String(body.id || ''), user.name, user.host, room);
       if (!message) return json(404, { error: 'Poll not found.' });
       return json(200, { message });
     }
@@ -138,16 +146,16 @@ export default async (req, context) => {
       const duration = Math.round(Number(body.duration));
       if (!(duration >= 1)) return json(400, { error: 'That voice message is too short.' });
       if (duration > MAX_VOICE_SECONDS) return json(400, { error: 'Voice messages can be up to 5 minutes.' });
-      const mediaId = await saveAudio(body.audio);
+      const mediaId = await saveAudio(body.audio, room);
       const message = await postMessage({
-        author: user.name, text: '🎤 Voice message', voice: { id: mediaId, duration },
+        author: user.name, room, text: '🎤 Voice message', voice: { id: mediaId, duration },
         replyTo: isMessageId(body.replyTo) ? body.replyTo : null
       });
       context.waitUntil(publishMessage(message));
       return json(200, { message });
     }
     if (body.action === 'schedule') {
-      const scheduled = await scheduleMessage({ user: user.name, text: body.text, replyTo: body.replyTo, sendAt: body.sendAt });
+      const scheduled = await scheduleMessage({ user: user.name, room, text: body.text, replyTo: body.replyTo, sendAt: body.sendAt });
       return json(200, { scheduled });
     }
     if (body.action === 'unschedule') {
@@ -158,18 +166,19 @@ export default async (req, context) => {
 
     if (body.action === 'react') {
       if (!EMOJI.includes(body.emoji)) return json(400, { error: 'Unsupported reaction.' });
-      const message = await toggleReaction(String(body.id || ''), user.name, body.emoji);
+      const message = await toggleReaction(String(body.id || ''), user.name, body.emoji, room);
       if (!message) return json(404, { error: 'Message not found.' });
       return json(200, { message });
     }
 
     const message = await postMessage({
       author: user.name,
+      room,
       text: body.text,
       image: body.image || null,
       replyTo: isMessageId(body.replyTo) ? body.replyTo : null
     });
-    await clearTyping(user.name);
+    await clearTyping(user.name, room);
     // Notifications and the AI's reply run after the response is sent.
     context.waitUntil(publishMessage(message));
     return json(200, { message });

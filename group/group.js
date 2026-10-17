@@ -3,6 +3,13 @@
     'use strict';
 
     const API = '/.netlify/functions/group';
+    // Which group chat this page shows (switching chats reloads the page with ?room=).
+    const ROOM_KEY = 'chowaniec_group_room';
+    let ROOM = 'everyone';
+    try {
+        ROOM = new URLSearchParams(location.search).get('room') || localStorage.getItem(ROOM_KEY) || 'everyone';
+    } catch (e) { ROOM = 'everyone'; }
+    if (!/^[a-z-]{1,20}$/.test(ROOM)) ROOM = 'everyone';
     const POLL_VISIBLE_MS = 3000;
     const POLL_HIDDEN_MS = 30000;
     const FULL_SYNC_MS = 20000;           // re-read the latest 50 to pick up reactions & deletions
@@ -209,7 +216,7 @@
         return `Last seen ${new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
     }
 
-    function mediaUrl(id) { return `${API}?media=${encodeURIComponent(id)}`; }
+    function mediaUrl(id) { return `${API}?media=${encodeURIComponent(id)}&room=${encodeURIComponent(ROOM)}`; }
 
     function snippet(text, n) {
         const s = String(text || '').replace(/\s+/g, ' ').trim();
@@ -366,6 +373,10 @@
             throw new ApiError(401, 'Please sign in again.');
         }
         const headers = { 'X-Chowaniec-Key': user.key };
+        // Every request names the chat it belongs to.
+        const method = opts.method || 'GET';
+        if (method === 'POST' && opts.body && typeof opts.body === 'object' && !opts.body.room) opts.body = { ...opts.body, room: ROOM };
+        else if (method !== 'POST' && !/[?&]room=/.test(url)) url += `${url.includes('?') ? '&' : '?'}room=${encodeURIComponent(ROOM)}`;
         if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
         let res;
         try {
@@ -2293,12 +2304,45 @@
         setTimeout(() => { render('auto'); scheduleMidnightRefresh(); }, next - now);
     }
 
+    // Finds the chats this person is in, shows the switcher, and limits @mentions to this chat's members.
+    async function loadRooms() {
+        try {
+            const data = await api(`${API}?rooms=1`);
+            state.rooms = Array.isArray(data.rooms) ? data.rooms : [];
+        } catch (e) { return; }
+        const mine = state.rooms.find((r) => r.id === ROOM);
+        if (!mine) {
+            const first = state.rooms.find((r) => r.id === 'everyone') || state.rooms[0];
+            if (first && first.id !== ROOM) { try { localStorage.setItem(ROOM_KEY, first.id); } catch (e) { /* ignore */ } location.replace(`/group/?room=${first.id}`); }
+            return;
+        }
+        try { localStorage.setItem(ROOM_KEY, ROOM); } catch (e) { /* ignore */ }
+        if (Array.isArray(mine.members) && mine.members.length) state.people = mine.members;
+        renderHeader();
+        renderRoomBar();
+    }
+
+    function renderRoomBar() {
+        const bar = $('room-bar');
+        if (!bar) return;
+        if (state.rooms.length < 2) { bar.classList.add('hidden'); return; }
+        bar.classList.remove('hidden');
+        bar.innerHTML = '<div class="wrap room-row">' + state.rooms.map((r) =>
+            `<a class="room-chip${r.id === ROOM ? ' on' : ''}" href="/group/?room=${encodeURIComponent(r.id)}" data-room="${escapeHtml(r.id)}" title="${escapeHtml(r.blurb)}"${r.id === ROOM ? ' aria-current="page"' : ''}>${escapeHtml(r.name)}</a>`
+        ).join('') + '</div>';
+        bar.querySelectorAll('a[data-room]').forEach((a) => a.addEventListener('click', () => {
+            try { localStorage.setItem(ROOM_KEY, a.dataset.room); } catch (e) { /* ignore */ }
+        }));
+    }
+
     function start() {
         if (state.started) return;
         state.user = getUser();
         if (!state.user || !state.user.key) { handleUnauthorized(); return; }
         state.started = true;
         state.people = loadPeople();
+        state.rooms = [];
+        loadRooms();
         state.theme = readTheme();
         applyTheme();
         renderHeader();

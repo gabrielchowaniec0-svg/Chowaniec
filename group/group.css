@@ -861,3 +861,11 @@ mark { background: var(--mark); color: var(--mark-fg); border-radius: 3px; paddi
 .voice.loading .v-play svg { opacity: 0.25; }
 .voice.loading .v-play { position: relative; }
 .voice.loading .v-play::after { content: ''; position: absolute; inset: 3px; border-radius: 9999px; border: 2.5px solid currentColor; border-right-color: transparent; animation: spin 0.8s linear infinite; }
+
+/* Chat switcher */
+.room-bar { flex-shrink: 0; position: relative; z-index: 26; background: var(--chrome); border-bottom: 1px solid var(--line); }
+.room-bar.hidden { display: none; }
+.room-row { display: flex; gap: 8px; overflow-x: auto; padding: 8px 12px; scrollbar-width: none; }
+.room-row::-webkit-scrollbar { display: none; }
+.room-chip { flex-shrink: 0; padding: 7px 14px; border-radius: 9999px; font-size: 14px; line-height: 1.2; color: var(--text-2); background: var(--surface-2); text-decoration: none; white-space: nowrap; }
+.room-chip.on { background: var(--text); color: var(--bg, #fff); font-weight: 600; }
