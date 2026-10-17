@@ -5,6 +5,7 @@
 //   GET ?id=<id>        -> { conversation }
 //   DELETE ?id=<id>     -> { ok }
 // Model: AI_AGENT_MODEL (default Claude Opus 5.5). Tools act with the caller's permissions.
+import { whyBlocked, logAction, TOOL_CAPABILITY } from '../lib/ai-policy.mjs';
 import { getStore } from '@netlify/blobs';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -303,7 +304,11 @@ function guardPost(turn, room) {
 // Turns errors from shared helpers (which carry an HTTP-style status) into messages the AI can read.
 async function runTool(name, input, user, turn) {
   try {
-    return await runToolInner(name, input, user, turn);
+    const blocked = await whyBlocked(user.name, name);
+    if (blocked) throw new ToolError(blocked);
+    const outcome = await runToolInner(name, input, user, turn);
+    if (TOOL_CAPABILITY[name]) await logAction({ user: user.name, action: name, summary: outcome.summary || LABELS[name], room: input.chat || '' });
+    return outcome;
   } catch (err) {
     if (err instanceof ToolError) throw err;
     if (err && err.status && err.status < 500) throw new ToolError(err.message);

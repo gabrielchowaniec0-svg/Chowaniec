@@ -53,6 +53,31 @@
             <p style="color:var(--muted);font-size:13px">Turn them on, choose what you hear about, set quiet hours and manage your devices.</p>
         </section>
 
+        <section class="card" aria-labelledby="h-ai">
+            <h2 id="h-ai">Chowaniec AI</h2>
+            <div class="row">
+                <div class="grow"><div class="t"><label for="sw-digest">Morning summary</label></div><div class="s">Each morning, get a short notification with today&rsquo;s plans and anything waiting on you.</div></div>
+                <span class="switch"><input type="checkbox" id="sw-digest" role="switch"><span class="track"></span></span>
+            </div>
+            <p class="s" id="ai-mine" style="color:var(--muted);font-size:13px;margin-top:2px"></p>
+        </section>
+
+        <section class="card hidden" id="ai-heads" aria-labelledby="h-aih">
+            <h2 id="h-aih">AI controls (family heads)</h2>
+            <p class="s" style="color:var(--muted);font-size:13px">Choose what the AI is allowed to do for each person, and when it may speak up on its own.</p>
+            <div id="ai-people"></div>
+            <div class="row">
+                <div class="grow"><div class="t"><label for="sw-aiquiet">AI quiet hours</label></div><div class="s">The AI won&rsquo;t post or notify on its own during these hours.</div></div>
+                <span class="switch"><input type="checkbox" id="sw-aiquiet" role="switch"><span class="track"></span></span>
+            </div>
+            <div class="row"><div class="grow"><label for="ai-qstart" class="s">From</label> <input type="time" id="ai-qstart"> <label for="ai-qend" class="s">to</label> <input type="time" id="ai-qend"></div></div>
+            <div class="row"><div class="grow"><div class="t"><label for="sw-f-loose">Follow up on unanswered questions</label></div></div><span class="switch"><input type="checkbox" id="sw-f-loose" role="switch"><span class="track"></span></span></div>
+            <div class="row"><div class="grow"><div class="t"><label for="sw-f-brief">Morning-of event briefings</label></div></div><span class="switch"><input type="checkbox" id="sw-f-brief" role="switch"><span class="track"></span></span></div>
+            <div class="row"><div class="grow"><div class="t"><label for="sw-f-digest">Morning summaries</label></div></div><span class="switch"><input type="checkbox" id="sw-f-digest" role="switch"><span class="track"></span></span></div>
+            <div class="row"><div class="grow"><div class="t">What the AI has done</div><div class="s">The last things it did, and for whom.</div></div><button type="button" class="btn" id="btn-ailog">Show</button></div>
+            <div id="ai-log"></div>
+        </section>
+
         <section class="card" aria-labelledby="h-look">
             <h2 id="h-look">Display &amp; appearance</h2>
             <div class="row">
@@ -125,6 +150,59 @@
         $('btn-signout').addEventListener('click', function () {
             window.clearChowaniecSession();
             location.href = '/';
+        });
+
+        // ----- AI settings
+        S.api('/.netlify/functions/settings').then(function (d) { $('sw-digest').checked = !!(d.settings.ai && d.settings.ai.digest); }).catch(function () {});
+        $('sw-digest').addEventListener('change', function (e) {
+            S.api('/.netlify/functions/settings', { method: 'POST', body: { settings: { ai: { digest: e.target.checked } } } })
+                .then(function () { S.toast(e.target.checked ? 'You\u2019ll get a morning summary.' : 'Morning summary is off.'); })
+                .catch(function (err) { S.toast(err.message, true); e.target.checked = !e.target.checked; });
+        });
+        var policy = null, caps = {};
+        function savePolicy() {
+            return S.api('/.netlify/functions/ai-policy', { method: 'PUT', body: { policy: policy } })
+                .then(function (d) { policy = d.policy; S.toast('Saved.'); }).catch(function (err) { S.toast(err.message, true); });
+        }
+        function paintPeople(people) {
+            var html = '';
+            people.filter(function (n) { return n !== user.name; }).forEach(function (n) {
+                var off = policy.restricted[n] || [];
+                html += '<div class="row" style="flex-direction:column;align-items:flex-start"><div class="t">' + S.esc(n) + '</div><div style="display:flex;flex-wrap:wrap;gap:6px 14px">' +
+                    Object.keys(caps).map(function (c) {
+                        return '<label style="font-size:13px;display:flex;gap:6px;align-items:center;min-height:32px"><input type="checkbox" data-person="' + S.esc(n) + '" data-cap="' + c + '"' + (off.indexOf(c) === -1 ? ' checked' : '') + '> ' + S.esc(caps[c]) + '</label>';
+                    }).join('') + '</div></div>';
+            });
+            $('ai-people').innerHTML = html;
+        }
+        S.api('/.netlify/functions/ai-policy').then(function (d) {
+            if ((d.mine || []).length) $('ai-mine').textContent = 'The family heads have limited what the AI does for you: it won\u2019t ' + d.mine.map(function (c) { return d.capabilities[c].toLowerCase(); }).join(', ') + '.';
+            if (!d.policy) return;
+            policy = d.policy; caps = d.capabilities;
+            $('ai-heads').classList.remove('hidden');
+            paintPeople(d.people);
+            $('sw-aiquiet').checked = policy.quiet.on; $('ai-qstart').value = policy.quiet.start; $('ai-qend').value = policy.quiet.end;
+            $('sw-f-loose').checked = policy.features.looseEnds; $('sw-f-brief').checked = policy.features.briefings; $('sw-f-digest').checked = policy.features.digest;
+        }).catch(function () {});
+        $('ai-people').addEventListener('change', function (e) {
+            var cb = e.target; if (!cb.dataset.person) return;
+            var list = (policy.restricted[cb.dataset.person] || []).filter(function (c) { return c !== cb.dataset.cap; });
+            if (!cb.checked) list.push(cb.dataset.cap);
+            policy.restricted[cb.dataset.person] = list;
+            savePolicy();
+        });
+        function saveGeneral() {
+            policy.quiet = { on: $('sw-aiquiet').checked, start: $('ai-qstart').value || policy.quiet.start, end: $('ai-qend').value || policy.quiet.end };
+            policy.features = { looseEnds: $('sw-f-loose').checked, briefings: $('sw-f-brief').checked, digest: $('sw-f-digest').checked };
+            savePolicy();
+        }
+        ['sw-aiquiet', 'ai-qstart', 'ai-qend', 'sw-f-loose', 'sw-f-brief', 'sw-f-digest'].forEach(function (id) { $(id).addEventListener('change', saveGeneral); });
+        $('btn-ailog').addEventListener('click', function () {
+            S.api('/.netlify/functions/ai-policy?log=1').then(function (d) {
+                $('ai-log').innerHTML = d.log.length ? d.log.map(function (l) {
+                    return '<div class="row"><div class="grow"><div class="t" style="font-size:14px">' + S.esc(l.summary) + '</div><div class="s">' + (l.auto ? 'On its own' : 'For ' + S.esc(l.user)) + ' \u00b7 ' + S.esc(new Date(l.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + '</div></div></div>';
+                }).join('') : '<p class="s" style="color:var(--muted)">Nothing yet.</p>';
+            }).catch(function (err) { S.toast(err.message, true); });
         });
 
         var labels = {

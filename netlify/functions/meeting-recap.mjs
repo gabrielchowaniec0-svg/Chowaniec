@@ -4,6 +4,7 @@
 //   POST { action: 'post', code, chat: 'auto'|<chat id> } -> { room, text, links }   (hosts)
 // The recap is written from the meeting's shared note, then posted in a chat as Chowaniec AI on the host's behalf.
 import { getUser, json } from '../lib/auth.mjs';
+import { logAction } from '../lib/ai-policy.mjs';
 import { recordJoin, getAttendance, chatForAttendees, postMeetingRecap, isMeetingCode, chatsForHost } from '../lib/meeting-recap.mjs';
 
 export default async (req) => {
@@ -29,6 +30,7 @@ export default async (req) => {
     if (body.action === 'post') {
       if (!user.host) return json(403, { error: 'Only a host can post a meeting recap.' });
       const result = await postMeetingRecap(user, { code: String(body.code || ''), chat: String(body.chat || 'auto'), origin: new URL(req.url).origin });
+      await logAction({ user: user.name, action: 'meeting_recap', summary: 'Posted a meeting recap', room: (result && result.chat) || '' });
       return json(200, result);
     }
     return json(400, { error: 'Unknown request.' });
