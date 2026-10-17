@@ -138,6 +138,10 @@
           <i data-lucide="link-2" class="w-4 h-4"></i>
         </button>
 
+        <button id="notify-btn" onclick="toggleDrawer('notify')" title="Tell people the meeting has started" class="hidden meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] items-center justify-center text-white">
+          <i data-lucide="bell-ring" class="w-4 h-4"></i>
+        </button>
+
         <button onclick="toggleDrawer('polls')" title="Quick Polls" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
           <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
         </button>
@@ -858,16 +862,97 @@
       endCall('You were disconnected from the meeting.');
     }
 
+    // One tap opens this link, signs the person in with their name and drops them straight into the meeting.
+    function directJoinLink() {
+      return `${window.location.origin}/meet/?room=${encodeURIComponent(currentMeetingCode)}&join=1`;
+    }
+
     function copyInviteLink() {
-      const inviteUrl = `${window.location.origin}/meet?${encodeURIComponent(currentMeetingCode)}`;
+      const inviteUrl = directJoinLink();
       if (!navigator.clipboard) {
         prompt('Copy this meeting link:', inviteUrl);
         return;
       }
       navigator.clipboard.writeText(inviteUrl).then(
-        () => alert(`Meeting link copied:\n${inviteUrl}`),
+        () => toast('Meeting link copied. Anyone signed in can tap it to join.'),
         () => prompt('Copy this meeting link:', inviteUrl)
       );
+    }
+
+    // --- "Meeting started" notification (hosts only, sent by hand) ---
+    const notifyState = { all: true, picked: new Set(), chat: false, busy: false, message: '' };
+
+    function isHostUser() {
+      const user = window.getChowaniecUser();
+      return !!(user && user.host);
+    }
+
+    function renderNotifyDrawer() {
+      const me = (window.getChowaniecUser() || {}).name;
+      const others = (window.chowaniecPeople ? window.chowaniecPeople() : []).filter((n) => n !== me);
+      const chip = (name, on) => `<button type="button" onclick="notifyTogglePerson('${name}')" aria-pressed="${on}" class="px-4 min-h-[40px] rounded-full border text-xs font-medium ${on ? 'bg-white text-black border-white' : 'bg-white/5 text-zinc-300 border-white/10 hover:bg-white/10'}">${name}</button>`;
+      const body = document.getElementById('drawer-body');
+      if (!isHostUser()) {
+        body.innerHTML = restrictedNotice('send meeting notifications');
+        return;
+      }
+      body.innerHTML = `
+        <div class="space-y-5">
+          <p class="text-sm text-zinc-300 font-light">Send a notification so people can join this meeting with one tap.</p>
+          <div>
+            <p class="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">Who to notify</p>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" onclick="notifyToggleAll()" aria-pressed="${notifyState.all}" class="px-4 min-h-[40px] rounded-full border text-xs font-medium ${notifyState.all ? 'bg-white text-black border-white' : 'bg-white/5 text-zinc-300 border-white/10 hover:bg-white/10'}">Everyone</button>
+              ${notifyState.all ? '' : others.map((n) => chip(n, notifyState.picked.has(n))).join('')}
+            </div>
+          </div>
+          <label class="flex items-center gap-3 min-h-[44px] cursor-pointer">
+            <input id="notify-chat" type="checkbox" ${notifyState.chat ? 'checked' : ''} onchange="notifyState.chat = this.checked" class="w-5 h-5 accent-white">
+            <span class="text-sm text-zinc-200">Also post the join link in the group chat</span>
+          </label>
+          <button id="notify-send" onclick="sendMeetingNotification()" ${notifyState.busy ? 'disabled' : ''} class="w-full py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+            <i data-lucide="bell-ring" class="w-4 h-4"></i><span>${notifyState.busy ? 'Sending…' : 'Send notification'}</span>
+          </button>
+          <p id="notify-message" class="text-xs text-zinc-400 ${notifyState.message ? '' : 'hidden'}">${notifyState.message}</p>
+        </div>`;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function notifyToggleAll() { notifyState.all = !notifyState.all; renderNotifyDrawer(); }
+    function notifyTogglePerson(name) {
+      if (notifyState.picked.has(name)) notifyState.picked.delete(name); else notifyState.picked.add(name);
+      renderNotifyDrawer();
+    }
+
+    async function sendMeetingNotification() {
+      if (notifyState.busy) return;
+      if (!notifyState.all && !notifyState.picked.size && !notifyState.chat) {
+        notifyState.message = 'Pick at least one person.';
+        renderNotifyDrawer();
+        return;
+      }
+      notifyState.busy = true;
+      notifyState.message = '';
+      renderNotifyDrawer();
+      try {
+        const res = await fetch('/.netlify/functions/meeting-notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Chowaniec-Key': signedInKey() },
+          body: JSON.stringify({ code: currentMeetingCode, people: notifyState.all ? 'all' : [...notifyState.picked], postToChat: notifyState.chat })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not send. Please try again.');
+        const parts = [];
+        if (data.people && data.people.length) parts.push(data.sent ? `Notified ${data.sent} device${data.sent === 1 ? '' : 's'}` : 'No one has notifications turned on yet');
+        if (data.posted) parts.push('link posted in the group chat');
+        notifyState.message = parts.join(' · ') + '.';
+        toast(notifyState.message);
+      } catch (err) {
+        notifyState.message = err.message;
+      } finally {
+        notifyState.busy = false;
+        if (currentDrawerTab === 'notify') renderNotifyDrawer();
+      }
     }
 
     // --- Roles ---
@@ -1213,6 +1298,7 @@
           <div class="space-y-2">
             ${item("copyInviteLink(); toggleDrawer(null)", 'link-2', 'Copy Meeting Link')}
             ${item("openAudioPanel()", 'volume-2', 'Audio Output (Speaker)')}
+            ${isHostUser() ? item("toggleDrawer('notify')", 'bell-ring', 'Notify People') : ''}
             ${item("toggleDrawer('info')", 'info', 'Meeting Info')}
             ${item("toggleCaptions(); toggleDrawer(null)", 'captions', captionsOn ? 'Turn Captions Off' : 'Turn Captions On')}
             ${item("toggleDrawer('agent')", 'bot', 'Meeting Agent & Notes')}
@@ -1221,6 +1307,9 @@
             ${item("toggleDrawer('forms')", 'clipboard-list', 'Production Forms')}
           </div>
         `;
+      } else if (tab === 'notify') {
+        title.innerText = 'Notify People';
+        renderNotifyDrawer();
       } else if (tab === 'forms') {
         title.innerText = formDraft ? (formDraft.index === null ? 'New Form' : 'Edit Form') : 'Production Forms';
         body.innerHTML = !canManage ? restrictedNotice('push forms') : formDraft ? renderFormEditor() : `
@@ -1548,8 +1637,28 @@
       parseMeetingCodeFromUrl();
       prefillUserName();
       renderCaptionsButton();
+      if (isHostUser()) {
+        const bell = document.getElementById('notify-btn');
+        bell.classList.remove('hidden');
+        bell.classList.add('flex');
+      }
       if (window.lucide) lucide.createIcons();
+      autoJoinFromLink();
     };
+
+    // A link like /meet/?room=abc-defg-hij&join=1 (from a notification or the group chat) joins right away.
+    let autoJoinTried = false;
+    function autoJoinFromLink() {
+      if (autoJoinTried) return;
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('join') !== '1') return;
+      const code = normalizeMeetingCode(document.getElementById('room-code-input').value.trim());
+      const name = document.getElementById('user-name-input').value.trim();
+      if (!ROOM_NAME_PATTERN.test(code) || !name) return;   // guests type their name, then press Enter Studio
+      autoJoinTried = true;
+      document.getElementById('room-subtext').innerText = 'Joining the meeting…';
+      setTimeout(joinMeeting, 300);
+    }
 
     window.addEventListener('DOMContentLoaded', () => {
       parseMeetingCodeFromUrl();
