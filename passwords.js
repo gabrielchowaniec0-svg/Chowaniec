@@ -80,10 +80,62 @@ if (typeof window !== 'undefined') {
       return Object.prototype.hasOwnProperty.call(hashes, hash) ? Object.assign({ key: hash }, hashes[hash]) : null;
     };
 
+    // Sign-ins are remembered for 180 days in a cookie holding the passcode's hash (never the
+    // passcode itself). It is checked against the list above on every page load.
+    const AUTH_COOKIE = 'chowaniec_auth';
+    const AUTH_COOKIE_MAX_AGE = 180 * 24 * 60 * 60;
+
+    function readAuthCookie() {
+      const match = document.cookie.match(/(?:^|;\s*)chowaniec_auth=([0-9a-f]{64})(?:;|$)/);
+      return match ? match[1] : null;
+    }
+
+    function writeAuthCookie(key, maxAge) {
+      const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = `${AUTH_COOKIE}=${key || ''}; Max-Age=${maxAge}; Path=/; SameSite=Lax${secure}`;
+    }
+
     window.setChowaniecSession = function (user) {
       sessionStorage.setItem('chowaniec_authenticated', 'true');
       sessionStorage.setItem('chowaniec_user', JSON.stringify(user));
+      if (user && user.key) writeAuthCookie(user.key, AUTH_COOKIE_MAX_AGE);
     };
+
+    window.clearChowaniecSession = function () {
+      sessionStorage.removeItem('chowaniec_authenticated');
+      sessionStorage.removeItem('chowaniec_user');
+      writeAuthCookie('', 0);
+    };
+
+    // Everyone who can be @mentioned (the family; not the shared Guest passcode).
+    window.chowaniecPeople = function () {
+      const names = Object.values(CHOWANIEC_PASSCODE_HASHES).map((u) => u.name).filter((n) => n !== 'Guest');
+      return [...new Set(names)];
+    };
+
+    // Restore a remembered sign-in before the page's own auth checks run.
+    (function restoreRememberedSession() {
+      try {
+        if (sessionStorage.getItem('chowaniec_authenticated') === 'true') {
+          // Older sessions predate the cookie; remember them from now on.
+          const current = JSON.parse(sessionStorage.getItem('chowaniec_user') || 'null');
+          if (current && current.key && !readAuthCookie()) writeAuthCookie(current.key, AUTH_COOKIE_MAX_AGE);
+          return;
+        }
+        const key = readAuthCookie();
+        if (!key) return;
+        if (!Object.prototype.hasOwnProperty.call(CHOWANIEC_PASSCODE_HASHES, key)) {
+          writeAuthCookie('', 0);
+          return;
+        }
+        sessionStorage.setItem('chowaniec_authenticated', 'true');
+        sessionStorage.setItem('chowaniec_user', JSON.stringify(Object.assign({ key }, CHOWANIEC_PASSCODE_HASHES[key])));
+        // Refresh the expiry so regular visitors stay signed in.
+        writeAuthCookie(key, AUTH_COOKIE_MAX_AGE);
+      } catch (e) {
+        // Storage blocked: fall back to signing in each visit.
+      }
+    })();
 
     window.getChowaniecUser = function () {
       try {

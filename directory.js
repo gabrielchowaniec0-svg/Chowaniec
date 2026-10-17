@@ -1,5 +1,23 @@
 window.DIRECTORY_CONFIG = [
   {
+    id: "group",
+    title: "Chowaniec Group",
+    path: "/group/",
+    localFallback: "./group/index.html",
+    icon: "messages-square",
+    status: "Active",
+    description: "The family group chat, with photos, replies, reactions and notifications."
+  },
+  {
+    id: "ai",
+    title: "Chowaniec AI",
+    path: "/ai/",
+    localFallback: "./ai/index.html",
+    icon: "bot",
+    status: "Active",
+    description: "Ask anything, summarize notes, plan meetings and post reminders to the family."
+  },
+  {
     id: "resort",
     title: "Chowaniec Hotels & Resorts",
     path: "/resort/",
@@ -61,5 +79,14 @@ window.DIRECTORY_CONFIG = [
     icon: "flower2",
     status: "Active",
     description: "Relax with our spa services, available to book in advance."
+  },
+  {
+    id: "app",
+    title: "Get the App",
+    path: "/get-the-app/",
+    localFallback: "./get-the-app/index.html",
+    icon: "smartphone",
+    status: "Active",
+    description: "Install Chowaniec on your phone and turn on group chat notifications."
   }
 ];

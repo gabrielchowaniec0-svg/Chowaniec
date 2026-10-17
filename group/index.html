@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+    <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#000000"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><script src="/pwa.js" defer></script>
+    <title>Chowaniec Group</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
+    <!-- Security Gate & Passcodes -->
+    <script src="../passwords.js"></script>
+    <script src="../auth-gate.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        html, body { height: 100%; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #fafafa;
+            color: #111827;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+        .fade-in { animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---------- Chat layout ---------- */
+        #app-shell { height: 100vh; height: 100dvh; }
+        #scroller { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+        .msg-row { display: flex; align-items: flex-end; gap: 8px; position: relative; padding: 1px 0; }
+        .msg-row.group-start { margin-top: 14px; }
+        .msg-row.mine { flex-direction: row-reverse; }
+        .msg-col { display: flex; flex-direction: column; min-width: 0; max-width: min(78%, 520px); }
+        .msg-row.mine .msg-col { align-items: flex-end; }
+        .msg-row.theirs .msg-col { align-items: flex-start; }
+
+        .avatar {
+            width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 600; align-self: flex-start; margin-top: 18px;
+        }
+        .avatar-spacer { width: 32px; flex-shrink: 0; }
+        .msg-meta { font-size: 11px; color: #9ca3af; margin: 0 6px 3px; display: flex; gap: 6px; align-items: baseline; white-space: nowrap; }
+        .msg-meta .who { color: #374151; font-weight: 500; font-size: 12px; }
+        .msg-meta .when { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.02em; }
+
+        .bubble {
+            position: relative; padding: 9px 14px; border-radius: 20px; font-size: 15px; line-height: 1.45;
+            white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-width: 100%;
+            -webkit-user-select: text; user-select: text; -webkit-touch-callout: none;
+        }
+        .theirs .bubble { background: #fff; border: 1px solid #f3f4f6; color: #111827; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .mine .bubble { background: #000; color: #fff; }
+        .theirs.group-start .bubble { border-top-left-radius: 20px; }
+        .theirs:not(.group-start) .bubble { border-top-left-radius: 6px; }
+        .theirs:not(.group-end) .bubble { border-bottom-left-radius: 6px; }
+        .mine:not(.group-start) .bubble { border-top-right-radius: 6px; }
+        .mine:not(.group-end) .bubble { border-bottom-right-radius: 6px; }
+
+        .ai .bubble { background: #f5f3ff; border-color: #ede9fe; color: #2e1065; }
+        .ai .msg-meta .who { color: #6d28d9; }
+        .theirs .bubble.mentions-me { background: #fffbeb; border-color: #fcd34d; }
+        .ai .bubble.mentions-me { background: #f5f3ff; border-color: #fcd34d; }
+
+        .bubble a { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+        .theirs .bubble a { color: #000; text-decoration-color: #9ca3af; }
+        .ai .bubble a { color: #5b21b6; text-decoration-color: #c4b5fd; }
+        .mine .bubble a { color: #fff; text-decoration-color: rgba(255,255,255,0.5); }
+
+        .mention { font-weight: 600; border-radius: 6px; padding: 0 3px; margin: 0 -1px; }
+        .theirs .mention { background: #f3f4f6; color: #000; }
+        .ai .mention { background: #ede9fe; color: #4c1d95; }
+        .mine .mention { background: rgba(255,255,255,0.18); color: #fff; }
+        .mention.me { background: #fde68a !important; color: #78350f !important; }
+
+        .bubble.emoji-only { background: transparent !important; border: 0 !important; box-shadow: none !important; font-size: 40px; line-height: 1.15; padding: 0 2px; }
+
+        .reply-quote {
+            display: block; width: 100%; text-align: left; border-left: 3px solid #d1d5db; padding: 3px 0 3px 9px; margin: 2px 0 6px;
+            font-size: 13px; line-height: 1.35; color: #6b7280; white-space: normal; border-radius: 2px; cursor: pointer;
+        }
+        .reply-quote b { display: block; font-weight: 600; color: #374151; font-size: 12px; }
+        .reply-quote span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .mine .reply-quote { border-left-color: rgba(255,255,255,0.45); color: rgba(255,255,255,0.7); }
+        .mine .reply-quote b { color: #fff; }
+        .ai .reply-quote { border-left-color: #c4b5fd; }
+
+        .msg-img-btn { display: block; border-radius: 16px; overflow: hidden; background: #f3f4f6; margin: 2px 0; cursor: zoom-in; }
+        .msg-img-btn img { display: block; max-width: min(260px, 64vw); max-height: 340px; min-width: 120px; min-height: 90px; object-fit: cover; }
+        .bubble.has-image { padding: 4px; }
+        .bubble.has-image .msg-text { padding: 4px 10px 5px; display: block; }
+        .bubble.has-image .reply-quote { margin: 4px 8px 6px; width: auto; }
+
+        .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: -4px; padding: 0 8px; position: relative; z-index: 1; }
+        .mine .reactions { justify-content: flex-end; }
+        .react-chip {
+            min-height: 28px; padding: 0 9px; border-radius: 9999px; background: #fff; border: 1px solid #e5e7eb;
+            font-size: 13px; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            position: relative;
+        }
+        .react-chip::after { content: ''; position: absolute; inset: -6px -2px; } /* bigger tap target */
+        .react-chip .n { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6b7280; }
+        .react-chip.on { background: #111827; border-color: #111827; }
+        .react-chip.on .n { color: #fff; }
+
+        .msg-status { font-size: 11px; color: #9ca3af; margin: 3px 8px 0; font-family: 'JetBrains Mono', monospace; }
+        .msg-status.failed { color: #dc2626; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500; min-height: 40px; display: inline-flex; align-items: center; gap: 6px; margin-top: 0; }
+        .msg-row.pending .bubble { opacity: 0.6; }
+        .msg-row.failed .bubble { opacity: 0.55; }
+
+        .hover-actions { display: none; align-self: center; gap: 2px; }
+        @media (hover: hover) and (pointer: fine) {
+            .msg-row:hover .hover-actions, .msg-row:focus-within .hover-actions { display: flex; }
+        }
+        .hover-actions button {
+            width: 32px; height: 32px; border-radius: 9999px; display: flex; align-items: center; justify-content: center;
+            color: #9ca3af; background: #fff; border: 1px solid #f3f4f6;
+        }
+        .hover-actions button:hover { color: #000; border-color: #e5e7eb; }
+
+        .day-sep { display: flex; align-items: center; gap: 12px; margin: 22px 0 6px; }
+        .day-sep::before, .day-sep::after { content: ''; flex: 1; height: 1px; background: #f0f0f0; }
+        .day-sep span { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: #9ca3af; }
+
+        .sys-row { text-align: center; font-size: 12px; color: #9ca3af; margin: 12px auto; max-width: 80%; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+        .flash .bubble { animation: flash 1.4s ease; }
+        @keyframes flash { 0%, 40% { box-shadow: 0 0 0 3px #fcd34d; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+        .press .bubble { transform: scale(0.97); transition: transform 0.15s ease; }
+
+        #composer-input { font-size: 16px; line-height: 1.4; max-height: 160px; resize: none; }
+
+        #lightbox img { max-width: 100vw; max-height: 100dvh; object-fit: contain; }
+
+        .sheet-enter { animation: sheetUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+        @keyframes sheetUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .no-scrollbar { scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="overflow-hidden selection:bg-gray-200">
+
+    <div id="app-root" class="transition-all duration-500">
+        <div id="app-shell" class="flex flex-col">
+
+            <!-- Header -->
+            <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 z-30 shrink-0 pt-[env(safe-area-inset-top)]">
+                <div class="max-w-[760px] mx-auto px-2 sm:px-4 h-16 flex items-center gap-2 sm:gap-3">
+                    <button type="button" onclick="returnToHub()" title="Return to Hub" class="lg:hidden shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:text-black">
+                        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                    </button>
+                    <div class="w-8 h-8 shrink-0 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans lg:ml-2">CN</div>
+                    <div class="min-w-0 flex-1">
+                        <div class="font-serif tracking-wide text-lg sm:text-xl whitespace-nowrap leading-tight">
+                            Chowaniec <span class="text-gray-400 italic font-light text-base">Group</span>
+                        </div>
+                        <div id="member-line" class="text-[10px] font-mono uppercase tracking-widest text-gray-400 truncate"></div>
+                    </div>
+                    <div class="relative shrink-0">
+                        <button id="btn-bell" type="button" aria-haspopup="dialog" aria-expanded="false" title="Notifications" class="w-10 h-10 rounded-full border border-gray-200 bg-white text-gray-600 hover:border-black hover:text-black flex items-center justify-center transition-colors">
+                            <i data-lucide="bell" class="w-4 h-4"></i>
+                        </button>
+                        <div id="bell-panel" role="dialog" aria-label="Notifications" class="hidden absolute right-0 top-full mt-2 w-[min(18rem,calc(100vw-1.5rem))] bg-white rounded-2xl border border-gray-100 shadow-xl p-4 z-40"></div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Connection banner -->
+            <div id="error-banner" role="alert" class="hidden shrink-0 bg-amber-50 border-b border-amber-100 text-amber-800 text-xs">
+                <div class="max-w-[760px] mx-auto px-4 min-h-[44px] flex items-center gap-2">
+                    <i data-lucide="wifi-off" class="w-4 h-4 shrink-0"></i>
+                    <span id="error-text" class="flex-1 min-w-0">Connection trouble.</span>
+                    <button id="btn-retry" type="button" class="shrink-0 min-h-[40px] px-3 rounded-full font-medium hover:bg-amber-100">Retry now</button>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <main id="scroller" class="flex-1 overflow-y-auto overflow-x-hidden relative" aria-label="Messages">
+                <div class="max-w-[760px] mx-auto px-3 sm:px-5 pb-4 min-h-full flex flex-col">
+                    <div id="older" class="h-12 flex items-center justify-center text-[10px] font-mono uppercase tracking-widest text-gray-400"></div>
+                    <div id="initial-loading" class="flex-1 flex flex-col items-center justify-center gap-3 text-xs font-mono text-gray-400 py-20">
+                        <i data-lucide="loader-circle" class="w-6 h-6 spin text-gray-300"></i>
+                        Loading messages&hellip;
+                    </div>
+                    <div id="empty" class="hidden flex-1 flex-col items-center justify-center text-center py-16 px-6 fade-in">
+                        <div class="w-16 h-16 rounded-3xl bg-white border border-gray-100 shadow-sm flex items-center justify-center text-black mb-5"><i data-lucide="messages-square" class="w-7 h-7"></i></div>
+                        <p class="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2">Family Group Chat</p>
+                        <h2 class="text-2xl font-serif text-black mb-2">Say hi to the family 👋</h2>
+                        <p class="text-sm text-gray-400 font-light max-w-xs">Share photos, reply to each other, and type <span class="font-mono text-gray-600">@</span> to mention someone, or <span class="font-mono text-gray-600">@AI</span> to ask Chowaniec AI.</p>
+                    </div>
+                    <div id="messages" class="flex-1 flex flex-col justify-end" role="log" aria-live="polite" aria-relevant="additions"></div>
+                </div>
+            </main>
+
+            <!-- Composer -->
+            <footer class="shrink-0 relative bg-white/90 backdrop-blur-md border-t border-gray-100 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-20">
+                <button id="new-pill" type="button" class="hidden absolute left-1/2 -translate-x-1/2 -top-14 min-h-[40px] px-4 rounded-full bg-black text-white text-xs font-medium shadow-xl items-center gap-1.5 fade-in">
+                    <span id="new-pill-text">New messages</span> <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
+                </button>
+
+                <div class="max-w-[760px] mx-auto px-2 sm:px-4 pt-2 relative">
+                    <!-- Mention autocomplete -->
+                    <div id="mention-popup" role="listbox" aria-label="Mention someone" class="hidden absolute left-2 right-2 sm:left-4 sm:right-auto sm:w-72 bottom-full mb-2 bg-white rounded-2xl border border-gray-100 shadow-xl p-1.5 max-h-64 overflow-y-auto z-40"></div>
+
+                    <!-- Attachments: reply chip + image preview -->
+                    <div id="attach-row" class="hidden flex-col gap-2 px-1 pb-2"></div>
+
+                    <form id="composer" class="flex items-end gap-1.5 sm:gap-2" autocomplete="off">
+                        <input id="file-input" type="file" accept="image/*" class="sr-only" tabindex="-1" aria-hidden="true">
+                        <button id="btn-photo" type="button" title="Add a photo" class="shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-black transition-colors">
+                            <i data-lucide="image-plus" class="w-5 h-5"></i>
+                        </button>
+                        <div class="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-3xl focus-within:border-black focus-within:bg-white transition-colors">
+                            <label for="composer-input" class="sr-only">Message the family</label>
+                            <textarea id="composer-input" rows="1" enterkeyhint="send" class="block w-full bg-transparent outline-none px-4 py-[10px] text-gray-900"></textarea>
+                        </div>
+                        <button id="btn-send" type="submit" title="Send" disabled class="shrink-0 w-11 h-11 rounded-full bg-black text-white flex items-center justify-center shadow-md hover:bg-gray-800 transition-all disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none">
+                            <i data-lucide="arrow-up" class="w-5 h-5"></i>
+                        </button>
+                    </form>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Floating Return Button (desktop; on phones it lives in the header so it never covers the composer) -->
+    <button onclick="returnToHub()" title="Return to Hub" class="hidden lg:flex fixed bottom-8 right-8 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full items-center justify-center text-gray-600 hover:text-black hover:bg-gray-50 hover:scale-105 transition-all z-50">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    </button>
+
+    <!-- Message action sheet / menu -->
+    <div id="action-backdrop" class="hidden fixed inset-0 z-[60] bg-black/20 sm:bg-transparent"></div>
+    <div id="action-menu" role="menu" class="hidden fixed z-[61] bg-white border border-gray-100 shadow-2xl rounded-t-3xl sm:rounded-2xl inset-x-0 bottom-0 sm:inset-x-auto sm:bottom-auto sm:w-72 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-2"></div>
+
+    <!-- Delete confirm -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[70] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-gray-100 space-y-5 text-center fade-in">
+            <div class="w-12 h-12 rounded-full bg-red-50 border border-red-100 flex items-center justify-center mx-auto text-red-600">
+                <i data-lucide="trash-2" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h3 class="text-xl font-serif text-black mb-1">Delete this message?</h3>
+                <p id="confirm-detail" class="text-xs text-gray-400 font-light">It will be removed for everyone.</p>
+            </div>
+            <div class="flex gap-3">
+                <button type="button" id="confirm-cancel" class="flex-1 min-h-[44px] py-3 text-xs font-medium border border-gray-200 text-gray-700 hover:border-black hover:text-black rounded-xl transition-colors">Cancel</button>
+                <button type="button" id="confirm-ok" class="flex-1 min-h-[44px] py-3 text-xs font-medium bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors shadow-md">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox -->
+    <div id="lightbox" role="dialog" aria-label="Photo" class="fixed inset-0 z-[90] bg-black/95 hidden items-center justify-center">
+        <img id="lightbox-img" alt="Shared photo">
+        <div class="absolute top-0 right-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex gap-2">
+            <a id="lightbox-open" target="_blank" rel="noopener" title="Open original" class="w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+                <i data-lucide="external-link" class="w-5 h-5"></i>
+            </a>
+            <button id="lightbox-close" type="button" title="Close" class="w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <div id="lightbox-caption" class="absolute bottom-0 inset-x-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-white/70 text-xs font-mono"></div>
+    </div>
+
+    <!-- Sign-in-again Modal -->
+    <div id="signin-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[95] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-gray-100 space-y-5 text-center">
+            <div class="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center mx-auto text-black">
+                <i data-lucide="log-in" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h3 class="text-xl font-serif text-black mb-1">Please sign in again</h3>
+                <p class="text-xs text-gray-400 font-light">Your session has expired. Enter your passcode to get back to the family chat.</p>
+            </div>
+            <button type="button" id="btn-signin" class="w-full min-h-[44px] py-3 text-xs font-medium bg-black text-white rounded-xl hover:bg-gray-800 transition-colors shadow-md">Sign in again</button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" role="status" aria-live="polite" class="hidden fixed left-1/2 -translate-x-1/2 top-20 z-[100] max-w-[calc(100vw-2rem)] bg-black text-white text-xs font-medium rounded-full px-5 py-3 shadow-xl items-center gap-2"></div>
+
+    <script src="group.js"></script>
+</body>
+</html>

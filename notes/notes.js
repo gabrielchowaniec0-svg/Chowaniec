@@ -172,8 +172,7 @@
 
     function signInAgain() {
         try {
-            sessionStorage.removeItem('chowaniec_authenticated');
-            sessionStorage.removeItem('chowaniec_user');
+            window.clearChowaniecSession();
         } catch (e) { /* ignore */ }
         state.dirty = false;
         window.location.reload();

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <title>Chowaniec - Offline</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #fafafa; color: #111827; font-family: system-ui, -apple-system, sans-serif; }
+    .card { max-width: 22rem; margin: 1rem; padding: 2rem; background: #fff; border: 1px solid #f3f4f6; border-radius: 1.5rem; text-align: center; }
+    img { width: 64px; height: 64px; border-radius: 16px; }
+    h1 { font-family: Georgia, serif; font-weight: 400; font-size: 1.5rem; margin: 1rem 0 0.5rem; }
+    p { color: #6b7280; line-height: 1.5; margin: 0 0 1.5rem; }
+    button { min-height: 44px; padding: 0 1.5rem; border: 0; border-radius: 999px; background: #000; color: #fff; font-size: 0.9rem; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="/icons/icon-192.png" alt="">
+    <h1>You're offline</h1>
+    <p>Chowaniec needs an internet connection for this page. Check your connection and try again.</p>
+    <button onclick="location.reload()">Try Again</button>
+  </div>
+</body>
+</html>
