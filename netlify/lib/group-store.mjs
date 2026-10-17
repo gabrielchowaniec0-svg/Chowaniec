@@ -193,3 +193,73 @@ export function transcriptOf(list) {
     return `[${when}] ${m.user}${reply}: ${m.text || ''}${m.image ? ' [photo]' : ''}`;
   }).join('\n');
 }
+
+// --- Presence (online / typing / read receipts) and the pinned message ---
+// presence/<user>: { user, lastSeen, typingUntil, lastReadId }. Only that person's devices write it.
+
+const ONLINE_MS = 60 * 1000;
+const SEEN_REFRESH_MS = 25 * 1000;
+const TYPING_MS = 6 * 1000;
+const presenceKey = (user) => `presence/${encodeURIComponent(user)}`;
+
+async function updatePresence(user, change) {
+  const key = presenceKey(user);
+  const current = (await messages().get(key, { type: 'json' })) || { user, lastSeen: null, typingUntil: null, lastReadId: null };
+  const next = change(current);
+  if (next) await messages().setJSON(key, next);
+}
+
+// Marks `user` as online; writes at most every 25s to keep polling cheap.
+export function touchPresence(user) {
+  return updatePresence(user, (p) => {
+    if (p.lastSeen && Date.now() - Date.parse(p.lastSeen) < SEEN_REFRESH_MS) return null;
+    return { ...p, lastSeen: new Date(Date.now()).toISOString() };
+  });
+}
+
+export function setTyping(user) {
+  const now = Date.now();
+  return updatePresence(user, (p) => ({ ...p, lastSeen: new Date(now).toISOString(), typingUntil: new Date(now + TYPING_MS).toISOString() }));
+}
+
+// Read receipts only move forward (ids sort by time).
+export function setRead(user, id) {
+  return updatePresence(user, (p) => {
+    if (p.lastReadId && p.lastReadId >= id) return null;
+    return { ...p, lastReadId: id, lastSeen: new Date(Date.now()).toISOString() };
+  });
+}
+
+export async function listPresence() {
+  const { blobs } = await messages().list({ prefix: 'presence/' });
+  const now = Date.now();
+  return (await Promise.all(blobs.map((b) => messages().get(b.key, { type: 'json' }))))
+    .filter(Boolean)
+    .map((p) => ({
+      user: p.user,
+      lastSeen: p.lastSeen,
+      online: !!p.lastSeen && now - Date.parse(p.lastSeen) < ONLINE_MS,
+      typing: !!p.typingUntil && Date.parse(p.typingUntil) > now,
+      lastReadId: p.lastReadId || null
+    }));
+}
+
+export async function getPinned() {
+  return (await messages().get('meta/pinned', { type: 'json' })) || null;
+}
+
+export async function pinMessage(id, user) {
+  const found = await getMessage(id);
+  if (!found) return null;
+  const { message } = found;
+  const pinned = {
+    id: message.id, user: message.user, text: message.text.slice(0, 300), image: message.image,
+    pinnedBy: user, pinnedAt: new Date().toISOString()
+  };
+  await messages().setJSON('meta/pinned', pinned);
+  return pinned;
+}
+
+export async function unpin() {
+  await messages().delete('meta/pinned');
+}
