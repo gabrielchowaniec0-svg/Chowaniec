@@ -561,7 +561,7 @@
         let name = '';
         if (!mine && flags.start) {
             name = m.kind === 'ai'
-                ? `<div class="msg-name"><i data-lucide="sparkles" class="w-3 h-3"></i>${escapeHtml(displayName(m))}</div>`
+                ? `<div class="msg-name"><i data-lucide="sparkles" class="w-3 h-3"></i>${escapeHtml(displayName(m))}${m.onBehalfOf ? ` <span class="msg-for">for ${escapeHtml(m.onBehalfOf)}</span>` : ''}</div>`
                 : `<div class="msg-name acc-text ${personClass(m.user)}">${escapeHtml(displayName(m))}</div>`;
         }
         const avatar = mine ? '' : `<div class="av-slot">${flags.end ? avatarHtml(m.user, '', { ai: m.kind === 'ai' }) : ''}</div>`;
@@ -635,7 +635,7 @@
                 end: !continues(m, next),
                 mentionsMe: mentionsMe(m)
             };
-            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice]);
+            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, m.onBehalfOf, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice]);
             items.push({ key: `m:${m.id}`, sig, t, id: m.id, html: messageHtml(m, flags) });
             if (receipt && receipt.id === m.id) {
                 items.push({ key: 'receipt', sig: 'r|' + receipt.seen.join(','), html: receiptHtml(receipt) });

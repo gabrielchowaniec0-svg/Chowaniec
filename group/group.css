@@ -870,3 +870,4 @@ mark { background: var(--mark); color: var(--mark-fg); border-radius: 3px; paddi
 .room-chip { flex-shrink: 0; padding: 7px 14px; border-radius: 9999px; font-size: 14px; line-height: 1.2; color: var(--text-2); background: var(--surface-2); text-decoration: none; white-space: nowrap; }
 .room-chip.on { background: var(--text); color: var(--bg, #fff); font-weight: 600; }
 .sys-row .sys-link { margin-left: 6px; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; color: inherit; }
+.msg-name .msg-for { font-weight: 400; color: var(--faint); }

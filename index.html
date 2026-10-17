@@ -209,6 +209,21 @@
           </p>
         </div>
 
+        <!-- One search box for notes, chats, meetings and the calendar -->
+        <form action="/search/" method="get" role="search" class="max-w-2xl" aria-label="Search everything">
+          <label for="hub-search" class="block text-xs font-mono uppercase tracking-widest text-gray-400 mb-2">Search everything</label>
+          <div class="flex gap-2">
+            <input
+              id="hub-search"
+              name="q"
+              type="search"
+              autocomplete="off"
+              class="flex-1 min-w-0 min-h-[48px] bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black text-sm"
+            />
+            <button type="submit" class="shrink-0 min-h-[48px] px-6 rounded-xl bg-black text-white text-xs font-medium hover:bg-gray-800 transition-colors shadow-sm">Search</button>
+          </div>
+        </form>
+
         <!-- Dynamically Rendered Service Grid -->
         <div id="directory-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <!-- Populated from directory.js -->

@@ -16,25 +16,20 @@ const throttleStore = () => getStore({ name: 'meeting-notify', consistency: 'str
 
 export const joinPath = (code) => `/meet/?room=${encodeURIComponent(code)}&join=1`;
 
-export default async (req) => {
-  const user = getUser(req);
-  if (!user) return json(401, { error: 'Please sign in again.' });
-  if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
-  if (!user.host) return json(403, { error: 'Only a host can send meeting notifications.' });
-
-  let body;
-  try { body = await req.json(); } catch (e) { return json(400, { error: 'Invalid request.' }); }
+// Sends the notification (shared with the AI). Returns { status, error } or { sent, people, posted }.
+export async function notifyMeeting(user, body, origin) {
+  if (!user.host) return { status: 403, error: 'Only a host can send meeting notifications.' };
   const code = typeof body.code === 'string' ? body.code.trim() : '';
-  if (!ROOM_NAME_PATTERN.test(code)) return json(400, { error: 'Invalid meeting code.' });
+  if (!ROOM_NAME_PATTERN.test(code)) return { status: 400, error: 'Invalid meeting code.' };
 
   const family = familyNames().filter((n) => n !== user.name);
   const people = body.people === 'all' || body.people === undefined
     ? family
     : [...new Set((Array.isArray(body.people) ? body.people : []).filter((n) => family.includes(n)))];
-  if (!people.length && !body.postToChat) return json(400, { error: 'Pick at least one person.' });
+  if (!people.length && !body.postToChat) return { status: 400, error: 'Pick at least one person.' };
 
   const last = await throttleStore().get(`last/${code}`, { type: 'json' });
-  if (last && Date.now() - last.at < MIN_GAP_MS) return json(429, { error: 'You just sent this. Give it a few seconds.' });
+  if (last && Date.now() - last.at < MIN_GAP_MS) return { status: 429, error: 'You just sent this. Give it a few seconds.' };
   await throttleStore().setJSON(`last/${code}`, { at: Date.now(), by: user.name });
 
   let topic = '';
@@ -55,9 +50,18 @@ export default async (req) => {
 
   let posted = false;
   if (body.postToChat) {
-    const origin = new URL(req.url).origin;
     await postMessage({ author: user.name, text: `📹 ${user.name} started a meeting${topic ? ` — ${topic}` : ''}. Tap to join: ${origin}${joinPath(code)}` });
     posted = true;
   }
-  return json(200, { sent, people, posted });
+  return { sent, people, posted };
+}
+
+export default async (req) => {
+  const user = getUser(req);
+  if (!user) return json(401, { error: 'Please sign in again.' });
+  if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
+  let body;
+  try { body = await req.json(); } catch (e) { return json(400, { error: 'Invalid request.' }); }
+  const result = await notifyMeeting(user, body, new URL(req.url).origin);
+  return result.error ? json(result.status, { error: result.error }) : json(200, result);
 };

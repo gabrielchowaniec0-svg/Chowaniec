@@ -129,7 +129,7 @@ export async function getImage(id) {
 }
 
 // Stores a message and returns it. `author` is a family name or AI_NAME.
-export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, room = DEFAULT_ROOM }) {
+export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, onBehalfOf, room = DEFAULT_ROOM }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
   if (!clean && !image && !poll && !voice) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
 
@@ -152,7 +152,8 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user',
     reactions: {},
     ...(poll ? { poll } : {}),
     ...(voice ? { voice } : {}),
-    ...(link ? { link } : {})
+    ...(link ? { link } : {}),
+    ...(onBehalfOf ? { onBehalfOf } : {})
   };
   await messages().setJSON(keyOf(message.id, room), message, { onlyIfNew: true });
   return message;
@@ -193,10 +194,11 @@ export async function notifyMessage(message) {
     ? everyone
     : message.mentions.filter((m) => everyone.includes(m));
   const others = everyone.filter((n) => !mentioned.includes(n));
+  const skip = message.onBehalfOf || message.user;   // the person an AI message was sent for already knows
   const url = message.room && message.room !== DEFAULT_ROOM ? `/group/?room=${message.room}` : '/group/';
   await Promise.all([
-    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: message.user, kind: 'mention' }) : 0,
-    others.length ? sendPush(others, { title: message.user, body, url }, { exclude: message.user, kind: 'message' }) : 0
+    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: skip, kind: 'mention' }) : 0,
+    others.length ? sendPush(others, { title: message.user, body, url }, { exclude: skip, kind: 'message' }) : 0
   ]);
 }
 
@@ -361,7 +363,7 @@ export async function nextScheduledAt() {
   return hint ? hint.at : null;
 }
 
-export async function scheduleMessage({ user, text, replyTo, sendAt, room = DEFAULT_ROOM }) {
+export async function scheduleMessage({ user, text, replyTo, sendAt, room = DEFAULT_ROOM, asAi = false }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
   if (!clean) throw Object.assign(new Error('Write a message to schedule.'), { status: 400 });
   const when = Date.parse(sendAt);
@@ -372,7 +374,7 @@ export async function scheduleMessage({ user, text, replyTo, sendAt, room = DEFA
   const { blobs } = await messages().list({ prefix: schedPrefix(user) });
   if (blobs.length >= MAX_SCHEDULED_PER_USER) throw Object.assign(new Error(`You can have up to ${MAX_SCHEDULED_PER_USER} scheduled messages.`), { status: 409 });
   const id = `${String(when).padStart(13, '0')}-${crypto.randomBytes(4).toString('hex')}`;
-  const record = { id, user, room, text: clean, replyTo: isMessageId(replyTo) ? replyTo : null, sendAt: new Date(when).toISOString(), createdAt: new Date(now).toISOString() };
+  const record = { id, user, room, ...(asAi ? { asAi: true } : {}), text: clean, replyTo: isMessageId(replyTo) ? replyTo : null, sendAt: new Date(when).toISOString(), createdAt: new Date(now).toISOString() };
   await messages().setJSON(`${schedPrefix(user)}${id}`, record);
   const next = await nextScheduledAt();
   if (next == null || when < next) await setNextSched(when);
@@ -411,7 +413,10 @@ export async function deliverDue(publish) {
     const claim = await messages().setJSON(b.key, { ...record, claimedAt: now }, { onlyIfMatch: entry.etag });
     if (!claim.modified) continue;
     try {
-      const message = await postMessage({ author: record.user, text: record.text, replyTo: record.replyTo, room: record.room || DEFAULT_ROOM });
+      const message = await postMessage({
+        author: record.asAi ? AI_NAME : record.user, kind: record.asAi ? 'ai' : 'user', onBehalfOf: record.asAi ? record.user : undefined,
+        text: record.text, replyTo: record.replyTo, room: record.room || DEFAULT_ROOM
+      });
       await messages().delete(b.key);
       delivered++;
       await publish(message);

@@ -9,16 +9,18 @@
         { name: 'summarize', args: '#note', desc: 'Summarize a note', server: true },
         { name: 'note', args: 'text', desc: 'Save a new note', server: true },
         { name: 'meet', args: 'topic', desc: 'Create a meeting link', server: true },
-        { name: 'group', args: 'message', desc: 'Post to the family group chat', server: true },
+        { name: 'group', args: 'message', desc: 'Post to the family group chat (sent by me for you)', server: true },
         { name: 'remind', args: '@person message', desc: 'Remind someone in the group chat', server: true },
-        { name: 'recap', args: '', desc: 'Catch up on the group chat', server: true },
+        { name: 'recap', args: '', desc: 'Catch up on the group chats you are in', server: true },
+        { name: 'calendar', args: 'event details', desc: 'Add something to the family calendar', server: true },
+        { name: 'poll', args: 'question and answers', desc: 'Create a poll in a group chat', server: true },
         { name: 'new', args: '', desc: 'Start a new chat', server: false },
         { name: 'help', args: '', desc: 'Show what I can do', server: false },
         { name: 'clear', args: '', desc: 'Clear this chat from view', server: false }
     ];
     const COMMAND_ICONS = {
         summarize: 'scroll-text', note: 'notebook-pen', meet: 'video', group: 'messages-square',
-        remind: 'bell-ring', recap: 'history', new: 'square-pen', help: 'circle-help', clear: 'eraser'
+        remind: 'bell-ring', recap: 'history', calendar: 'calendar-days', poll: 'chart-no-axes-column', new: 'square-pen', help: 'circle-help', clear: 'eraser'
     };
 
     const SUGGESTIONS = [
@@ -372,9 +374,10 @@
             const conv = data.conversation || {};
             $('messages').innerHTML = '';
             if (conv.title) upsertConversation(id, conv.title, false);
-            (conv.messages || []).forEach((m) => {
+            const all = conv.messages || [];
+            all.forEach((m, i) => {
                 if (m.role === 'user') addUserMessage(m.text || '', null);
-                else addAssistantFinal(m.text || '', m.actions || []);
+                else addAssistantFinal(m.text || '', m.actions || [], i === all.length - 1 ? m.quickAnswers : null);
             });
             updateWelcome();
             scrollToBottom(true);
@@ -504,6 +507,7 @@
                 <div data-slot="body" class="md-preview"></div>
                 <div data-slot="error" class="hidden"></div>
                 <div data-slot="actions" class="hidden flex-wrap gap-2"></div>
+                <div data-slot="quick" class="hidden flex-wrap gap-2" role="group" aria-label="Quick answers"></div>
                 <div data-slot="footer" class="hidden items-center gap-1 -ml-2"></div>
             </div>`;
         $('messages').appendChild(row);
@@ -516,6 +520,7 @@
             body: slot('body'),
             error: slot('error'),
             actions: slot('actions'),
+            quick: slot('quick'),
             footer: slot('footer'),
             text: '',
             toolChips: []
@@ -558,6 +563,41 @@
         icons();
     }
 
+    // Tappable answers the AI offers under its reply. Tapping one sends it as the person's next message.
+    function renderQuickAnswers(view, answers) {
+        const list = (Array.isArray(answers) ? answers : []).filter((a) => a && a.label && a.reply).slice(0, 4);
+        view.quick.innerHTML = '';
+        if (!list.length) {
+            view.quick.classList.add('hidden');
+            view.quick.classList.remove('flex');
+            return;
+        }
+        list.forEach((a) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('data-quick', '');
+            btn.className = 'min-h-[44px] px-5 py-2 rounded-full border border-gray-300 bg-white text-sm font-medium text-gray-800 hover:border-black hover:text-black transition-colors max-w-full';
+            btn.textContent = a.label;
+            btn.addEventListener('click', () => {
+                if (state.stream) return;
+                view.quick.querySelectorAll('button').forEach((b) => { b.disabled = true; b.classList.add('opacity-40'); });
+                btn.classList.remove('opacity-40');
+                btn.classList.add('bg-black', 'text-white', 'border-black');
+                const input = $('composer-input');
+                input.value = a.reply;
+                send();
+            });
+            view.quick.appendChild(btn);
+        });
+        view.quick.classList.remove('hidden');
+        view.quick.classList.add('flex');
+    }
+
+    // Quick answers only make sense for the newest reply: older ones are answered or stale.
+    function clearOldQuickAnswers() {
+        document.querySelectorAll('[data-slot="quick"]').forEach((el) => { el.innerHTML = ''; el.classList.add('hidden'); el.classList.remove('flex'); });
+    }
+
     function renderFooter(view) {
         view.footer.innerHTML = '';
         const btn = document.createElement('button');
@@ -586,11 +626,12 @@
         icons();
     }
 
-    function addAssistantFinal(text, actions) {
+    function addAssistantFinal(text, actions, quickAnswers) {
         const view = assistantShell();
         view.text = String(text || '');
         setMarkdownHtml(view.body, view.text);
         renderActions(view, actions);
+        renderQuickAnswers(view, quickAnswers);
         if (view.text) renderFooter(view);
         state.messages.push({ role: 'assistant', text: view.text, actions, el: view.row });
         icons();
@@ -782,6 +823,7 @@
                 if (typeof msg.text === 'string' && msg.text) view.text = msg.text;
                 flushRender(view);
                 renderActions(view, msg.actions);
+                renderQuickAnswers(view, msg.quickAnswers);
                 ctx.actions = msg.actions || [];
                 break;
             }
@@ -797,6 +839,7 @@
 
     async function runStream(request) {
         state.lastRequest = request;
+        clearOldQuickAnswers();
         const view = assistantShell();
         view.typing.classList.remove('hidden');
         view.typing.classList.add('flex');
@@ -989,6 +1032,8 @@
             if (cmd.name === 'summarize' && !hasNote && !message) return toast('Add a note with # to summarize', 'error');
             if (cmd.name === 'note' && !message) return toast('Write the note text after /note', 'error');
             if (cmd.name === 'group' && !message) return toast('Write a message after /group', 'error');
+            if (cmd.name === 'calendar' && !message) return toast('Say what to add after /calendar', 'error');
+            if (cmd.name === 'poll' && !message) return toast('Write the question and answers after /poll', 'error');
             if (cmd.name === 'remind' && !mentions.length) return toast('Mention someone with @ to remind', 'error');
         }
 
