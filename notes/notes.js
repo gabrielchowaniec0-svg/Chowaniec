@@ -39,7 +39,8 @@
         pane: 'list',
         openSeq: 0,
         ai: null,           // { mode, status: 'loading'|'done'|'error', markdown, truncated, error, controller }
-        liveLock: false     // Live Notes (live.js) is writing this note
+        liveLock: false,    // Live Notes (live.js) is writing this note
+        peopleOpen: false   // the "specific people" picker is open
     };
 
     const $ = (id) => document.getElementById(id);
@@ -222,9 +223,34 @@
     function isOwner(note) {
         return !!note && !!state.user && note.owner === state.user.name;
     }
+    // Everyone who can open a note can edit it, unless the owner or a host locked editing.
     function canEdit(note) {
         if (!note) return false;
-        return !note.id || isOwner(note) || !!state.user.host || !!note.shared;
+        return !note.id || isOwner(note) || !!state.user.host || !note.lockEdit;
+    }
+    function canCheck(note) {
+        if (!note) return false;
+        return !note.id || isOwner(note) || !!state.user.host || !note.lockCheck;
+    }
+    function peopleList(note) {
+        return Array.isArray(note && note.sharedWith) ? note.sharedWith : [];
+    }
+    function visibilityOf(note) {
+        if (note.shared) return 'shared';
+        return peopleList(note).length || state.peopleOpen ? 'people' : 'private';
+    }
+    function visibilityLabel(note) {
+        const v = visibilityOf(note);
+        if (v === 'shared') return 'Shared with everyone';
+        if (v === 'people') {
+            const who = peopleList(note);
+            return who.length ? 'Shared with ' + who.join(', ') : 'Shared with specific people';
+        }
+        return 'Private';
+    }
+    function familyOthers(note) {
+        const all = window.chowaniecPeople ? window.chowaniecPeople() : [];
+        return all.filter((name) => name !== note.owner);
     }
     function canShare(note) {
         return !!note && (!note.id || isOwner(note) || !!state.user.host);
@@ -238,7 +264,7 @@
         const q = state.search.trim().toLowerCase();
         return state.notes.filter((n) => {
             if (state.filter === 'mine' && n.owner !== state.user.name) return false;
-            if (state.filter === 'shared' && !n.shared) return false;
+            if (state.filter === 'shared' && !n.shared && !peopleList(n).length) return false;
             if (state.filter === 'meeting' && n.source !== 'agent') return false;
             if (!q) return true;
             return String(n.title || '').toLowerCase().includes(q) || String(n.preview || '').toLowerCase().includes(q);
@@ -312,8 +338,8 @@
                 <button type="button" data-id="${escapeHtml(n.id)}" class="note-item w-full text-left bg-white p-5 rounded-3xl border transition-all block ${active ? 'border-black shadow-md' : 'border-gray-100 hover:border-gray-300 hover:shadow-lg hover:shadow-gray-200/50'}" ${active ? 'aria-current="true"' : ''}>
                     <div class="flex items-start justify-between gap-3">
                         <h3 class="note-item-title font-serif text-lg text-black leading-snug break-words min-w-0">${escapeHtml(n.title || 'Untitled note')}</h3>
-                        <span class="shrink-0 mt-1 text-gray-400" title="${n.shared ? 'Shared with family' : 'Private'}">
-                            <i data-lucide="${n.shared ? 'users' : 'lock'}" class="w-3.5 h-3.5"></i>
+                        <span class="shrink-0 mt-1 text-gray-400" title="${escapeHtml(n.shared ? 'Shared with everyone' : peopleList(n).length ? 'Shared with ' + peopleList(n).join(', ') : 'Private')}">
+                            <i data-lucide="${n.shared ? 'users' : peopleList(n).length ? 'user-check' : 'lock'}" class="w-3.5 h-3.5"></i>
                         </span>
                     </div>
                     ${n.preview ? `<p class="clamp-2 text-sm text-gray-500 font-light mt-1 break-words">${escapeHtml(n.preview)}</p>` : '<p class="text-sm text-gray-300 font-light mt-1 italic">Empty note</p>'}
@@ -321,6 +347,7 @@
                         <span>${mine ? 'You' : escapeHtml(n.owner)}</span>
                         <span>&bull;</span>
                         <span title="${escapeHtml(fullTime(n.updatedAt))}">${escapeHtml(relativeTime(n.updatedAt))}</span>
+                        ${n.tasks && n.tasks.total ? `<span class="inline-flex items-center gap-1 normal-case tracking-normal font-sans text-[11px] font-medium ${n.tasks.done === n.tasks.total ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-gray-600 bg-gray-50 border-gray-100'} border rounded-full px-2 py-0.5" title="Checklist progress"><i data-lucide="list-checks" class="w-3 h-3"></i>${n.tasks.done}/${n.tasks.total}</span>` : ''}
                         ${n.source === 'agent' ? '<span class="ml-auto inline-flex items-center gap-1 normal-case tracking-normal font-sans text-[11px] font-medium text-violet-700 bg-violet-50 border border-violet-100 rounded-full px-2 py-0.5"><i data-lucide="video" class="w-3 h-3"></i>Meeting</span>' : ''}
                     </div>
                 </button>`;
@@ -408,6 +435,7 @@
             return;
         }
         setMarkdownHtml(box, md);
+        enhanceChecklist(box);
     }
 
     let previewFrame = null;
@@ -442,17 +470,33 @@
         const n = state.current;
         const el = $('share-control');
         if (!n) { el.innerHTML = ''; return; }
+        const mode = visibilityOf(n);
         if (canShare(n)) {
             const opt = (value, label, icon) => {
-                const active = n.shared === value;
-                return `<button type="button" data-share="${value ? 'shared' : 'private'}" aria-pressed="${active}" class="share-opt min-h-[40px] px-4 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap ${active ? 'bg-black text-white shadow-md' : 'text-gray-500 hover:text-black'}"><i data-lucide="${icon}" class="w-3.5 h-3.5"></i>${label}</button>`;
+                const active = mode === value;
+                return `<button type="button" data-share="${value}" aria-pressed="${active}" class="share-opt min-h-[40px] px-3.5 sm:px-4 rounded-full text-xs font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap ${active ? 'bg-black text-white shadow-md' : 'text-gray-500 hover:text-black'}"><i data-lucide="${icon}" class="w-3.5 h-3.5"></i>${label}</button>`;
             };
-            el.innerHTML = `<div class="inline-flex bg-gray-50 border border-gray-100 rounded-full p-1" role="group" aria-label="Visibility">${opt(false, 'Private', 'lock')}${opt(true, 'Shared with family', 'users')}</div>`;
+            let html = `<div class="inline-flex bg-gray-50 border border-gray-100 rounded-full p-1" role="group" aria-label="Who can see this note">${opt('private', 'Only me', 'lock')}${opt('people', 'Specific people', 'user-check')}${opt('shared', 'Everyone', 'users')}</div>`;
+            if (mode === 'people') {
+                const chosen = peopleList(n);
+                html += `<div class="mt-3 flex flex-wrap gap-2" role="group" aria-label="People who can see this note">` + familyOthers(n).map((name) => {
+                    const on = chosen.includes(name);
+                    return `<button type="button" data-person="${escapeHtml(name)}" aria-pressed="${on}" class="person-chip min-h-[40px] px-4 rounded-full border text-xs font-medium flex items-center gap-1.5 transition-colors ${on ? 'bg-black text-white border-black' : 'bg-white text-gray-600 border-gray-200 hover:border-black'}"><i data-lucide="${on ? 'check' : 'plus'}" class="w-3.5 h-3.5"></i>${escapeHtml(name)}</button>`;
+                }).join('') + `</div>`;
+                if (!chosen.length) html += `<p class="mt-2 text-xs text-gray-400 font-light">Tap the people who should see this note.</p>`;
+            }
+            if (mode !== 'private') {
+                const sw = (kind, label, hint, on) => `<label class="flex items-center justify-between gap-4 min-h-[44px] py-1 cursor-pointer"><span><span class="block text-sm text-gray-800">${label}</span><span class="block text-xs text-gray-400 font-light">${hint}</span></span><input type="checkbox" role="switch" data-lock="${kind}" ${on ? 'checked' : ''} class="lock-switch shrink-0 w-5 h-5 accent-black"></label>`;
+                html += `<div class="mt-3 border-t border-gray-100 pt-2">${sw('edit', 'Lock editing', 'Only you or a host can change the text.', !!n.lockEdit)}${sw('check', 'Lock checking off', 'Only you or a host can tick checklist items.', !!n.lockCheck)}</div>`;
+            }
+            el.innerHTML = html;
         } else {
+            const locks = [n.lockEdit ? 'editing is locked' : '', n.lockCheck ? 'checking off is locked' : ''].filter(Boolean).join(' · ');
             el.innerHTML = `
-                <div id="share-readonly" class="inline-flex items-center gap-2 min-h-[40px] px-4 rounded-full bg-gray-50 border border-gray-100 text-xs text-gray-600">
-                    <i data-lucide="${n.shared ? 'users' : 'lock'}" class="w-3.5 h-3.5"></i>
-                    <span class="font-medium">${n.shared ? 'Shared with family' : 'Private'}</span>
+                <div id="share-readonly" class="inline-flex flex-wrap items-center gap-x-2 gap-y-1 min-h-[40px] px-4 py-2 rounded-2xl bg-gray-50 border border-gray-100 text-xs text-gray-600">
+                    <i data-lucide="${mode === 'shared' ? 'users' : mode === 'people' ? 'user-check' : 'lock'}" class="w-3.5 h-3.5"></i>
+                    <span class="font-medium">${escapeHtml(visibilityLabel(n))}</span>
+                    ${locks ? `<span class="text-gray-400 font-light">&middot; ${escapeHtml(locks)}</span>` : ''}
                     <span class="text-gray-400 font-light hidden sm:inline">&middot; only ${escapeHtml(n.owner)} or a host can change this</span>
                 </div>`;
         }
@@ -498,6 +542,9 @@
         body.readOnly = !editable || state.liveLock;
         $('readonly-banner').classList.toggle('hidden', editable);
         $('readonly-banner').classList.toggle('flex', !editable);
+        $('readonly-text').textContent = !n.lockCheck
+            ? `Editing is locked on this note. You can still tick checklist items in the Preview tab. Only ${n.owner} or a host can change this.`
+            : `Editing and checking off are locked on this note. Only ${n.owner} or a host can change this.`;
 
         const del = $('btn-delete');
         del.classList.toggle('hidden', !canDelete(n));
@@ -517,6 +564,9 @@
             title: note.title || '',
             markdown: note.markdown || '',
             shared: !!note.shared,
+            sharedWith: peopleList(note).slice(),
+            lockEdit: !!note.lockEdit,
+            lockCheck: !!note.lockCheck,
             owner: note.owner,
             source: note.source || 'manual',
             meetingCode: note.meetingCode || '',
@@ -526,6 +576,7 @@
             etag: etag || null
         };
         state.dirty = false;
+        state.peopleOpen = false;
         state.saveError = '';
         state.conflict = null;
         clearTimeout(state.saveTimer);
@@ -597,7 +648,7 @@
     async function newNote() {
         if (!(await flushBeforeLeaving())) return;
         state.openSeq++;
-        openNoteObject({ id: null, title: '', markdown: '', shared: false, owner: state.user.name, source: 'manual' }, null);
+        openNoteObject({ id: null, title: '', markdown: '', shared: false, sharedWith: [], lockEdit: false, lockCheck: false, owner: state.user.name, source: 'manual' }, null);
         setUrlId(null);
         setPane('editor');
         setTimeout(() => $('note-title').focus(), 30);
@@ -642,7 +693,7 @@
             return;
         }
 
-        const snapshot = { title: n.title, markdown: n.markdown, shared: n.shared };
+        const snapshot = { title: n.title, markdown: n.markdown, shared: n.shared, sharedWith: peopleList(n).slice(), lockEdit: !!n.lockEdit, lockCheck: !!n.lockCheck };
         const note = n;
         state.saving = true;
         state.saveAgain = false;
@@ -651,10 +702,10 @@
         try {
             let data;
             if (!note.id) {
-                data = await api(API, { method: 'POST', body: { title: snapshot.title, markdown: snapshot.markdown, shared: snapshot.shared } });
+                data = await api(API, { method: 'POST', body: { title: snapshot.title, markdown: snapshot.markdown, shared: snapshot.shared, sharedWith: snapshot.sharedWith, lockEdit: snapshot.lockEdit, lockCheck: snapshot.lockCheck } });
             } else {
                 const body = { id: note.id, title: snapshot.title, markdown: snapshot.markdown };
-                if (canShare(note)) body.shared = snapshot.shared;
+                if (canShare(note)) Object.assign(body, { shared: snapshot.shared, sharedWith: snapshot.sharedWith, lockEdit: snapshot.lockEdit, lockCheck: snapshot.lockCheck });
                 if (!options.overwrite && note.etag) body.etag = note.etag;
                 data = await api(API, { method: 'PUT', body });
             }
@@ -668,12 +719,15 @@
             note.etag = data.etag;
             note.owner = data.note.owner;
             note.shared = !!data.note.shared;
+            note.sharedWith = peopleList(data.note).slice();
+            note.lockEdit = !!data.note.lockEdit;
+            note.lockCheck = !!data.note.lockCheck;
             note.createdAt = data.note.createdAt;
             note.updatedAt = data.note.updatedAt;
             note.updatedBy = data.note.updatedBy;
             note.source = data.note.source;
             note.meetingCode = data.note.meetingCode;
-            if (snapshot.shared !== note.shared && canShare(note)) {
+            if ((snapshot.shared !== note.shared || snapshot.lockEdit !== note.lockEdit || snapshot.lockCheck !== note.lockCheck) && canShare(note)) {
                 // The server refused the change.
                 toast('Only the owner or a host can change sharing.', 'error');
             }
@@ -730,15 +784,145 @@
         if (!state.dirty && !state.saveError) toast('Your version was saved');
     }
 
-    async function setShared(shared) {
+    // Saves a sharing or lock change right away (a brand-new empty note keeps it until it is first saved).
+    async function persistSharing(message) {
         const n = state.current;
-        if (!n || !canShare(n) || n.shared === shared) return;
-        n.shared = shared;
         renderShareControl();
-        if (!n.id && !n.title.trim() && !n.markdown.trim()) return; // Applied when the note is first saved.
+        if (!n.id && !n.title.trim() && !n.markdown.trim()) return;
         state.dirty = true;
         await saveNow({ force: true });
-        if (!state.saveError && !state.conflict) toast(shared ? 'Shared with the family' : 'Note is now private');
+        if (message && !state.saveError && !state.conflict) toast(message);
+        renderEditor();
+    }
+
+    async function setVisibility(mode) {
+        const n = state.current;
+        if (!n || !canShare(n) || visibilityOf(n) === mode) return;
+        if (mode === 'private') { n.shared = false; n.sharedWith = []; state.peopleOpen = false; }
+        else if (mode === 'people') { n.shared = false; state.peopleOpen = true; }
+        else { n.shared = true; state.peopleOpen = false; }
+        await persistSharing(mode === 'shared' ? 'Shared with everyone' : mode === 'private' ? 'Note is now private' : null);
+    }
+
+    async function togglePerson(name) {
+        const n = state.current;
+        if (!n || !canShare(n)) return;
+        const set = new Set(peopleList(n));
+        if (set.has(name)) set.delete(name); else set.add(name);
+        n.sharedWith = [...set];
+        await persistSharing(set.has(name) ? `Shared with ${name}` : `${name} can no longer see this note`);
+    }
+
+    async function setLock(kind, on) {
+        const n = state.current;
+        if (!n || !canShare(n)) return;
+        if (kind === 'edit') n.lockEdit = on; else n.lockCheck = on;
+        await persistSharing(kind === 'edit' ? (on ? 'Editing locked' : 'Editing unlocked') : (on ? 'Checking off locked' : 'Checking off unlocked'));
+    }
+
+    // --- CHECKLISTS ---
+    // Mirrors the server's reading of "- [ ] item" lines, so the n-th tick box is the n-th item.
+    function taskItemsOf(markdown) {
+        const items = [];
+        let fence = null;
+        String(markdown || '').split('\n').forEach((line) => {
+            const f = line.match(/^\s*(```|~~~)/);
+            if (f) { fence = fence === f[1] ? null : fence || f[1]; return; }
+            if (fence) return;
+            const m = line.match(/^\s*(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s?(.*)$/);
+            if (m) items.push({ checked: m[1] !== ' ', text: m[2].trim() });
+        });
+        return items;
+    }
+
+    function enhanceChecklist(box) {
+        const n = state.current;
+        const boxes = box.querySelectorAll('input[type="checkbox"]');
+        if (!n || !boxes.length) return;
+        const items = taskItemsOf($('note-body').value);
+        const usable = n.id && !state.liveLock && canCheck(n) && boxes.length === items.length;
+        boxes.forEach((cb, i) => {
+            cb.dataset.task = String(i);
+            cb.disabled = !usable;
+            cb.style.cursor = usable ? 'pointer' : 'default';
+            cb.style.width = cb.style.height = '1.25rem';
+            if (!usable) cb.title = !n.id ? 'Save the note first' : !canCheck(n) ? 'Checking off is locked on this note' : '';
+        });
+        box.querySelectorAll('li:has(> input[type="checkbox"])').forEach((li) => {
+            const cb = li.querySelector(':scope > input[type="checkbox"]');
+            li.classList.toggle('task-done', !!cb && cb.checked);
+        });
+    }
+
+    // Adopts a newer saved version of the open note (from a tick, or another device).
+    function applyServerNote(note, etag) {
+        const n = state.current;
+        if (!n || n.id !== note.id) return;
+        Object.assign(n, {
+            title: note.title, markdown: note.markdown, etag,
+            shared: !!note.shared, sharedWith: peopleList(note).slice(), lockEdit: !!note.lockEdit, lockCheck: !!note.lockCheck,
+            updatedAt: note.updatedAt, updatedBy: note.updatedBy
+        });
+        const body = $('note-body');
+        const title = $('note-title');
+        if (body.value !== n.markdown) {
+            const s = body.selectionStart, e = body.selectionEnd;
+            body.value = n.markdown;
+            try { body.setSelectionRange(Math.min(s, n.markdown.length), Math.min(e, n.markdown.length)); } catch (err) { /* not focused */ }
+        }
+        if (title.value !== n.title && document.activeElement !== title) title.value = n.title;
+        upsertSummary(note);
+        renderMeta();
+        renderEditor();
+        renderList();
+    }
+
+    async function tickItem(index, checked, cb) {
+        const n = state.current;
+        if (!n || !n.id) return;
+        try {
+            // Make sure the server has what is on screen first, so the item numbers agree.
+            if (state.dirty || state.saving) {
+                await saveNow({ force: true });
+                for (let i = 0; i < 40 && state.saving; i++) await new Promise((r) => setTimeout(r, 100));
+                if (state.conflict || state.saveError) { cb.checked = !checked; return; }
+            }
+            const items = taskItemsOf($('note-body').value);
+            const data = await api(API, { method: 'PUT', body: { id: n.id, action: 'toggle', index, checked, text: items[index] && items[index].text } });
+            applyServerNote(data.note, data.etag);
+        } catch (e) {
+            if (e.status === 409 && e.data && e.data.note) {
+                applyServerNote(e.data.note, e.data.etag);
+                toast('The list just changed, so I refreshed it. Tap again.');
+            } else {
+                cb.checked = !checked;
+                if (e.status !== 401) toast(e.message, 'error');
+            }
+        }
+    }
+
+    // Keeps the open note up to date when someone else ticks or edits it on another device.
+    let syncBusy = false;
+    async function syncOpenNote() {
+        const n = state.current;
+        if (syncBusy || !n || !n.id || state.dirty || state.saving || state.conflict || state.liveLock || document.hidden) return;
+        syncBusy = true;
+        try {
+            const data = await api(`${API}?id=${encodeURIComponent(n.id)}`);
+            if (state.current === n && !state.dirty && !state.saving && data.etag !== n.etag) applyServerNote(data.note, data.etag);
+        } catch (e) {
+            if (e.status === 404 && state.current === n) {
+                toast('This note was deleted or is no longer shared with you.', 'error');
+                state.current = null;
+                state.dirty = false;
+                setUrlId(null);
+                renderEditor();
+                await loadList();
+                closeToList();
+            }
+        } finally {
+            syncBusy = false;
+        }
     }
 
     async function deleteNote() {
@@ -848,7 +1032,7 @@
         if (action === 'copy-link') {
             if (!n.id) { toast('Save the note first', 'error'); return; }
             const ok = await copyText(`${window.location.origin}/notes/?id=${encodeURIComponent(n.id)}`);
-            toast(ok ? (n.shared ? 'Link copied' : 'Link copied · this note is private') : 'Could not copy', ok ? undefined : 'error');
+            toast(ok ? (n.shared ? 'Link copied' : 'Link copied · only the people it is shared with can open it') : 'Could not copy', ok ? undefined : 'error');
         } else if (action === 'copy-markdown') {
             const ok = await copyText($('note-body').value);
             toast(ok ? 'Markdown copied' : 'Could not copy', ok ? undefined : 'error');
@@ -1098,9 +1282,22 @@
         });
 
         $('share-control').addEventListener('click', (e) => {
+            const person = e.target.closest('[data-person]');
+            if (person) { togglePerson(person.dataset.person); return; }
             const btn = e.target.closest('[data-share]');
-            if (btn) setShared(btn.dataset.share === 'shared');
+            if (btn) setVisibility(btn.dataset.share);
         });
+        $('share-control').addEventListener('change', (e) => {
+            const sw = e.target.closest('[data-lock]');
+            if (sw) setLock(sw.dataset.lock, sw.checked);
+        });
+        $('preview-box').addEventListener('change', (e) => {
+            const cb = e.target.closest('input[type="checkbox"][data-task]');
+            if (cb) tickItem(Number(cb.dataset.task), cb.checked, cb);
+        });
+        setInterval(syncOpenNote, 4000);
+        setInterval(() => { if (!document.hidden && state.listLoaded) { const keep = state.notes; loadList().catch(() => { state.notes = keep; }); } }, 20000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) syncOpenNote(); });
 
         $('btn-share').addEventListener('click', (e) => { e.stopPropagation(); toggleMenu('share'); });
         $('btn-ai').addEventListener('click', (e) => { e.stopPropagation(); toggleMenu('ai'); });

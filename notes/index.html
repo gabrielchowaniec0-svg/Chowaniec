@@ -82,6 +82,8 @@
         .md-preview li { margin: 0.25rem 0; }
         .md-preview li::marker { color: #9ca3af; }
         .md-preview li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.4rem; }
+        .md-preview li.task-done { color: #9ca3af; text-decoration: line-through; text-decoration-color: #d1d5db; }
+        .md-preview li.task-done li:not(.task-done) { text-decoration: none; }
         .md-preview input[type="checkbox"] { width: 1rem; height: 1rem; margin-right: 0.5rem; vertical-align: -0.15rem; accent-color: #000; }
         .md-preview blockquote { margin: 1rem 0; padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid #e5e7eb; color: #6b7280; font-style: italic; }
         .md-preview code { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.1rem 0.35rem; }
@@ -233,7 +235,7 @@
                             <!-- Read-only banner -->
                             <div id="readonly-banner" class="hidden bg-gray-50 border border-gray-100 rounded-2xl p-3 text-xs text-gray-500 flex items-center gap-2">
                                 <i data-lucide="lock" class="w-3.5 h-3.5 shrink-0"></i>
-                                <span>You can view this note, but only its owner or a host can edit it.</span>
+                                <span id="readonly-text">You can view this note, but only its owner or a host can edit it.</span>
                             </div>
 
                             <!-- Title -->
@@ -244,8 +246,8 @@
                             </div>
 
                             <!-- Sharing -->
-                            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                                <span class="text-xs font-mono text-gray-400 uppercase tracking-widest">Visibility</span>
+                            <div class="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                                <span class="text-xs font-mono text-gray-400 uppercase tracking-widest sm:self-start sm:pt-3">Who can see it</span>
                                 <div id="share-control"></div>
                             </div>
 
