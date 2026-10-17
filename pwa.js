@@ -344,6 +344,7 @@
       return outcome;
     },
     pushStatus,
+    serverInfo: getServerInfo,
     enablePush,
     disablePush,
     sendTestPush

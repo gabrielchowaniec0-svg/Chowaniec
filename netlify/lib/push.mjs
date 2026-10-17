@@ -7,10 +7,18 @@ import { whoWantsPush } from './user-settings.mjs';
 
 const store = () => getStore({ name: 'push-subscriptions', consistency: 'strong' });
 
+// Values are trimmed: a stray space or line break pasted into Netlify would otherwise break the keys.
+const envValue = (name) => (Netlify.env.get(name) || '').trim();
+
 export function pushConfig() {
-  const publicKey = Netlify.env.get('VAPID_PUBLIC_KEY');
-  const privateKey = Netlify.env.get('VAPID_PRIVATE_KEY');
+  const publicKey = envValue('VAPID_PUBLIC_KEY');
+  const privateKey = envValue('VAPID_PRIVATE_KEY');
   return publicKey && privateKey ? { publicKey, privateKey } : null;
+}
+
+// Names (never values) of the settings the server can't see, to help fix a setup problem.
+export function missingPushSettings() {
+  return ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'].filter((n) => !envValue(n));
 }
 
 const keyFor = (user, endpoint) => `sub/${encodeURIComponent(user)}/${crypto.createHash('sha256').update(endpoint).digest('hex').slice(0, 32)}`;

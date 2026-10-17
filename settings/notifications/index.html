@@ -132,7 +132,11 @@
         } else if (st === 'unsupported') {
             card('&#128533;', 'This browser can&rsquo;t do notifications', 'Try Chrome, Edge, Firefox or Safari (added to your home screen on iPhone).');
         } else if (st === 'not-configured') {
-            card('&#128679;', 'Notifications aren&rsquo;t set up on the server yet', 'The site owner still needs to finish setting them up. Nothing you can do here.');
+            var info = await pwa.serverInfo();
+            var miss = (info.missing || []).map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(' and ');
+            card('&#128679;', 'Notifications aren&rsquo;t set up on the server yet',
+                miss ? 'The website can&rsquo;t see ' + miss + '. In Netlify, open <b>Site configuration &rarr; Environment variables</b>, make sure each one is available to <b>Functions</b> for <b>Production</b>, then press <b>Deploys &rarr; Trigger deploy</b>. Netlify only applies changes to new deploys.' :
+                'The server isn&rsquo;t reporting its notification keys. Try again in a minute.');
         } else {
             card('&#9888;&#65039;', 'Couldn&rsquo;t check right now', 'Your connection or sign-in may have hiccuped.',
                 '<div class="actions"><button type="button" class="btn solid" id="btn-retry">Try again</button></div>');
