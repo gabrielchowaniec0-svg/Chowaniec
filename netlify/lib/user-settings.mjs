@@ -73,10 +73,37 @@ export function inQuietHours(quiet, now = new Date()) {
   return start < end ? nowMin >= start && nowMin < end : nowMin >= start || nowMin < end;
 }
 
+// ---- Muted chats: { <room id>: <ISO time the mute ends> }, kept apart from the settings so saving
+// the settings page can never wipe them. An @important ping always gets through a mute.
+const mutesKey = (name) => `mutes/${encodeURIComponent(name)}`;
+export const MUTE_HOURS = { '1h': 1, '8h': 8, week: 24 * 7 };
+
+export async function getMutes(name, now = Date.now()) {
+  const saved = (await store().get(mutesKey(name), { type: 'json' })) || {};
+  const live = {};
+  for (const [room, until] of Object.entries(saved)) if (Date.parse(until) > now) live[room] = until;
+  return live;
+}
+
+// duration: '1h' | '8h' | 'week' | 'off' (unmute). Returns the person's current mutes.
+export async function setMute(name, room, duration, now = Date.now()) {
+  const mutes = await getMutes(name, now);
+  if (duration === 'off') delete mutes[room];
+  else if (MUTE_HOURS[duration]) mutes[room] = new Date(now + MUTE_HOURS[duration] * 3600 * 1000).toISOString();
+  else throw Object.assign(new Error('Pick how long to mute.'), { status: 400 });
+  await store().setJSON(mutesKey(name), mutes);
+  return mutes;
+}
+
 // kind: 'message' | 'mention' | 'other'. Returns the subset of `names` who should get this push.
-export async function whoWantsPush(names, kind, now = new Date()) {
+// `room`: the chat the push is about, so that person's mute for it can apply.
+export async function whoWantsPush(names, kind, now = new Date(), room = null) {
   const all = await Promise.all(names.map(async (name) => {
     try {
+      if (room && kind !== 'important' && kind !== 'test') {
+        const mutes = await getMutes(name, now.getTime());
+        if (mutes[room]) return null;
+      }
       const n = (await getSettings(name)).notifications;
       if (n.messages === 'off') return null;
       if (kind === 'important') return name;           // an @important ping gets through quiet hours and "mentions only"

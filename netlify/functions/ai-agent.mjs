@@ -5,6 +5,7 @@
 //   GET ?id=<id>        -> { conversation }
 //   DELETE ?id=<id>     -> { ok }
 // Model: AI_AGENT_MODEL (default Claude Opus 5.5). Tools act with the caller's permissions.
+import { findList, createList as createSharedList, addItems as addListItems } from '../lib/lists-store.mjs';
 import { createSheet } from '../lib/signup-store.mjs';
 import { whyBlocked, logAction, TOOL_CAPABILITY } from '../lib/ai-policy.mjs';
 import { getStore } from '@netlify/blobs';
@@ -108,6 +109,21 @@ const TOOLS = [
         important: { type: 'boolean', description: 'true to send it as an @important ping that reaches everyone even in quiet hours. Only allowed when the person is Victoria, Gabriel or Nicole; use only if they clearly ask for an important or urgent ping.' }
       },
       required: ['chat', 'text', 'important'],
+      additionalProperties: false
+    },
+    strict: true
+  },
+  {
+    name: 'add_to_list',
+    description: 'Add items to a shared family list (groceries, packing, costumes...). Finds the list by name among this person\'s chats; if there is none yet it is created in the given chat. Use when the person asks to add something to a list.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        list: { type: 'string', description: 'The list name, e.g. "Groceries".' },
+        items: { type: 'array', items: { type: 'string' }, description: 'What to add, one short entry each.' },
+        chat: { type: 'string', description: 'Chat id from list_chats whose members share the list (used to find or create it).' }
+      },
+      required: ['list', 'items', 'chat'],
       additionalProperties: false
     },
     strict: true
@@ -282,6 +298,7 @@ const INPUTS = {
   read_group_chat: z.object({ chat: z.string().max(40), limit: z.number().int().min(1).max(100) }),
   post_to_group: z.object({ chat: z.string().max(40), text: z.string().min(1).max(4000), important: z.boolean().optional() }),
   schedule_group_message: z.object({ chat: z.string().max(40), text: z.string().min(1).max(4000), send_at: z.string().max(60) }),
+  add_to_list: z.object({ list: z.string().min(1).max(60), items: z.array(z.string().min(1).max(120)).min(1).max(30), chat: z.string().max(40) }),
   send_direct_message: z.object({ to: z.string().max(40), text: z.string().min(1).max(4000) }),
   create_signup_sheet: z.object({ chat: z.string().max(40), title: z.string().max(100), slots: z.array(z.string().max(80)).min(1).max(20) }),
   create_poll: z.object({ chat: z.string().max(40), question: z.string().max(300), options: z.array(z.string().max(200)).min(2).max(8), multi: z.boolean() }),
@@ -306,6 +323,7 @@ const LABELS = {
   list_chats: 'Checking your chats',
   read_group_chat: 'Reading a group chat',
   post_to_group: 'Posting to a group chat',
+  add_to_list: 'Adding to a list',
   schedule_group_message: 'Scheduling a message',
   create_poll: 'Creating a poll',
   create_signup_sheet: 'Creating a sign-up sheet',
@@ -370,7 +388,7 @@ async function runToolInner(name, input, user, turn) {
   }
   if (name === 'create_note') {
     const { note } = await createNote(user, { ...input, source: 'ai' });
-    return { result: { id: note.id, title: note.title, url: `/notes/?id=${note.id}` }, summary: `Created note "${note.title}"`, url: `/notes/?id=${note.id}`, action: { label: `Open "${note.title}"`, url: `/notes/?id=${note.id}` } };
+    return { result: { id: note.id, title: note.title, url: `/notes/?id=${note.id}` }, summary: `Created note "${note.title}"`, url: `/notes/?id=${note.id}`, action: { label: `Open "${note.title}"`, url: `/notes/?id=${note.id}` }, undo: { kind: 'note', id: note.id } };
   }
   if (name === 'append_to_note') {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -406,7 +424,29 @@ async function runToolInner(name, input, user, turn) {
     });
     await notifyMessage(message);
     const link = room === 'everyone' ? '/group/' : `/group/?room=${room}`;
-    return { result: { ok: true, posted: message.text, sent_as: AI_NAME }, summary: poll ? 'Posted a poll' : 'Posted to the group chat', url: link, action: { label: 'Open the chat', url: link } };
+    return { result: { ok: true, posted: message.text, sent_as: AI_NAME }, summary: poll ? 'Posted a poll' : 'Posted to the group chat', url: link, action: { label: 'Open the chat', url: link }, undo: { kind: 'message', id: message.id, room } };
+  }
+  if (name === 'add_to_list') {
+    const room = resolveRoom(input.chat, user);
+    let list = await findList(user, input.list, room);
+    let created = false;
+    let addedIds = [];
+    if (!list) {
+      list = await createSharedList(user, { title: input.list, room, items: input.items });
+      created = true;
+      addedIds = list.items.map((i) => i.id);
+    } else {
+      const { list: next, extra } = await addListItems(user, list.id, input.items);
+      list = next;
+      addedIds = extra.map((i) => i.id);
+    }
+    const link = `/lists/?id=${list.id}`;
+    return {
+      result: { ok: true, list: list.title, created, added: input.items, now_on_list: list.items.map((i) => i.text) },
+      summary: created ? `Started the list "${list.title}"` : `Added to "${list.title}"`,
+      url: link, action: { label: 'Open the list', url: link },
+      undo: { kind: 'list', id: list.id, items: addedIds, created }
+    };
   }
   if (name === 'send_direct_message') {
     const to = resolveName(input.to);
@@ -416,7 +456,7 @@ async function runToolInner(name, input, user, turn) {
     const message = await postMessage({ author: AI_NAME, kind: 'ai', onBehalfOf: user.name, room, text: input.text });
     await notifyMessage(message);
     const link = `/group/?room=${room}`;
-    return { result: { ok: true, sent_to: to }, summary: `Sent a direct message to ${to}`, url: link, action: { label: `Open messages with ${to}`, url: link } };
+    return { result: { ok: true, sent_to: to }, summary: `Sent a direct message to ${to}`, url: link, action: { label: `Open messages with ${to}`, url: link }, undo: { kind: 'message', id: message.id, room } };
   }
   if (name === 'create_signup_sheet') {
     const room = resolveRoom(input.chat, user);
@@ -424,7 +464,7 @@ async function runToolInner(name, input, user, turn) {
     const { sheet, message } = await createSheet(user, { title: input.title, slots: input.slots, room, asAi: true });
     await notifyMessage(message);
     const link = room === 'everyone' ? '/group/' : `/group/?room=${room}`;
-    return { result: { ok: true, title: sheet.title, slots: sheet.slots.map((x) => x.label) }, summary: `Posted a sign-up sheet "${sheet.title}"`, url: link, action: { label: 'Open the chat', url: link } };
+    return { result: { ok: true, title: sheet.title, slots: sheet.slots.map((x) => x.label) }, summary: `Posted a sign-up sheet "${sheet.title}"`, url: link, action: { label: 'Open the chat', url: link }, undo: { kind: 'sheet', id: sheet.id, message: message.id, room } };
   }
   if (name === 'schedule_group_message') {
     const room = resolveRoom(input.chat, user);
@@ -435,7 +475,7 @@ async function runToolInner(name, input, user, turn) {
   if (name === 'add_calendar_event') {
     const room = resolveRoom(input.chat, user);
     const event = await createEvent(user, { title: input.title, date: input.date, time: input.time, endTime: input.end_time, location: input.location, notes: input.notes, room }, { via: 'ai' });
-    return { result: { id: event.id, title: event.title, when: describeWhen(event) }, summary: `Added "${event.title}" to the calendar`, url: `/calendar/?event=${event.id}`, action: { label: 'Open the calendar', url: `/calendar/?event=${event.id}` } };
+    return { result: { id: event.id, title: event.title, when: describeWhen(event) }, summary: `Added "${event.title}" to the calendar`, url: `/calendar/?event=${event.id}`, action: { label: 'Open the calendar', url: `/calendar/?event=${event.id}` }, undo: { kind: 'event', id: event.id } };
   }
   if (name === 'list_calendar') {
     const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -546,6 +586,7 @@ Use your tools to work with notes, the calendar, group chats and meetings.
 Messages you post to a group chat are sent by you, Chowaniec AI, never as ${user.name}. Write them in your own voice as the AI, in the first person ("I"), and say who asked you to (for example "${user.name} asked me to remind everyone that dinner is at 6."). Never write as if you were ${user.name}. Calendar events show who added them.
 Nicknames: ${Object.entries(ALIASES).filter(([, a]) => a.length).map(([n, a]) => `${n} is also called ${a.join(' or ')}`).join('; ')}. Treat a nickname as that person, and use the real name when you post.
 ${defaultChat ? `Unless ${user.name} names another chat, post in "${defaultChat.id}" (${defaultChat.name}); ${user.name} picked it in the app. Don't ask which chat when they haven't named one.` : ''}
+Shared lists (groceries, packing, costumes) live at /lists; use add_to_list when asked to add things to a list.
 Only Victoria, Gabriel and Nicole may send an @important ping (post_to_group with important: true). ${user.name} ${user.host ? 'is allowed to' : 'is not allowed to'}.
 If ${user.name} clearly asks you to do something, do it. If an action would notify or involve other people and they haven't clearly asked (for example you think a reminder would help), do not do it: ask first, then call offer_quick_answers with 2 to 4 buttons such as "Yes, send it", "Only some people" and "Not now". Whenever your reply ends with a question or an offer, call offer_quick_answers as your last step so they can answer with one tap, and keep the reply itself short. Never repeat the options in the text.
 Resolve dates like "Friday" or "next week" yourself using today's date, and say the exact date you used.
@@ -637,7 +678,7 @@ function streamTurn(user, body) {
               if (!parsed.success) throw new ToolError('Invalid tool input.');
               outcome = await runTool(block.name, parsed.data, user, turnState);
               if (outcome.action) actions.push(outcome.action);
-              if (!quiet) send({ type: 'tool_result', name: block.name, ok: true, summary: outcome.summary, url: outcome.url });
+              if (!quiet) send({ type: 'tool_result', name: block.name, ok: true, summary: outcome.summary, url: outcome.url, ...(outcome.undo ? { undo: outcome.undo } : {}) });
               results.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(outcome.result) });
             } catch (err) {
               const error = err instanceof ToolError ? err.message : 'That action failed.';

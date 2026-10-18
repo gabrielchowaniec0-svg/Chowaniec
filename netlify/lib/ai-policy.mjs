@@ -12,7 +12,8 @@ export const CAPABILITIES = {
   calendar: 'Add events to the calendar',
   notify: 'Notify other people (meeting alerts)',
   notes: 'Create or change notes',
-  meetings: 'Start meetings'
+  meetings: 'Start meetings',
+  lists: 'Add to shared lists'
 };
 
 export const TOOL_CAPABILITY = {
@@ -20,14 +21,15 @@ export const TOOL_CAPABILITY = {
   add_calendar_event: 'calendar',
   notify_meeting: 'notify',
   create_note: 'notes', append_to_note: 'notes',
-  create_meeting: 'meetings'
+  create_meeting: 'meetings',
+  add_to_list: 'lists'
 };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const DEFAULT_POLICY = {
   restricted: {},                                         // { <name>: ['post', ...] } things the AI will not do for that person
   quiet: { on: true, start: '21:30', end: '07:00' },       // the AI doesn't speak up on its own during these hours
-  features: { looseEnds: true, briefings: true, digest: true }
+  features: { looseEnds: true, briefings: true, digest: true, birthdays: true }
 };
 
 export function cleanPolicy(input, base = DEFAULT_POLICY) {
@@ -52,7 +54,8 @@ export function cleanPolicy(input, base = DEFAULT_POLICY) {
     features: {
       looseEnds: typeof f.looseEnds === 'boolean' ? f.looseEnds : base.features.looseEnds,
       briefings: typeof f.briefings === 'boolean' ? f.briefings : base.features.briefings,
-      digest: typeof f.digest === 'boolean' ? f.digest : base.features.digest
+      digest: typeof f.digest === 'boolean' ? f.digest : base.features.digest,
+      birthdays: typeof f.birthdays === 'boolean' ? f.birthdays : base.features.birthdays !== false
     }
   };
 }

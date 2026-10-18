@@ -7,7 +7,7 @@
 //   (create and change also return { clashes }: events at the same time the person is going to)
 //   DELETE ?id=<id>                     -> { ok }
 import { getUser, json } from '../lib/auth.mjs';
-import { createEvent, updateEvent, rsvpEvent, clashesFor, deleteEvent, getEvent, listEvents, canSee, todayLocal, addDays, isEventId } from '../lib/calendar-store.mjs';
+import { createEvent, updateEvent, rsvpEvent, checkinEvent, clashesFor, deleteEvent, getEvent, listEvents, canSee, todayLocal, addDays, isEventId } from '../lib/calendar-store.mjs';
 
 export default async (req) => {
   const user = getUser(req);
@@ -35,6 +35,9 @@ export default async (req) => {
       body = await req.json();
     } catch (e) {
       return json(400, { error: 'Invalid request.' });
+    }
+    if (req.method === 'POST' && body.action === 'checkin') {
+      return json(200, { event: await checkinEvent(user, String(body.id || ''), String(body.status || '')) });
     }
     if (req.method === 'POST' && body.action === 'rsvp') {
       const event = await rsvpEvent(user, String(body.id || ''), String(body.response || ''));

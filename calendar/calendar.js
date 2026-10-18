@@ -66,12 +66,36 @@
         state.today = data.today || state.today;
     }
 
+    // ---- birthdays (from Settings > Birthdays) show up as all-day entries and a countdown ----
+    function birthdayEvents() {
+        const out = [];
+        const { from } = monthRange();
+        const start = new Date(`${from}T12:00:00Z`).getUTCFullYear();
+        (state.bdays || []).forEach((b) => {
+            [start, start + 1].forEach((yr) => {
+                const date = ymd(yr, b.month - 1, b.day);
+                out.push({ id: `bday-${b.name}-${date}`, virtual: true, title: `🎂 ${b.name}’s birthday`, date, time: null, room: 'everyone', turns: b.year ? yr - b.year : null });
+            });
+        });
+        return out;
+    }
+    const allEvents = () => state.events.concat(birthdayEvents().filter((b) => !state.events.some((e) => e.id === b.id)));
+
+    function renderBirthdayStrip() {
+        const el = $('bday-strip');
+        if (!el) return;
+        const P = window.ChowaniecPolish;
+        const soon = (state.bdays || []).map((b) => ({ b, d: P ? P.daysUntil(b, new Date(`${state.today}T12:00:00`)) : 999 })).filter((x) => x.d <= 45).sort((a, b) => a.d - b.d).slice(0, 3);
+        el.classList.toggle('gone', !soon.length);
+        el.innerHTML = soon.map(({ b, d }) => `<span class="bd-chip" aria-label="${esc(b.name)}’s birthday ${d === 0 ? 'is today' : d === 1 ? 'is tomorrow' : `is in ${d} days`}">🎂 ${esc(b.name)} <b>${d === 0 ? 'today!' : d === 1 ? 'tomorrow' : `in ${d} days`}</b></span>`).join('');
+    }
+
     function render() {
         const { y, m } = state.month;
         $('month-title').textContent = monthName(y, m);
         const { from } = monthRange();
         const byDay = {};
-        state.events.forEach((e) => { (byDay[e.date] = byDay[e.date] || []).push(e); });
+        allEvents().forEach((e) => { (byDay[e.date] = byDay[e.date] || []).push(e); });
         let html = '';
         const cur = new Date(`${from}T12:00:00Z`);
         for (let i = 0; i < 42; i++) {
@@ -83,6 +107,7 @@
             cur.setUTCDate(cur.getUTCDate() + 1);
         }
         $('grid').innerHTML = html;
+        renderBirthdayStrip();
         renderList();
     }
 
@@ -98,8 +123,28 @@
         return `<div class="rsvp"><div class="rsvp-row">${btn('going', 'Going')}${btn('maybe', 'Maybe')}${btn('no', 'Can’t go')}</div>${parts.length ? `<div class="rsvp-who">${parts.join(' · ')}</div>` : ''}</div>`;
     }
 
+    // Rehearsal call sheet: on the day of an event, everyone taps "On my way" / "I'm here".
+    function callSheetHtml(e) {
+        if (e.date !== state.today || !e.time) return '';
+        const room = state.rooms.find((r) => r.id === e.room);
+        const members = (room && room.members) || [];
+        const c = e.checkins || {};
+        const mine = state.user && c[state.user.name] && c[state.user.name].status;
+        const names = (k) => Object.keys(c).filter((n) => c[n].status === k);
+        const waiting = members.filter((n) => !c[n] && (!e.rsvp || e.rsvp[n] !== 'no'));
+        const btn = (k, label) => `<button type="button" class="rsvp-btn${mine === k ? ' on' : ''}" data-checkin="${k}" data-eid="${esc(e.id)}" aria-pressed="${mine === k}">${label}</button>`;
+        const parts = [];
+        if (names('here').length) parts.push(`✅ Here: ${names('here').map(esc).join(', ')}`);
+        if (names('onway').length) parts.push(`🚗 On the way: ${names('onway').map(esc).join(', ')}`);
+        if (waiting.length) parts.push(`⏳ Not yet: ${waiting.map(esc).join(', ')}`);
+        return `<div class="rsvp callsheet" role="group" aria-label="Call sheet for ${esc(e.title)}"><div class="rsvp-who" style="font-weight:600;margin-bottom:6px">Call sheet · today</div><div class="rsvp-row">${btn('onway', 'On my way')}${btn('here', 'I’m here')}</div>${parts.length ? `<div class="rsvp-who" style="margin-top:6px">${parts.join('<br>')}</div>` : ''}</div>`;
+    }
+
     function eventCard(e) {
-        return `<div class="ev-wrap">${eventCardInner(e)}${rsvpHtml(e)}</div>`;
+        if (e.virtual) {
+            return `<div class="ev-wrap"><div class="ev bday" role="note"><div class="font-medium text-[15px]">${esc(e.title)}</div><div class="text-xs text-gray-500 mt-0.5">All day${e.turns ? ` · turns ${e.turns}` : ''}</div></div></div>`;
+        }
+        return `<div class="ev-wrap">${eventCardInner(e)}${rsvpHtml(e)}${callSheetHtml(e)}</div>`;
     }
 
     function eventCardInner(e) {
@@ -117,12 +162,14 @@
         if (state.selected) {
             $('list-title').textContent = dayLabel(state.selected);
             $('show-upcoming').classList.remove('gone');
-            items = state.events.filter((e) => e.date === state.selected);
+            items = allEvents().filter((e) => e.date === state.selected);
             list.innerHTML = items.length ? items.map(eventCard).join('') : '<p class="text-sm text-gray-400 py-6 text-center">Nothing planned this day.</p>';
         } else {
             $('list-title').textContent = 'Coming up';
             $('show-upcoming').classList.add('gone');
-            items = state.events.filter((e) => e.date >= state.today).slice(0, 30);
+            const soonEnd = new Date(`${state.today}T12:00:00Z`); soonEnd.setUTCDate(soonEnd.getUTCDate() + 60);
+            const soonStr = soonEnd.toISOString().slice(0, 10);
+            items = allEvents().filter((e) => e.date >= state.today && (!e.virtual || e.date <= soonStr)).sort((a, b) => `${a.date} ${a.time || ''}` < `${b.date} ${b.time || ''}` ? -1 : 1).slice(0, 30);
             if (!items.length) { list.innerHTML = '<p class="text-sm text-gray-400 py-6 text-center">Nothing coming up. Tap New Event to add something.</p>'; return; }
             let last = '';
             list.innerHTML = items.map((e) => {
@@ -229,6 +276,19 @@
                 } catch (err) { toast(err.message); }
                 return;
             }
+            const ck = e.target.closest('[data-checkin]');
+            if (ck) {
+                const ev = state.events.find((x) => x.id === ck.dataset.eid);
+                const mine = ev && ev.checkins && ev.checkins[state.user.name] && ev.checkins[state.user.name].status;
+                const status = mine === ck.dataset.checkin ? 'clear' : ck.dataset.checkin;
+                try {
+                    const data = await api(API, { method: 'POST', body: { action: 'checkin', id: ck.dataset.eid, status } });
+                    state.events = state.events.map((x) => (x.id === data.event.id ? data.event : x));
+                    renderList();
+                    if (window.ChowaniecHaptics) window.ChowaniecHaptics.tap('light');
+                } catch (err) { toast(err.message); }
+                return;
+            }
             const b = e.target.closest('[data-id]');
             const found = b && state.events.find((x) => x.id === b.dataset.id);
             if (found) openForm(found);
@@ -255,6 +315,13 @@
         render();
     }
 
+    async function loadBirthdays() {
+        for (let i = 0; i < 20 && !window.ChowaniecPolish; i++) await new Promise((r) => setTimeout(r, 100));
+        if (!window.ChowaniecPolish) return;
+        state.bdays = await window.ChowaniecPolish.birthdays();
+        render();
+    }
+
     async function start() {
         state.user = getUser();
         if (!state.user || !state.user.key) { $('signin-modal').classList.remove('gone'); return; }
@@ -267,9 +334,18 @@
         state.today = first.today;
         const p = parse(state.today);
         state.month = { y: p.y, m: p.m };
-        const deep = new URLSearchParams(location.search).get('event');
+        const params = new URLSearchParams(location.search);
+        const deep = params.get('event');
         await load();
         render();
+        loadBirthdays();
+        // "Add to calendar?" from a chat message opens the form already filled in.
+        if (params.get('add') === '1') {
+            openForm(null, /^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '') ? params.get('date') : null);
+            if (params.get('title')) $('f-title').value = params.get('title').slice(0, 120);
+            if (/^\d{2}:\d{2}$/.test(params.get('time') || '')) { $('f-allday').checked = false; $('time-row').classList.remove('gone'); $('f-time').value = params.get('time'); }
+            if (params.get('room') && state.rooms.some((r) => r.id === params.get('room'))) $('f-room').value = params.get('room');
+        }
         if (deep) {
             const found = state.events.find((e) => e.id === deep);
             if (found) { state.selected = found.date; render(); openForm(found); }

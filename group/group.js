@@ -88,6 +88,12 @@
     const isFinePointer = () => window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const reducedMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    // Little buzz on supported phones (see /haptics.js; honours reduced motion and the on/off switch).
+    const hap = (kind) => {
+        if (window.ChowaniecHaptics) return window.ChowaniecHaptics.tap(kind);
+        if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* ignore */ } }
+        return false;
+    };
 
     // ---------- helpers ----------
     function escapeHtml(value) {
@@ -581,6 +587,7 @@
 
         let status = '';
         if (m._pending === 'sending') status = `<div class="msg-status">Sending…</div>`;
+        else if (m._pending === 'offline') status = `<div class="msg-status offline">Waiting for a connection. It will send by itself.</div>`;
         else if (m._pending === 'failed') {
             status = `<button type="button" class="msg-status failed" data-act="retry" data-id="${escapeHtml(m.id)}"><i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Failed — tap to retry</button>`;
         }
@@ -642,6 +649,9 @@
         const continues = (a, b) => !!a && !!b && a.kind !== 'system' && b.kind !== 'system' &&
             groupKey(a) === groupKey(b) && dayKey(ts(a)) === dayKey(ts(b)) && Math.abs(ts(b) - ts(a)) <= GROUP_GAP_MS;
         const receipt = receiptInfo();
+        // "New messages" line: after what you had read when you opened the chat, or after what arrived while you were scrolled away.
+        const after = state.liveAfter || (state.openRead && !state.openReadDone ? state.openRead.id : null);
+        let dividerDone = !after;
 
         for (let i = 0; i < all.length; i++) {
             const m = all[i];
@@ -651,6 +661,10 @@
             if (!prev || dayKey(ts(prev)) !== dayKey(t)) {
                 const label = dayLabel(t);
                 items.push({ key: `day:${dayKey(t)}`, sig: label, html: `<div class="day-sep" role="separator"><span>${escapeHtml(label)}</span></div>` });
+            }
+            if (!dividerDone && !m._pending && String(m.id) > String(after) && !isMine(m) && m.kind !== 'system') {
+                dividerDone = true;
+                if (i > 0) items.push({ key: 'newline', sig: 'new', html: `<div class="day-sep new-sep" role="separator"><span>New messages</span></div>` });
             }
             if (m.kind === 'system') {
                 items.push({ key: `m:${m.id}`, sig: `sys|${m.text}|${m.link ? m.link.href : ''}`, t, html: `<div class="sys-row" data-id="${escapeHtml(m.id)}"><span>${formatText(m.text, m.mentions)}${m.link && /^\/[a-z]/.test(m.link.href || '') ? ` <a class="sys-link" href="${escapeHtml(m.link.href)}">${escapeHtml(m.link.label || 'Open')}</a>` : ''}</span></div>` });
@@ -662,7 +676,7 @@
                 end: !continues(m, next),
                 mentionsMe: mentionsMe(m)
             };
-            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, m.onBehalfOf, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice, m.sticker, m.threadCount, m.sheet, m.important, window.GroupExtras && window.GroupExtras.sig ? window.GroupExtras.sig(m) : '']);
+            const sig = JSON.stringify([m.text, m.image, m._localImage ? m._localImage.length : 0, m.replyTo, m.reactions, m._pending, m.user, m.kind, m.onBehalfOf, flags, dayLabel(t), timeLabel(t), state.people.length, m.poll, m.voice, m.sticker, m.threadCount, m.sheet, m.important, m.listenedBy, window.GroupExtras && window.GroupExtras.sig ? window.GroupExtras.sig(m) : '']);
             items.push({ key: `m:${m.id}`, sig, t, id: m.id, html: messageHtml(m, flags) });
             if (receipt && receipt.id === m.id) {
                 items.push({ key: 'receipt', sig: 'r|' + receipt.seen.join(','), html: receiptHtml(receipt) });
@@ -703,6 +717,19 @@
         state.unseen = 0;
         renderJump();
         maybeSendRead();
+        scheduleDividerClear();
+    }
+
+    // The "New messages" line stays for a few seconds once you are caught up, then goes away.
+    function scheduleDividerClear() {
+        if (state.dividerTimer || (!state.liveAfter && !(state.openRead && !state.openReadDone))) return;
+        state.dividerTimer = setTimeout(() => {
+            state.dividerTimer = null;
+            if (distanceFromBottom() >= NEAR_BOTTOM_PX) { scheduleDividerClear(); return; }
+            state.liveAfter = null;
+            state.openReadDone = true;
+            render('auto');
+        }, 6000);
     }
 
     function findAnchor() {
@@ -773,6 +800,7 @@
         }
         renderJump();
         maybeSendRead();
+        if (state.loaded && wasNearBottom) scheduleDividerClear();
         if (state.sheetOpen) renderSheetPhotos();
         if (window.GroupExtras && window.GroupExtras.afterRender) window.GroupExtras.afterRender();
     }
@@ -816,7 +844,13 @@
             state.hiddenUnseen += fresh;
             updateTitle();
         }
-        if (!state.stick && distanceFromBottom() >= NEAR_BOTTOM_PX) state.unseen += fresh;
+        if (!state.stick && distanceFromBottom() >= NEAR_BOTTOM_PX) {
+            if (!state.liveAfter) {
+                const before = state.messages[state.messages.length - 1 - fresh];
+                if (before) state.liveAfter = String(before.id);
+            }
+            state.unseen += fresh;
+        }
     }
 
     // ---------- header / pinned ----------
@@ -1115,6 +1149,7 @@
         try {
             const data = await api(API, { method: 'POST', body });
             state.pending = state.pending.filter((x) => x !== p);
+            saveOutbox();
             if (data && data.message) {
                 const all = Array.isArray(data.messages) && data.messages.length ? data.messages : [data.message];
                 all.forEach((m) => state.confirmed.add(m.id));
@@ -1124,6 +1159,13 @@
             }
             render('auto');
         } catch (e) {
+            if (e.status === 0 && !p.imageData) {
+                // No connection: keep it and send automatically when the phone is back online.
+                p.status = 'offline';
+                saveOutbox();
+                render('auto');
+                return;
+            }
             p.status = 'failed';
             p.error = e.message;
             if (/@(ai|bob)\b/i.test(p.text) || (state.dm && state.dm.ai)) state.aiThinkingUntil = 0;
@@ -1132,9 +1174,39 @@
         }
     }
 
+    // Messages written without a connection are kept (text only) so they survive closing the page.
+    const outboxKey = () => `chowaniec_outbox_${ROOM}`;
+    function saveOutbox() {
+        try {
+            const queued = state.pending.filter((p) => p.status === 'offline' && !p.imageData)
+                .map((p) => ({ tempId: p.tempId, text: p.text, replyTo: p.replyTo, createdAt: p.createdAt }));
+            if (queued.length) localStorage.setItem(outboxKey(), JSON.stringify(queued)); else localStorage.removeItem(outboxKey());
+        } catch (e) { /* storage unavailable */ }
+    }
+    function loadOutbox() {
+        try {
+            const queued = JSON.parse(localStorage.getItem(outboxKey()) || '[]');
+            if (!Array.isArray(queued)) return;
+            queued.forEach((q) => {
+                if (!q || !q.text || state.pending.some((p) => p.tempId === q.tempId)) return;
+                state.pending.push({ tempId: q.tempId, text: String(q.text), imageData: null, replyTo: q.replyTo || null, createdAt: q.createdAt || new Date().toISOString(), status: 'offline' });
+            });
+        } catch (e) { /* ignore */ }
+    }
+    let flushing = false;
+    async function flushOutbox() {
+        if (flushing) return;
+        flushing = true;
+        try {
+            const queued = state.pending.filter((p) => p.status === 'offline');
+            for (const p of queued) { await deliver(p); if (p.status === 'offline') break; }
+        } finally { flushing = false; }
+    }
+
     function retryPending(id) {
         const p = state.pending.find((x) => x.tempId === id);
         if (!p || p.status === 'sending') return;
+        if (p.status === 'offline') { flushOutbox(); return; }
         if (/(^|[^\w@])@ai\b/i.test(p.text)) state.aiThinkingUntil = Date.now() + 60000;
         deliver(p);
     }
@@ -1365,6 +1437,10 @@
             else items += item('pin', 'pin', 'Pin');
         }
         if (m._pending === 'failed') items += item('retry', 'rotate-cw', 'Retry sending');
+        if (!pendingMsg) {
+            const starred = window.GroupPolish && window.GroupPolish.isStarred(m.id);
+            items += item('star', 'star', starred ? 'Remove star' : 'Star (save)');
+        }
         if (m.text) items += item('copy', 'copy', 'Copy text');
         if (window.GroupExtras && window.GroupExtras.menuItems && !pendingMsg) items += window.GroupExtras.menuItems(m);
         if (canDelete(m)) items += item('delete', 'trash-2', pendingMsg ? 'Discard' : 'Delete', 'danger');
@@ -1501,7 +1577,7 @@
         const m = state.byId.get(id);
         if (!m) return;
         const had = ((m.reactions || {})['❤️'] || []).some((n) => sameName(n, myName()));
-        if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* ignore */ } }
+        hap('light');
         const p = toggleReaction(id, '❤️');
         if (!had) heartPop(id);
         await p;
@@ -2070,7 +2146,8 @@
                 case 'unpin': closeActions(); unpinMessage(); break;
                 case 'jump': revealMessage(id); break;
                 case 'jump-pinned': if (state.pinned) revealMessage(state.pinned.id); break;
-                case 'lightbox': openLightbox(t.dataset.src, t.dataset.caption); break;
+                case 'lightbox': openLightbox(t.dataset.src, t.dataset.caption); if (window.GroupPolish) window.GroupPolish.photoOpened(t.dataset.src); break;
+                case 'star': closeActions(); if (window.GroupPolish) window.GroupPolish.toggleStar(id); break;
                 case 'older': loadOlder(); break;
                 case 'cancel-reply': setReply(null); break;
                 case 'remove-image': state.image = null; renderAttachments(); updateSendButton(); break;
@@ -2111,6 +2188,7 @@
             g = {
                 id: row.dataset.id, row, bubble, tapTarget, x: e.clientX, y: e.clientY, t: Date.now(), mode: null, dx: 0,
                 canReply: !!m && !m._pending && m.kind !== 'system',
+                link: e.target.closest('a[href]'),
                 interactive: !!e.target.closest('a, .msg-img-btn, .reply-quote, .react-chip, .msg-status, .hover-actions, [data-x]')
             };
             if (!bubble) return;
@@ -2122,13 +2200,37 @@
                 suppressClick = true;
                 setTimeout(() => { suppressClick = false; }, 700);
                 row.classList.remove('press');
-                if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) { /* ignore */ } }
+                hap('medium');
+                if (g.link && window.GroupPolish) { window.GroupPolish.linkMenu(g.link, g.x, g.y); return; }
                 openActions(bubble.dataset.id, bubble);
+                g.slide = { x: g.x, y: g.y, hot: null, moved: false };
             }, 450);
         });
 
+        // Keep holding after the menu opens, slide onto a button and let go to press it.
+        const slideHot = (x, y) => {
+            const el = document.elementFromPoint(x, y);
+            const btn = el && el.closest ? el.closest('#action-menu button') : null;
+            return btn && !btn.disabled ? btn : null;
+        };
+        const slideMove = (e) => {
+            if (!g || !g.slide) return;
+            const sl = g.slide;
+            if (!sl.moved && Math.hypot(e.clientX - sl.x, e.clientY - sl.y) < 12) return;
+            sl.moved = true;
+            const hot = slideHot(e.clientX, e.clientY);
+            if (hot !== sl.hot) {
+                if (sl.hot) sl.hot.classList.remove('slide-hot');
+                sl.hot = hot;
+                if (hot) { hot.classList.add('slide-hot'); hap('light'); }
+            }
+        };
+        // Stop the page scrolling while a finger is sliding over the open menu.
+        sc.addEventListener('touchmove', (e) => { if (g && g.slide && e.cancelable) e.preventDefault(); }, { passive: false });
+
         sc.addEventListener('pointermove', (e) => {
-            if (!g || g.mode === 'long' || e.pointerType === 'mouse') return;
+            if (g && g.mode === 'long') { slideMove(e); return; }
+            if (!g || e.pointerType === 'mouse') return;
             const dx = e.clientX - g.x;
             const dy = e.clientY - g.y;
             if (!g.mode) {
@@ -2147,7 +2249,7 @@
             const armed = raw >= SWIPE_REPLY_PX;
             if (armed !== g.row.classList.contains('armed')) {
                 g.row.classList.toggle('armed', armed);
-                if (armed && navigator.vibrate) { try { navigator.vibrate(6); } catch (err) { /* ignore */ } }
+                if (armed) hap('light');
             }
         });
 
@@ -2156,6 +2258,16 @@
             const cur = g;
             clearPressTimers();
             unpress();
+            if (cur.slide) {
+                const sl = cur.slide;
+                if (sl.hot) sl.hot.classList.remove('slide-hot');
+                g = null;
+                if (!cancelled && sl.moved) {
+                    const hit = slideHot(e.clientX, e.clientY);
+                    if (hit) { suppressClick = false; hap('medium'); hit.click(); }
+                }
+                return;
+            }
             if (cur.mode === 'swipe') {
                 resetSwipe(cur.row, true);
                 if (!cancelled && cur.dx >= SWIPE_REPLY_PX) {
@@ -2371,7 +2483,7 @@
                 schedulePoll();
             }
         });
-        window.addEventListener('online', () => { state.failures = 0; poll(); });
+        window.addEventListener('online', () => { state.failures = 0; poll(); flushOutbox(); });
         window.addEventListener('resize', () => { if (state.menuFor) closeActions(); });
 
         // iOS: keep the composer above the on-screen keyboard.
@@ -2459,6 +2571,8 @@
         bindEvents();
         autosize();
         updateSendButton();
+        loadOutbox();
+        if (state.pending.length) { render('bottom'); if (navigator.onLine !== false) flushOutbox(); }
         refreshBell();
         // /pwa.js is deferred: check again shortly in case it arrives without an event.
         [600, 2000, 5000].forEach((ms) => setTimeout(() => { if (!pwa() || state.push === 'loading') refreshBell(); }, ms));
@@ -2488,6 +2602,7 @@
         API, state, api, toast, icons, render, upsert, findMessage, setReply, clearComposer, closeActions, closeEmoji,
         escapeHtml, sameName, myName, isMine, mediaUrl, show, hide, ts,
         clickSuppressed: () => suppressClick,
+        revealMessage, hap, flushOutbox, closeLightbox, openLightbox, dmRoomFor, openSheet, isDm: IS_DM, isAiName, avatarHtml,
         room: () => ROOM
     };
 

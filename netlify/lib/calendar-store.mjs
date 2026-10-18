@@ -168,6 +168,24 @@ export async function updateEvent(user, id, input) {
 }
 
 // --- RSVP: event.rsvp = { <name>: 'going' | 'maybe' | 'no' } ---
+// Rehearsal call sheet: "on my way" / "I'm here" (or clear). Stored on the event as checkins[name] = { status, at }.
+export const CHECKIN_CHOICES = ['onway', 'here', 'clear'];
+export async function checkinEvent(user, id, status) {
+  if (!CHECKIN_CHOICES.includes(status)) throw bad('Choose "on my way" or "I’m here".');
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (!isEventId(id)) throw bad('Event not found.', 404);
+    const entry = await store().getWithMetadata(keyOf(id), { type: 'json' });
+    const event = entry && entry.data;
+    if (!event || !canSee(user, event)) throw bad('Event not found.', 404);
+    event.checkins = { ...(event.checkins || {}) };
+    if (status === 'clear') delete event.checkins[user.name];
+    else event.checkins[user.name] = { status, at: new Date().toISOString() };
+    const { modified } = await store().setJSON(keyOf(id), event, { onlyIfMatch: entry.etag });
+    if (modified) return event;
+  }
+  throw bad('Please try again.', 409);
+}
+
 export const RSVP_CHOICES = ['going', 'maybe', 'no'];
 
 export async function rsvpEvent(user, id, response) {

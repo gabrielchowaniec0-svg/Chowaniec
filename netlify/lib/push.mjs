@@ -53,7 +53,15 @@ export async function removeDeviceById(user, id) {
 // (or everyone when users is '*'), skipping `exclude`. `kind` ('message', 'mention' or 'other')
 // lets each person's own notification settings and quiet hours apply; 'test' always goes through.
 // Returns how many were delivered.
-export async function sendPush(users, payload, { exclude, kind = 'other' } = {}) {
+// Notifications from the same chat stack under one tag, and chat notifications get a "Reply" button.
+export function withChatTag(payload) {
+  const url = String((payload && payload.url) || '');
+  const m = url.match(/^\/group\/(?:\?room=([a-z0-9-]+))?(?:&|$)/);
+  if (!m) return payload;
+  return { ...payload, tag: payload.tag || `chat-${m[1] || 'everyone'}`, replyable: true };
+}
+
+export async function sendPush(users, payload, { exclude, kind = 'other', room = null } = {}) {
   const config = pushConfig();
   if (!config) return 0;
   webpush.setVapidDetails(Netlify.env.get('VAPID_SUBJECT') || 'https://chowaniec.net', config.publicKey, config.privateKey);
@@ -66,11 +74,11 @@ export async function sendPush(users, payload, { exclude, kind = 'other' } = {})
   });
   if (kind !== 'test') {
     const names = [...new Set(targets.map((b) => decodeURIComponent(b.key.split('/')[1])))];
-    const allowed = new Set(await whoWantsPush(names, kind));
+    const allowed = new Set(await whoWantsPush(names, kind, new Date(), room));
     targets = targets.filter((b) => allowed.has(decodeURIComponent(b.key.split('/')[1])));
   }
 
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify(withChatTag(payload));
   const results = await Promise.all(targets.map(async (b) => {
     const record = await store().get(b.key, { type: 'json' });
     if (!record) return 0;

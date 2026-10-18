@@ -2,10 +2,12 @@
 // The chats themselves are ordinary rooms (see rooms.mjs: 'dm-<a>-<b>' and 'dm-ai-<name>').
 import { dmPartners, dmParts } from './rooms.mjs';
 import { latest, since, listPresence } from './group-store.mjs';
+import { getMutes } from './user-settings.mjs';
 
 // [{ id, name, ai, last: { user, text, createdAt, onBehalfOf? } | null, unread }] newest conversation first,
 // then everyone else (so the page can offer "start a chat").
 export async function listDms(user) {
+  const mutes = await getMutes(user.name);
   const items = await Promise.all(dmPartners(user.name).map(async (p) => {
     const [recent, presence] = await Promise.all([latest(1, p.id), listPresence(p.id)]);
     const last = recent[0] || null;
@@ -17,8 +19,9 @@ export async function listDms(user) {
     }
     return {
       id: p.id, name: p.name, ai: p.ai,
-      last: last ? { user: last.user, text: (last.text || (last.image ? '📷 Photo' : '')).slice(0, 120), createdAt: last.createdAt, ...(last.onBehalfOf ? { onBehalfOf: last.onBehalfOf } : {}) } : null,
-      unread
+      last: last ? { id: last.id, user: last.user, text: (last.text || (last.image ? '📷 Photo' : '')).slice(0, 120), createdAt: last.createdAt, ...(last.onBehalfOf ? { onBehalfOf: last.onBehalfOf } : {}) } : null,
+      unread,
+      ...(mutes[p.id] ? { mutedUntil: mutes[p.id] } : {})
     };
   }));
   const talked = items.filter((i) => i.last).sort((a, b) => (a.last.createdAt < b.last.createdAt ? 1 : -1));

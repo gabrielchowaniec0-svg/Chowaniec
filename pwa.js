@@ -350,6 +350,14 @@
     sendTestPush
   };
 
+  // Shared extras on every page: appearance, offline banner, quick jump, and Bob the helper.
+  (function loadExtras() {
+    const add = (src) => { const el = document.createElement('script'); el.src = src; el.defer = true; document.head.appendChild(el); };
+    add('/polish.js');
+    add('/quickjump.js');
+    if (/^\/(group|notes|calendar|lists)(\/|$)/.test(location.pathname)) add('/robot-float.js');
+  })();
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').then((reg) => {
       registration = reg;

@@ -1,10 +1,18 @@
 // Chowaniec service worker: offline fallback, light caching, and push notifications.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `chowaniec-${VERSION}`;
 const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/badge-96.png', '/manifest.webmanifest'];
+// The app shell: shared scripts and the main pages, cached on a best-effort basis so the app opens instantly
+// and still shows something when you have no signal.
+const SHELL = ['/', '/group/', '/messages/', '/ai/', '/notes/', '/calendar/', '/lists/', '/settings/',
+  '/polish.js', '/quickjump.js', '/robot-float.js', '/robot.js', '/robot.css', '/haptics.js', '/pwa.js', '/passwords.js', '/auth-gate.js', '/directory.js',
+  '/group/group.js', '/group/extras.js', '/group/group.css', '/calendar/calendar.js', '/lists/lists.js', '/settings/settings.js', '/settings/settings.css'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(async (cache) => {
+    await cache.addAll(PRECACHE);
+    await Promise.all(SHELL.map((url) => cache.add(url).catch(() => {})));
+  }).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
@@ -62,13 +70,16 @@ self.addEventListener('push', (event) => {
     badge: '/icons/badge-96.png',
     tag: data.tag || undefined,
     renotify: !!data.tag,
-    data: { url: data.url || '/' }
+    data: { url: data.url || '/', replyUrl: data.replyable ? `${data.url}${String(data.url).includes('?') ? '&' : '?'}reply=1` : null },
+    actions: data.replyable ? [{ action: 'reply', title: 'Reply' }] : []
   }));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  const info = event.notification.data || {};
+  const wanted = event.action === 'reply' && info.replyUrl ? info.replyUrl : (info.url || '/');
+  const target = new URL(wanted, self.location.origin).href;
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of windows) {
