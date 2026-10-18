@@ -75,3 +75,10 @@
 #bob-menu button:hover, #bob-menu button:focus-visible { background: #ede9fe; outline: none; }
 @keyframes bob-menu-in { from { transform: scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (min-width: 900px) { #bob-float { width: 72px; left: 16px; bottom: 16px; } }
+
+/* In the chat header: a small Bob next to the search button */
+#bob-float.in-header { position: relative; left: auto; bottom: auto; width: 38px; flex: none; z-index: 5; transition: opacity .25s ease; }
+#bob-float.in-header.away { transform: none; }
+#bob-float.in-header .bob-say { bottom: auto; top: 100%; margin: 8px 0 0; right: 0; left: auto; border-radius: 4px 18px 18px 18px; transform-origin: top right; width: max-content; position: absolute; z-index: 20; }
+#bob-float.in-header .bob-bubbles { display: none; }
+@media (min-width: 900px) { #bob-float.in-header { width: 42px; left: auto; bottom: auto; } }

@@ -18,7 +18,14 @@
     const wrap = document.createElement('div');
     wrap.id = 'bob-float';
     wrap.innerHTML = window.ChowaniecRobot.mascot();
-    document.body.appendChild(wrap);
+    // In the chat, Bob lives in the header so he never covers messages.
+    const header = document.querySelector('.chat-header .hdr-inner');
+    if (header) {
+      wrap.classList.add('in-header');
+      header.insertBefore(wrap, document.getElementById('btn-search') || null);
+    } else {
+      document.body.appendChild(wrap);
+    }
     const bob = wrap.querySelector('.bob');
     const say = wrap.querySelector('.bob-say');
     bob.setAttribute('aria-label', 'Bob, your AI helper. Tap to open Chowaniec AI, press and hold for more.');
@@ -46,6 +53,7 @@
         if (r.height > 0 && r.bottom > innerHeight * 0.55 && r.top < innerHeight && r.left < 120) top = Math.min(top, r.top);
       });
       const base = 12;
+      if (wrap.classList.contains('in-header')) return;
       wrap.style.bottom = top < innerHeight ? `calc(env(safe-area-inset-bottom, 0px) + ${Math.round(innerHeight - top + 10)}px)` : '';
       if (top >= innerHeight) wrap.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${base}px)`;
     }
@@ -69,7 +77,8 @@
       menu.id = 'bob-menu';
       menu.setAttribute('role', 'menu');
       const r = wrap.getBoundingClientRect();
-      menu.style.bottom = `${Math.round(innerHeight - r.top + 6)}px`;
+      if (wrap.classList.contains('in-header')) { menu.style.top = `${Math.round(r.bottom + 6)}px`; menu.style.left = `${Math.max(8, Math.round(r.left - 150))}px`; menu.style.bottom = 'auto'; }
+      else menu.style.bottom = `${Math.round(innerHeight - r.top + 6)}px`;
       const entries = [
         ['Ask Chowaniec AI', () => { location.href = '/ai/'; }],
         ['Search & jump', () => window.ChowaniecQuickJump && window.ChowaniecQuickJump.open()],
