@@ -329,7 +329,7 @@ function botMount() {
   const wrap = document.createElement('div');
   wrap.id = 'bob-wrap';
   wrap.innerHTML = window.ChowaniecRobot.mascot();
-  document.body.appendChild(wrap);
+  (document.getElementById('video-stage') || document.body).appendChild(wrap);
   botEl = wrap.querySelector('.bob');
   const wake = (e) => { e.preventDefault(); botTap(); };
   botEl.addEventListener('click', wake);
