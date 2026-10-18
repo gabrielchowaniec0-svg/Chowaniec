@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#000000">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <title>Lists</title>
+    <script>
+        (function () {
+            var pref = 'auto';
+            try { pref = localStorage.getItem('chowaniec_theme') || localStorage.getItem('chowaniec_group_theme') || 'auto'; } catch (e) {}
+            var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+    <script src="/pwa.js" defer></script>
+    <!-- Tailwind is only used by the shared passcode box -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../passwords.js"></script>
+    <script src="../auth-gate.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+    <link rel="stylesheet" href="/settings/settings.css">
+    <style>
+        .item { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 0; border-top: 1px solid var(--line); }
+        .item:first-of-type { border-top: 0; }
+        .item input[type=checkbox] { width: 24px; height: 24px; flex: none; }
+        .item .txt { flex: 1; min-width: 0; font-size: 16px; overflow-wrap: anywhere; }
+        .item.done .txt { text-decoration: line-through; color: var(--muted); }
+        .item .by { font-size: 11px; color: var(--muted); }
+        .xbtn { min-width: 40px; min-height: 40px; border: 0; background: transparent; color: var(--muted); font-size: 20px; border-radius: 999px; cursor: pointer; }
+        .xbtn:hover { background: var(--soft); }
+        .addrow { display: flex; gap: 8px; margin-top: 10px; }
+        .addrow input[type=text], .field input[type=text], .field select { flex: 1; min-height: 44px; font: inherit; font-size: 16px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); }
+        .field { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+        .head { display: flex; align-items: center; gap: 8px; }
+        .head h3 { margin: 0; font-size: 18px; font-weight: 600; flex: 1; }
+        .meter { height: 6px; border-radius: 99px; background: var(--soft); overflow: hidden; margin: 8px 0 4px; }
+        .meter > i { display: block; height: 100%; background: var(--accent); transition: width .4s ease; }
+        .sk-card { height: 120px; }
+    </style>
+</head>
+<body>
+<div id="app-root">
+    <header class="topbar"><div class="topbar-in">
+        <a class="back" href="/" aria-label="Back to Chowaniec home">&#8592;</a>
+        <h1 class="serif">Lists</h1>
+        <button type="button" class="btn solid" id="btn-new">New list</button>
+    </div></header>
+    <main class="wrap" id="main">
+        <p class="lead">Shared lists for the family: groceries, packing, costumes. Each list belongs to a chat, so only the people in that chat can see it. You can also ask Chowaniec AI to add things.</p>
+        <section class="card hidden" id="new-card" aria-labelledby="h-new">
+            <h2 id="h-new">New list</h2>
+            <div class="field"><label for="new-title">Name</label><input type="text" id="new-title" maxlength="60" autocomplete="off"></div>
+            <div class="field"><label for="new-room">Shared with</label><select id="new-room"></select></div>
+            <div class="addrow"><button type="button" class="btn solid" id="new-create">Create</button><button type="button" class="btn" id="new-cancel">Cancel</button></div>
+            <div class="s" id="new-msg" role="status" style="color:var(--bad);min-height:18px;margin-top:6px"></div>
+        </section>
+        <div id="lists" aria-live="polite"><div class="sk sk-card"></div></div>
+    </main>
+</div>
+<script src="/settings/settings.js"></script>
+<script src="/lists/lists.js"></script>
+</body>
+</html>

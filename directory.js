@@ -45,6 +45,15 @@ window.DIRECTORY_CONFIG = [
     description: "Write, organize and share notes, with AI summaries and meeting notes from the Agent."
   },
   {
+    id: "lists",
+    title: "Lists",
+    path: "/lists/",
+    localFallback: "./lists/index.html",
+    icon: "list-checks",
+    status: "Active",
+    description: "Shared groceries, packing and costume lists the whole family can tick off."
+  },
+  {
     id: "calendar",
     title: "Chowaniec Calendar",
     path: "/calendar/",

@@ -21,6 +21,9 @@
 //   POST { action: 'react', id, emoji }      -> { message }
 //   POST { action: 'typing' } | { action: 'read', id }   -> { ok }
 //   POST { action: 'pin', id } -> { pinned }   POST { action: 'unpin' } -> { pinned: null }
+//   GET ?mutes=1 -> { mutes }   POST { action: 'mute', room, duration: '1h'|'8h'|'week'|'off' } -> { mutes }
+//   POST { action: 'listened', id } -> { ok }   (you played a voice message)
+//   GET ?stars=1 -> { stars }   POST { action: 'star', id } -> { starred }   (your saved messages)
 //   DELETE ?id=<id>                          -> { ok }        (author or host)
 // Every message GET also returns { presence, pinned } and marks the caller online.
 import { getUser, json } from '../lib/auth.mjs';
@@ -29,12 +32,13 @@ import {
   toggleReaction, touchPresence, setTyping, clearTyping, setRead, listPresence,
   getPinned, pinMessage, unpin, saveAudio, MAX_VOICE_SECONDS, buildPoll, votePoll, closePoll,
   scheduleMessage, listScheduled, cancelScheduled, nextScheduledAt, deliverDue,
-  STICKERS, stickerById, threadRoot, listThread, searchMessages
+  STICKERS, stickerById, threadRoot, listThread, searchMessages, getStarRefs, toggleStar, markListened
 } from '../lib/group-store.mjs';
 import { publishMessage } from '../lib/group-post.mjs';
 import { catchUpSummary } from '../lib/catch-up.mjs';
 import { analyzeMessage } from '../lib/smart-message.mjs';
 import { listDms, dmInfo } from '../lib/dm.mjs';
+import { getMutes, setMute } from '../lib/user-settings.mjs';
 import { isDmId } from '../lib/rooms.mjs';
 import { createEvent, describeWhen } from '../lib/calendar-store.mjs';
 import { resolveRoom, roomsFor, canAccessRoom } from '../lib/rooms.mjs';
@@ -48,6 +52,15 @@ export default async (req, context) => {
 
   try {
     if (req.method === 'GET' && url.searchParams.get('rooms')) return json(200, { rooms: roomsFor(user.name) });
+    if (req.method === 'GET' && url.searchParams.get('mutes')) return json(200, { mutes: await getMutes(user.name) });
+    if (req.method === 'GET' && url.searchParams.get('stars')) {
+      const refs = await getStarRefs(user.name);
+      const found = await Promise.all(refs.filter((r) => canAccessRoom(user.name, r.room)).map(async (r) => {
+        const found = await getMessage(r.id, r.room);
+        return found ? { ...found.message, room: r.room, starredAt: r.at } : null;
+      }));
+      return json(200, { stars: found.filter(Boolean) });
+    }
     if (req.method === 'GET' && url.searchParams.get('dms')) return json(200, { dms: await listDms(user) });
     let body = null;
     if (req.method === 'POST') {
@@ -128,6 +141,20 @@ export default async (req, context) => {
 
     if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
+    if (body.action === 'mute') {
+      if (!canAccessRoom(user.name, String(body.room || ''))) return json(403, { error: 'You are not in that chat.' });
+      return json(200, { mutes: await setMute(user.name, String(body.room), String(body.duration || '')) });
+    }
+    if (body.action === 'listened') {
+      if (!isMessageId(body.id)) return json(400, { error: 'Invalid message.' });
+      const message = await markListened(body.id, user.name, room);
+      return json(200, { ok: !!message });
+    }
+    if (body.action === 'star') {
+      if (!isMessageId(body.id)) return json(400, { error: 'Invalid message.' });
+      if (!(await getMessage(body.id, room))) return json(404, { error: 'Message not found.' });
+      return json(200, { starred: (await toggleStar(user.name, room, body.id)).starred });
+    }
     if (body.action === 'typing') {
       await setTyping(user.name, room);
       return json(200, { ok: true });

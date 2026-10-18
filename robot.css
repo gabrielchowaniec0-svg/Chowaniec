@@ -54,3 +54,24 @@
 #bob-wrap .bob:focus-visible { outline: 2px solid #a78bfa; border-radius: 12px; }
 #bob-wrap .bob-say { right: auto; left: 0; border-radius: 18px 18px 18px 4px; transform-origin: bottom left; max-width: min(260px, calc(100vw - 40px)); }
 @media (max-width: 640px) { #bob-wrap { width: 56px; left: 6px; bottom: 6px; } }
+
+/* celebrate: a happy hop with the arms up (used when a poll finishes or a sign-up sheet fills) */
+.bob[data-state="celebrate"] .bob-svg { transform: translateY(-6px) scale(1.06); }
+.bob[data-state="celebrate"] .bob-body { animation: bob-hop .5s ease-in-out infinite; }
+.bob[data-state="celebrate"] .bob-mouth-closed { opacity: 0; }
+.bob[data-state="celebrate"] .bob-mouth-open { opacity: 1; animation: bob-talk .3s ease-in-out infinite alternate; }
+.bob[data-state="celebrate"] .bob-arm.l rect { transform: translateY(-12px) rotate(-30deg); }
+.bob[data-state="celebrate"] .bob-arm.r rect { transform: translateY(-12px) rotate(30deg); }
+.bob[data-state="celebrate"] .bob-bulb { fill: #f472b6; animation: bob-pulse .5s ease-in-out infinite; }
+@keyframes bob-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+
+/* Bob as a small helper on Group, Notes, Calendar and Lists (see robot-float.js) */
+#bob-float { position: fixed; left: 8px; z-index: 900; width: 60px; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); transition: bottom .3s ease, opacity .25s ease, transform .3s cubic-bezier(.34,1.3,.5,1); }
+#bob-float.away { opacity: 0; pointer-events: none; transform: translateY(14px); }
+#bob-float .bob { width: 100%; }
+#bob-float .bob-say { right: auto; left: 0; border-radius: 18px 18px 18px 4px; transform-origin: bottom left; max-width: min(240px, calc(100vw - 32px)); font-size: 13px; }
+#bob-menu { position: fixed; left: 8px; z-index: 901; min-width: 210px; background: #fff; color: #111827; border: 2px solid #7c3aed; border-radius: 16px; box-shadow: 0 10px 34px rgba(0,0,0,.28); padding: 6px; font: 500 14px system-ui, sans-serif; transform-origin: bottom left; animation: bob-menu-in .22s cubic-bezier(.34,1.3,.5,1); }
+#bob-menu button { display: flex; width: 100%; min-height: 44px; align-items: center; gap: 8px; text-align: left; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; padding: 0 12px; cursor: pointer; }
+#bob-menu button:hover, #bob-menu button:focus-visible { background: #ede9fe; outline: none; }
+@keyframes bob-menu-in { from { transform: scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (min-width: 900px) { #bob-float { width: 72px; left: 16px; bottom: 16px; } }

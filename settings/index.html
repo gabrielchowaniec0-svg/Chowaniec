@@ -74,6 +74,7 @@
             <div class="row"><div class="grow"><div class="t"><label for="sw-f-loose">Follow up on unanswered questions</label></div></div><span class="switch"><input type="checkbox" id="sw-f-loose" role="switch"><span class="track"></span></span></div>
             <div class="row"><div class="grow"><div class="t"><label for="sw-f-brief">Morning-of event briefings</label></div></div><span class="switch"><input type="checkbox" id="sw-f-brief" role="switch"><span class="track"></span></span></div>
             <div class="row"><div class="grow"><div class="t"><label for="sw-f-digest">Morning summaries</label></div></div><span class="switch"><input type="checkbox" id="sw-f-digest" role="switch"><span class="track"></span></span></div>
+            <div class="row"><div class="grow"><div class="t"><label for="sw-f-bday">Birthday greetings</label></div></div><span class="switch"><input type="checkbox" id="sw-f-bday" role="switch"><span class="track"></span></span></div>
             <div class="row"><div class="grow"><div class="t">What the AI has done</div><div class="s">The last things it did, and for whom.</div></div><button type="button" class="btn" id="btn-ailog">Show</button></div>
             <div id="ai-log"></div>
         </section>
@@ -92,6 +93,39 @@
                 <div class="grow"><div class="t"><label for="sw-motion">Reduce animations</label></div><div class="s">Calmer screens with less movement, on every page of this device.</div></div>
                 <span class="switch"><input type="checkbox" id="sw-motion" role="switch"><span class="track"></span></span>
             </div>
+            <div class="row">
+                <div class="grow"><div class="t" id="lbl-accent">Colour</div><div class="s">Your own colour for buttons, your chat bubbles and the little helpers on this device.</div>
+                    <div class="seg" id="accent-seg" role="group" aria-labelledby="lbl-accent" style="flex-wrap:wrap;margin-top:8px"></div></div>
+            </div>
+            <div class="row">
+                <div class="grow"><div class="t" id="lbl-size">Text size</div>
+                    <div class="seg" id="size-seg" role="group" aria-labelledby="lbl-size" style="margin-top:8px">
+                        <button type="button" data-size="normal">Normal</button><button type="button" data-size="large">Large</button><button type="button" data-size="xl">Extra large</button>
+                    </div></div>
+            </div>
+            <div class="row">
+                <div class="grow"><div class="t"><label for="sw-haptics">Vibration feedback</label></div><div class="s">A small buzz when you react, send or press and hold, on phones that support it.</div></div>
+                <span class="switch"><input type="checkbox" id="sw-haptics" role="switch"><span class="track"></span></span>
+            </div>
+            <div class="row">
+                <div class="grow"><div class="t"><label for="sw-voice">AI reads replies aloud</label></div><div class="s">Chowaniec AI speaks its answers. You can still tap Listen on any single reply.</div></div>
+                <span class="switch"><input type="checkbox" id="sw-voice" role="switch"><span class="track"></span></span>
+            </div>
+        </section>
+
+        <section class="card hidden" id="bday-card" aria-labelledby="h-bday">
+            <h2 id="h-bday">Birthdays</h2>
+            <p style="color:var(--muted);font-size:13px">The AI posts a birthday greeting in the family chat on the day, and the calendar counts down. Only heads can change this list.</p>
+            <div id="bday-list"></div>
+            <div class="row" style="flex-wrap:wrap;gap:8px">
+                <label class="s" for="bday-name">Name</label><input type="text" id="bday-name" maxlength="40" autocomplete="off">
+                <label class="s" for="bday-month">Month</label>
+                <select id="bday-month"></select>
+                <label class="s" for="bday-day">Day</label><input type="number" id="bday-day" min="1" max="31" style="width:72px">
+                <label class="s" for="bday-year">Year (optional)</label><input type="number" id="bday-year" min="1900" max="2100" style="width:92px">
+                <button type="button" class="btn" id="bday-add">Add</button>
+            </div>
+            <div class="s" id="bday-msg" role="status" style="min-height:18px"></div>
         </section>
 
         <section class="card" aria-labelledby="h-sec">
@@ -122,6 +156,7 @@
     </main>
 </div>
 <script src="/settings/settings.js"></script>
+<script src="/settings/polish-settings.js"></script>
 <script>
 (function () {
     var S = window.ChowaniecSettings, $ = S.$;
@@ -182,7 +217,7 @@
             $('ai-heads').classList.remove('hidden');
             paintPeople(d.people);
             $('sw-aiquiet').checked = policy.quiet.on; $('ai-qstart').value = policy.quiet.start; $('ai-qend').value = policy.quiet.end;
-            $('sw-f-loose').checked = policy.features.looseEnds; $('sw-f-brief').checked = policy.features.briefings; $('sw-f-digest').checked = policy.features.digest;
+            $('sw-f-loose').checked = policy.features.looseEnds; $('sw-f-brief').checked = policy.features.briefings; $('sw-f-digest').checked = policy.features.digest; $('sw-f-bday').checked = policy.features.birthdays !== false;
         }).catch(function () {});
         $('ai-people').addEventListener('change', function (e) {
             var cb = e.target; if (!cb.dataset.person) return;
@@ -193,10 +228,10 @@
         });
         function saveGeneral() {
             policy.quiet = { on: $('sw-aiquiet').checked, start: $('ai-qstart').value || policy.quiet.start, end: $('ai-qend').value || policy.quiet.end };
-            policy.features = { looseEnds: $('sw-f-loose').checked, briefings: $('sw-f-brief').checked, digest: $('sw-f-digest').checked };
+            policy.features = { looseEnds: $('sw-f-loose').checked, briefings: $('sw-f-brief').checked, digest: $('sw-f-digest').checked, birthdays: $('sw-f-bday').checked };
             savePolicy();
         }
-        ['sw-aiquiet', 'ai-qstart', 'ai-qend', 'sw-f-loose', 'sw-f-brief', 'sw-f-digest'].forEach(function (id) { $(id).addEventListener('change', saveGeneral); });
+        ['sw-aiquiet', 'ai-qstart', 'ai-qend', 'sw-f-loose', 'sw-f-brief', 'sw-f-digest', 'sw-f-bday'].forEach(function (id) { $(id).addEventListener('change', saveGeneral); });
         $('btn-ailog').addEventListener('click', function () {
             S.api('/.netlify/functions/ai-policy?log=1').then(function (d) {
                 $('ai-log').innerHTML = d.log.length ? d.log.map(function (l) {

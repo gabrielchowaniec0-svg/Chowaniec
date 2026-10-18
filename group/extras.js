@@ -401,7 +401,7 @@
         clearInterval(rec.timer);
         rec.timer = setInterval(tickRec, 250);
         setRecUi('recording', 'Recording');
-        if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* ignore */ } }
+        if (G.hap) G.hap('light'); else if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* ignore */ } }
     }
 
     function stopRecorder() {
@@ -652,8 +652,10 @@
             sched.pressTimer = setTimeout(() => {
                 sched.pressTimer = null;
                 sched.longFired = true;
-                if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) { /* ignore */ } }
-                openSchedulePicker();
+                if (G.hap) G.hap('medium'); else if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) { /* ignore */ } }
+                // With the polish layer the hold opens a little menu you can slide onto (send later / @important).
+                if (window.GroupPolish && window.GroupPolish.sendMenu) window.GroupPolish.sendMenu(e.clientX, e.clientY, openSchedulePicker);
+                else openSchedulePicker();
             }, LONG_PRESS_MS);
         });
         ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => send.addEventListener(ev, clear));
@@ -662,7 +664,8 @@
             if (send.disabled) return;
             sched.longFired = true;
             clear();
-            openSchedulePicker();
+            if (window.GroupPolish && window.GroupPolish.sendMenu) { const r = send.getBoundingClientRect(); window.GroupPolish.sendMenu(r.left + r.width / 2, r.top, openSchedulePicker); }
+            else openSchedulePicker();
         });
     }
 

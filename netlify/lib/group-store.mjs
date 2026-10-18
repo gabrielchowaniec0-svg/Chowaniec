@@ -279,6 +279,22 @@ export async function toggleReaction(id, user, emoji, room = DEFAULT_ROOM) {
   throw Object.assign(new Error('Too many reactions at once. Try again.'), { status: 409 });
 }
 
+// Someone played a voice message: remember who has listened (the sender sees "Heard by ...").
+export async function markListened(id, user, room = DEFAULT_ROOM) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const found = await getMessage(id, room);
+    if (!found || !found.message.voice) return null;
+    const message = found.message;
+    const heard = new Set(message.listenedBy || []);
+    if (heard.has(user) || message.user === user) return message;
+    heard.add(user);
+    message.listenedBy = [...heard];
+    const { modified } = await messages().setJSON(keyOf(id, room), message, { onlyIfMatch: found.etag });
+    if (modified) return message;
+  }
+  return null;
+}
+
 // Push notifications for a new message: mentioned people get "X mentioned you",
 // everyone else a normal message notification. The author is never notified.
 export async function notifyMessage(message) {
@@ -303,7 +319,7 @@ export async function notifyMessage(message) {
   if (isDmId(message.room)) {
     // A direct message: always treated like a mention (it is for them), never a group-style notification.
     const to = everyone.filter((n) => n !== skip);
-    if (to.length) await sendPush(to, { title: message.onBehalfOf ? `${AI_NAME} for ${message.onBehalfOf}` : message.user, body, url, tag: `dm-${message.room}` }, { exclude: skip, kind: message.important ? 'important' : 'mention' });
+    if (to.length) await sendPush(to, { title: message.onBehalfOf ? `${AI_NAME} for ${message.onBehalfOf}` : message.user, body, url, tag: `dm-${message.room}` }, { exclude: skip, room: message.room, kind: message.important ? 'important' : 'mention' });
     return;
   }
   if (message.important) {
@@ -312,8 +328,8 @@ export async function notifyMessage(message) {
     return;
   }
   await Promise.all([
-    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: skip, kind: 'mention' }) : 0,
-    others.length ? sendPush(others, { title: `${message.user}${threadTitle}`, body, url }, { exclude: skip, kind: 'message' }) : 0
+    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: skip, kind: 'mention', room: message.room || DEFAULT_ROOM }) : 0,
+    others.length ? sendPush(others, { title: `${message.user}${threadTitle}`, body, url }, { exclude: skip, kind: 'message', room: message.room || DEFAULT_ROOM }) : 0
   ]);
 }
 
@@ -543,4 +559,22 @@ export async function deliverDue(publish) {
   }
   await setNextSched(nextAt);
   return delivered;
+}
+
+
+// ---- Starred (saved) messages: a personal list of { room, id, at }, newest first.
+const starsKey = (name) => `stars/${encodeURIComponent(name)}`;
+const MAX_STARS = 300;
+
+export async function getStarRefs(name) {
+  return (await messages().get(starsKey(name), { type: 'json' })) || [];
+}
+
+// Adds or removes a star. Returns { starred, refs }.
+export async function toggleStar(name, room, id) {
+  const refs = await getStarRefs(name);
+  const has = refs.some((r) => r.room === room && r.id === id);
+  const next = has ? refs.filter((r) => !(r.room === room && r.id === id)) : [{ room, id, at: new Date().toISOString() }, ...refs].slice(0, MAX_STARS);
+  await messages().setJSON(starsKey(name), next);
+  return { starred: !has, refs: next };
 }

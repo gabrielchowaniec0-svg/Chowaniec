@@ -33,6 +33,17 @@
         .dm-last { font-size: 13.5px; color: var(--muted, #6b7280); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .dm-badge { background: #dc2626; color: #fff; font-size: 12px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
         .dm-time { font-size: 12px; color: var(--muted, #6b7280); }
+        .dm-swipe { position: relative; overflow: hidden; border-top: 1px solid var(--line, #eee); touch-action: pan-y; }
+        .dm-swipe:first-child { border-top: 0; }
+        .dm-swipe .dm-row { border-top: 0; background: var(--surface, #fff); position: relative; z-index: 1; transition: transform .22s cubic-bezier(.2,.9,.3,1); will-change: transform; }
+        .dm-swipe.dragging .dm-row { transition: none; }
+        .dm-acts { position: absolute; top: 0; right: 0; bottom: 0; width: 216px; display: flex; }
+        .dm-acts button { flex: 1; font-size: 13px; font-weight: 600; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+        .dm-acts .a-pin { background: #d97706; } .dm-acts .a-mute { background: #6b7280; } .dm-acts .a-read { background: #2563eb; }
+        .dm-more { border: 0; background: transparent; cursor: pointer; margin-left: 4px; width: 34px; height: 34px; border-radius: 9999px; color: var(--muted, #6b7280); font-size: 20px; line-height: 1; flex-shrink: 0; }
+        .dm-more:hover { background: rgba(0,0,0,.06); }
+        .dm-pin, .dm-mutedi { font-size: 12px; margin-left: 4px; }
+        @media (prefers-reduced-motion: reduce) { .dm-swipe .dm-row { transition: none; } }
         .dm-empty { color: var(--muted, #6b7280); font-size: 14px; padding: 8px 0; }
     </style>
 </head>
@@ -53,6 +64,7 @@
         </section>
     </main>
 </div>
+<script src="/haptics.js"></script>
 <script src="/robot.js"></script>
 <script src="/settings/settings.js"></script>
 <script src="/messages/messages.js"></script>

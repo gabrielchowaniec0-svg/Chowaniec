@@ -13,6 +13,7 @@ import { ROOM_IDS, roomMembers } from './rooms.mjs';
 import { familyNames } from './auth.mjs';
 import { getSettings } from './user-settings.mjs';
 import { sendPush } from './push.mjs';
+import { getBirthdays, birthdaysOn } from './birthdays-store.mjs';
 
 const BRIEF_HOUR = 7.5;    // 7:30 a.m. family time
 const localHour = (now, tz) => {
@@ -132,8 +133,21 @@ async function sheetNudges(now) {
   return posted;
 }
 
+// ---- birthday greetings (once per person per day, in the main chat)
+async function birthdayGreetings(today) {
+  let posted = 0;
+  for (const b of birthdaysOn(await getBirthdays(), today)) {
+    if (!(await claimOnce(`${today}/birthday-${b.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`))) continue;
+    const age = b.year ? ` They turn ${Number(today.slice(0, 4)) - b.year} today.` : '';
+    await aiPost('everyone', `🎂 Happy birthday, ${b.name}!${age} 🎉 Sending lots of love from the whole family.`);
+    await logAction({ user: 'Chowaniec AI', action: 'birthday', summary: `Posted a birthday greeting for ${b.name}`, room: 'everyone', auto: true });
+    posted++;
+  }
+  return posted;
+}
+
 export async function runAiAuto(now = new Date()) {
-  const out = { briefings: 0, digests: 0, followUps: 0, sheetNudges: 0 };
+  const out = { briefings: 0, digests: 0, followUps: 0, sheetNudges: 0, birthdays: 0 };
   const tz = familyTimeZone();
   const policy = await getPolicy();
   const hour = localHour(now, tz);
@@ -142,6 +156,7 @@ export async function runAiAuto(now = new Date()) {
   const run = async (name, fn) => { try { out[name] = await fn(); } catch (e) { console.error(`AI auto ${name} failed:`, e.message); } };
   if (hour >= BRIEF_HOUR && hour < 22) {
     if (policy.features.briefings && !quiet) await run('briefings', () => briefings(now, today, policy));
+    if (policy.features.birthdays !== false && !quiet) await run('birthdays', () => birthdayGreetings(today));
     if (policy.features.digest && hour < 11) await run('digests', () => digests(now, today));
   }
   if (!quiet) {

@@ -624,6 +624,20 @@
             }
         });
         view.footer.appendChild(btn);
+        if (canSpeak()) {
+            const listen = document.createElement('button');
+            listen.type = 'button';
+            listen.title = 'Read aloud';
+            listen.setAttribute('aria-label', 'Read this response aloud');
+            listen.setAttribute('data-listen', '');
+            listen.className = btn.className;
+            listen.innerHTML = '<i data-lucide="volume-2" class="w-3.5 h-3.5"></i><span>Listen</span>';
+            listen.addEventListener('click', () => {
+                if (canSpeak() && speechSynthesis.speaking) { stopSpeaking(); return; }
+                speakText(view.text);
+            });
+            view.footer.appendChild(listen);
+        }
         view.footer.classList.remove('hidden');
         view.footer.classList.add('flex');
         icons();
@@ -739,8 +753,89 @@
             s.textContent = summary;
             chip.appendChild(s);
         }
+        if (ok && evt.undo) addUndoButton(chip, evt.undo);
         icons();
     }
+
+    // "Undo" stays for 10 seconds after the AI does something for you (post, event, note, sign-up sheet, list).
+    function addUndoButton(chip, undo) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('data-undo', '');
+        btn.className = 'shrink-0 ml-1 min-h-[28px] px-2.5 rounded-full border border-current/30 text-[11px] font-medium hover:bg-white/60';
+        let left = 10;
+        const label = () => { btn.textContent = `Undo (${left})`; btn.setAttribute('aria-label', `Undo what the AI just did, ${left} seconds left`); };
+        label();
+        const timer = setInterval(() => {
+            left -= 1;
+            if (left <= 0) { clearInterval(timer); btn.remove(); } else label();
+        }, 1000);
+        btn.addEventListener('click', async () => {
+            clearInterval(timer);
+            btn.disabled = true;
+            btn.textContent = 'Undoing…';
+            try {
+                await api('/.netlify/functions/ai-undo', { method: 'POST', body: undo });
+                btn.textContent = 'Undone';
+                if (window.ChowaniecHaptics) window.ChowaniecHaptics.tap('light');
+                const a = chip.querySelector('a');
+                if (a) { a.removeAttribute('href'); a.style.textDecoration = 'line-through'; }
+                setTimeout(() => btn.remove(), 2500);
+            } catch (e) {
+                btn.disabled = false;
+                btn.textContent = 'Couldn’t undo';
+                setTimeout(() => btn.remove(), 3000);
+            }
+        });
+        chip.appendChild(btn);
+    }
+
+    // --- Voice: read replies aloud (optional) ---
+    const voiceOn = () => {
+        try {
+            return localStorage.getItem('chowaniec_ai_voice') === 'on';
+        } catch (e) { return false; }
+    };
+    // Bob's "catch me up" asks for just the next reply to be read aloud.
+    const voiceOnce = () => {
+        try {
+            if (localStorage.getItem('chowaniec_ai_voice_once') !== '1') return false;
+            localStorage.removeItem('chowaniec_ai_voice_once');
+            return true;
+        } catch (e) { return false; }
+    };
+    const canSpeak = () => 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
+    function speakText(text) {
+        if (!canSpeak()) return;
+        stopSpeaking();
+        const plain = String(text || '').replace(/```[\s\S]*?```/g, ' ').replace(/[*_`#>~]/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/https?:\/\/\S+/g, ' link ').replace(/\s+/g, ' ').trim();
+        if (!plain) return;
+        const parts = plain.match(/[^.!?]+[.!?]*\s*/g) || [plain];
+        parts.forEach((part) => speechSynthesis.speak(new SpeechSynthesisUtterance(part.trim())));
+    }
+    function stopSpeaking() { if (canSpeak()) speechSynthesis.cancel(); }
+    window.addEventListener('pagehide', stopSpeaking);
+    function syncVoiceButton() {
+        const b = $('btn-voice');
+        if (!b) return;
+        if (!canSpeak()) { b.classList.add('hidden'); return; }
+        b.setAttribute('aria-pressed', voiceOn() ? 'true' : 'false');
+        b.title = voiceOn() ? 'Voice replies on' : 'Voice replies off';
+        b.setAttribute('aria-label', b.title + '. Tap to change.');
+        b.classList.toggle('text-violet-600', voiceOn());
+        b.classList.toggle('text-gray-500', !voiceOn());
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        const b = $('btn-voice');
+        if (!b) return;
+        syncVoiceButton();
+        b.addEventListener('click', () => {
+            try { localStorage.setItem('chowaniec_ai_voice', voiceOn() ? 'off' : 'on'); } catch (e) { /* ignore */ }
+            if (!voiceOn()) stopSpeaking();
+            syncVoiceButton();
+            toast(voiceOn() ? 'The AI will read its replies aloud.' : 'Voice replies are off.');
+        });
+    });
 
     function scheduleRender(view) {
         if (view.renderTimer) return;
@@ -828,6 +923,7 @@
                 renderActions(view, msg.actions);
                 renderQuickAnswers(view, msg.quickAnswers);
                 ctx.actions = msg.actions || [];
+                if (view.text && (voiceOn() || voiceOnce())) speakText(view.text);
                 break;
             }
             case 'error':
@@ -1522,6 +1618,14 @@
         icons();
         await listPromise;
         if (!coarsePointer()) $('composer-input').focus();
+        // Bob's menu: "Catch me up" runs /recap and reads it aloud.
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('run') === 'recap' && !deepId) {
+            if (params.get('speak') === '1') { try { localStorage.setItem('chowaniec_ai_voice_once', '1'); } catch (e) { /* ignore */ } }
+            $('composer-input').value = '/recap';
+            autoGrow();
+            setTimeout(send, 250);
+        }
     }
 
     // Test/debug hook (read-only view of state).
