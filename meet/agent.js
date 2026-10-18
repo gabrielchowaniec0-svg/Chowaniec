@@ -9,11 +9,12 @@ const AGENT_ENDPOINT = '/.netlify/functions/meeting-agent';
 const AGENT_NOTES_INTERVAL_MS = 60 * 1000;
 const AGENT_MAX_LINES_PER_UPDATE = 400;
 // Speech recognition may render the wake phrase a few ways ("Hey, Agent." / "Hi agents").
-const AGENT_WAKE_PATTERN = /\b(?:hey|hi|okay|ok)[\s,.!?-]+agents?\b[\s,.!?:;-]*/i;
+const AGENT_WAKE_PATTERN = /(?:\b(?:hey|hi|okay|ok)[\s,.!?-]+(?:agents?|bob)\b|^\s*bob\b)[\s,.!?:;-]*/i;
 const AGENT_COMMAND_SILENCE_MS = 2500;
 const AGENT_WAKE_ONLY_WAIT_MS = 5000;
 const CHECKIN_TIMEOUT_MS = 90 * 1000;
 const NOTES_ENDPOINT = '/.netlify/functions/notes';
+const RECAP_ENDPOINT = '/.netlify/functions/meeting-recap';
 
 let agent = freshAgentState();
 let agentListeningRemotely = false;   // someone in the call has the Agent running
@@ -89,6 +90,7 @@ function loadAgentState() {
 // --- Daily wiring (called from meet/index.html) ---
 
 function agentAttach(frame) {
+  botMount();
   loadAgentState();
   agentListeningRemotely = false;
   frame.on('transcription-started', () => {
@@ -98,6 +100,7 @@ function agentAttach(frame) {
       agent.running = true;
       agent.startedAt = agent.startedAt || new Date().toISOString();
       logAgentActivity('Agent started listening.', 'ok');
+      botState('idle');
       broadcastAgentSay('The Agent is now listening and taking notes. Say "Hey Agent" to give it a command.');
       clearInterval(agentNotesTimer);
       agentNotesTimer = setInterval(() => updateAgentNotes(false), AGENT_NOTES_INTERVAL_MS);
@@ -108,6 +111,7 @@ function agentAttach(frame) {
   });
   frame.on('transcription-stopped', () => {
     agentListeningRemotely = false;
+    botState('asleep');
     if (agent.running) stopAgentLocally('Agent stopped listening.');
     updateAgentChip();
     scheduleAgentRender();
@@ -188,8 +192,14 @@ function detectAgentCommand(line) {
     armCommandTimer(line.id, AGENT_COMMAND_SILENCE_MS);
     return;
   }
-  const match = line.text.match(AGENT_WAKE_PATTERN);
+  const tapped = botTapArmed && line.id === localSessionId();
+  const match = tapped ? { index: 0, 0: '' } : line.text.match(AGENT_WAKE_PATTERN);
   if (!match) return;
+  botTapArmed = false;
+  clearTimeout(botTapTimer);
+  botPing();
+  botState('listening');
+  botBroadcast('ping');
 
   const text = line.text.slice(match.index + match[0].length).trim();
   agent.pending[line.id] = { speaker: line.speaker, text, contextEnd: agent.transcript.length - 1 };
@@ -203,12 +213,15 @@ function armCommandTimer(sessionId, delay) {
   pending.timer = setTimeout(() => {
     delete agent.pending[sessionId];
     if (!pending.text) {
+      botState('idle');
+      botBroadcast('idle');
       toast('The Agent didn\'t hear a command after "Hey Agent".');
       return;
     }
     if (!isPrivileged(sessionId)) {
       logAgentActivity(`Ignored a command from ${pending.speaker} (only the Director or Co-Director can give commands).`, 'error');
       toast('Only the Director or Co-Director can give the Agent commands.');
+      botState('idle');
       return;
     }
     runAgentCommand(pending);
@@ -242,6 +255,8 @@ async function callAgent(payload) {
 }
 
 async function runAgentCommand(pending) {
+  botState('thinking');
+  botBroadcast('thinking');
   logAgentActivity(`${pending.speaker}: "Hey Agent, ${pending.text}"`, 'working');
   scheduleAgentRender();
   try {
@@ -262,6 +277,7 @@ async function runAgentCommand(pending) {
   } catch (err) {
     finishAgentActivity('error', err.message);
     toast(err.message);
+    botSay("Sorry, I couldn't do that one.");
   }
   saveAgentState();
   scheduleAgentRender();
@@ -297,6 +313,99 @@ function broadcastAgentSay(text) {
 
 function showAgentSay(text) {
   toast(`Agent: ${text}`);
+  botSay(text);
+}
+
+// --- Bob, the little robot who sits at the side of the call ---
+// States: asleep | listening | thinking | talking. Wake it by saying "Hey Agent"/"Bob" or tapping it.
+let botEl = null;
+let botTapArmed = false;
+let botTapTimer = null;
+let botSayTimer = null;
+let botAudio = null;
+
+function botMount() {
+  if (botEl || !window.ChowaniecRobot) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'bob-wrap';
+  wrap.innerHTML = window.ChowaniecRobot.mascot();
+  document.body.appendChild(wrap);
+  botEl = wrap.querySelector('.bob');
+  const wake = (e) => { e.preventDefault(); botTap(); };
+  botEl.addEventListener('click', wake);
+  botEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') wake(e); });
+}
+
+// Tells everyone else in the call what Bob is doing (only the host running the Agent sends this).
+function botBroadcast(state) {
+  if (callFrame && agent.running) callFrame.sendAppMessage({ type: 'AGENT_STATE', state }, '*');
+}
+
+function botState(state) {
+  botMount();
+  if (!botEl) return;
+  botEl.dataset.state = state;
+  if (state !== 'talking') clearTimeout(botSayTimer);
+}
+
+// A short two-note "ping".
+function botPing() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    botAudio = botAudio || new Ctx();
+    if (botAudio.state === 'suspended') botAudio.resume();
+    const t = botAudio.currentTime;
+    [[880, 0], [1320, 0.11]].forEach(([freq, at]) => {
+      const osc = botAudio.createOscillator();
+      const gain = botAudio.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t + at);
+      gain.gain.exponentialRampToValueAtTime(0.25, t + at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.28);
+      osc.connect(gain).connect(botAudio.destination);
+      osc.start(t + at);
+      osc.stop(t + at + 0.3);
+    });
+  } catch (e) {
+    // Sound is optional.
+  }
+}
+
+// Shows the reply in a speech bubble while Bob's mouth moves.
+function botSay(text) {
+  botMount();
+  if (!botEl) return;
+  const bubble = botEl.querySelector('.bob-say');
+  bubble.textContent = text;
+  bubble.classList.remove('hidden');
+  botEl.dataset.state = 'talking';
+  clearTimeout(botSayTimer);
+  const ms = Math.min(14000, 3500 + String(text).length * 60);
+  botSayTimer = setTimeout(() => {
+    bubble.classList.add('hidden');
+    botEl.dataset.state = (agent.running || agentListeningRemotely) ? 'idle' : 'asleep';
+  }, ms);
+}
+
+// Tapping Bob wakes it: the next thing the tapper says becomes the command.
+function botTap() {
+  botMount();
+  if (!agent.running) {
+    botSay('Ask a host to start the Agent first, then tap me or say "Hey Agent".');
+    return;
+  }
+  if (!isPrivileged(localSessionId())) {
+    botSay('Only the Director or Co-Director can give me commands.');
+    return;
+  }
+  botPing();
+  botTapArmed = true;
+  botState('listening');
+  toast('Bob is listening... say your command.');
+  clearTimeout(botTapTimer);
+  botTapTimer = setTimeout(() => { botTapArmed = false; if (!Object.keys(agent.pending).length) botState('idle'); }, 12000);
 }
 
 function pollSummary(poll) {
@@ -426,10 +535,11 @@ function hideCheckInCard() {
 
 // Check-in messages from the host running the Agent. Returns true when handled.
 function agentHandleAppMessage(msg, fromId) {
-  if (!['CHECKIN', 'CHECKIN_HEARD', 'CHECKIN_DONE'].includes(msg.type)) return false;
+  if (!['CHECKIN', 'CHECKIN_HEARD', 'CHECKIN_DONE', 'AGENT_STATE'].includes(msg.type)) return false;
   const sender = getParticipant(fromId);
   if (!(isPrivileged(fromId) || (sender && sender.owner))) return true;
-  if (msg.type === 'CHECKIN') showCheckInCard();
+  if (msg.type === 'AGENT_STATE') { if (msg.state === 'ping') botPing(); botState(['listening', 'thinking', 'idle', 'asleep'].includes(msg.state) ? msg.state : (msg.state === 'ping' ? 'listening' : 'idle')); }
+  else if (msg.type === 'CHECKIN') showCheckInCard();
   else if (msg.type === 'CHECKIN_HEARD') markCheckInHeard();
   else hideCheckInCard();
   return true;
@@ -472,6 +582,93 @@ async function syncNotesToNotebook() {
   scheduleAgentRender();
 }
 
+// --- Meeting recap (posted to a group chat as Chowaniec AI) ---
+// Everyone reports when they join, so the recap goes to the most private chat that includes everyone who attended.
+// The host can pick a different chat, or turn the recap off, in the Agent panel.
+
+const agentRecap = { chat: 'auto', info: null, busy: false, message: '' };
+
+function recapStorageKey() { return `chowaniec_meet_recap_chat_${currentMeetingCode}`; }
+
+function recapHeaders() {
+  return { 'Content-Type': 'application/json', 'X-Chowaniec-Key': signedInKey() };
+}
+
+function reportMeetingJoined() {
+  if (!currentMeetingCode) return;
+  fetch(RECAP_ENDPOINT, { method: 'POST', headers: recapHeaders(), body: JSON.stringify({ action: 'joined', code: currentMeetingCode }), keepalive: true }).catch(() => {});
+  try { agentRecap.chat = localStorage.getItem(recapStorageKey()) || 'auto'; } catch (e) { agentRecap.chat = 'auto'; }
+}
+
+async function loadRecapInfo() {
+  if (!isHostUser() || !currentMeetingCode) return;
+  try {
+    const res = await fetch(`${RECAP_ENDPOINT}?code=${encodeURIComponent(currentMeetingCode)}`, { headers: recapHeaders(), cache: 'no-store' });
+    if (res.ok) { agentRecap.info = await res.json(); scheduleAgentRender(); }
+  } catch (e) { /* the card still works with its defaults */ }
+}
+
+function setRecapChat(value) {
+  agentRecap.chat = value;
+  try { localStorage.setItem(recapStorageKey(), value); } catch (e) { /* ignore */ }
+  scheduleAgentRender();
+}
+
+// Sends the recap now. From the "Post recap now" button the person sees the result; on leaving it runs in the background.
+async function postRecapNow(background) {
+  if (agentRecap.chat === 'none' || !currentMeetingCode || agentRecap.busy) return;
+  agentRecap.busy = true;
+  agentRecap.message = '';
+  scheduleAgentRender();
+  if (agent.notes && background !== true) await syncNotesToNotebook();
+  try {
+    const res = await fetch(RECAP_ENDPOINT, {
+      method: 'POST', headers: recapHeaders(), keepalive: background === true,
+      body: JSON.stringify({ action: 'post', code: currentMeetingCode, chat: agentRecap.chat })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'The recap could not be posted.');
+    agentRecap.message = 'Recap posted to the chat.';
+    if (!background) toast('Recap posted to the chat.');
+  } catch (e) {
+    agentRecap.message = e.message;
+    if (!background) toast(e.message);
+  } finally {
+    agentRecap.busy = false;
+    scheduleAgentRender();
+  }
+}
+
+// Called when the host who ran the Agent leaves: save the notes, then post the recap without making them wait.
+async function postRecapOnLeave() {
+  if (agentRecap.chat === 'none' || !agent.notes) return;
+  try { await Promise.race([syncNotesToNotebook(), new Promise((r) => setTimeout(r, 4000))]); } catch (e) { /* the recap uses the saved note */ }
+  postRecapNow(true);
+}
+
+function renderRecapSection() {
+  if (!isHostUser()) return '';
+  const info = agentRecap.info;
+  const chats = (info && info.chats) || [{ id: 'everyone', name: 'Everyone' }];
+  const suggested = info ? chats.find((c) => c.id === info.suggested) : null;
+  const options = [
+    `<option value="auto"${agentRecap.chat === 'auto' ? ' selected' : ''}>Automatic${suggested ? `: ${escapeHtml(suggested.name)}` : ''}</option>`,
+    ...chats.map((c) => `<option value="${escapeHtml(c.id)}"${agentRecap.chat === c.id ? ' selected' : ''}>${escapeHtml(c.name)}</option>`),
+    `<option value="none"${agentRecap.chat === 'none' ? ' selected' : ''}>Don't post a recap</option>`
+  ].join('');
+  return `
+    <div class="p-4 rounded-xl bg-white/5 border border-white/5 space-y-3">
+      <span class="text-xs font-medium text-white">Meeting Recap</span>
+      <p class="text-[11px] text-zinc-500 leading-relaxed">When you leave, the AI posts a short recap in a group chat. Automatic picks the chat that matches who attended${info && info.attendees.length ? ` (${escapeHtml(info.attendees.join(', '))})` : ''}.</p>
+      <label class="block text-[10px] font-mono uppercase tracking-widest text-zinc-500" for="recap-chat">Post to</label>
+      <select id="recap-chat" onchange="setRecapChat(this.value)" class="w-full py-2.5 px-3 rounded-lg bg-white/10 text-xs text-white border border-white/10">${options}</select>
+      <button onclick="postRecapNow()" ${agentRecap.busy || agentRecap.chat === 'none' || !agent.notes ? 'disabled' : ''} class="w-full py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs text-white disabled:opacity-40">${agentRecap.busy ? 'Posting...' : 'Post recap now'}</button>
+      ${!agent.notes ? '<p class="text-[11px] text-zinc-500">The recap needs the Agent\'s notes. Start the Agent first.</p>' : ''}
+      ${info && info.posted ? `<p class="text-[11px] text-zinc-400">Last posted ${escapeHtml(formatClock(info.posted.at))}.</p>` : ''}
+      ${agentRecap.message ? `<p class="text-[11px] text-zinc-300">${escapeHtml(agentRecap.message)}</p>` : ''}
+    </div>`;
+}
+
 // --- Start / stop ---
 
 function startAgent() {
@@ -494,6 +691,7 @@ function stopAgent() {
 
 function stopAgentLocally(message) {
   agent.running = false;
+  botState('asleep');
   clearInterval(agentNotesTimer);
   agentNotesTimer = null;
   if (message) logAgentActivity(message, 'ok');
@@ -600,6 +798,8 @@ function renderAgentPanel() {
       </div>
 
       ${renderCheckInSection()}
+
+      ${renderRecapSection()}
 
       ${agent.savedNoteId ? `
         <a href="/notes/?id=${encodeURIComponent(agent.savedNoteId)}" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-sky-300">

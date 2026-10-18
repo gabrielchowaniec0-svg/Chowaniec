@@ -253,7 +253,8 @@
         return `<div class="voice" data-mid="${esc(m.id)}" data-dur="${esc(v.duration)}">` +
             `<button type="button" class="v-play" data-x="voice-play" data-mid="${esc(m.id)}" aria-label="Play voice message">${SVG.play}</button>` +
             `<div class="v-body"><div class="v-wave" data-x="voice-seek" data-mid="${esc(m.id)}" role="slider" aria-label="Voice message position" aria-valuemin="0" aria-valuemax="${esc(v.duration)}" aria-valuenow="0">${bars}</div>` +
-            `<div class="v-row"><span class="v-time">${fmtDur(v.duration)}</span><button type="button" class="v-speed" data-x="voice-speed" data-mid="${esc(m.id)}" aria-label="Playback speed">1×</button></div></div></div>`;
+            `<div class="v-row"><span class="v-time">${fmtDur(v.duration)}</span>${v.transcript ? `<button type="button" class="v-aa" data-x="voice-text" data-mid="${esc(m.id)}" aria-label="Show what was said">Aa</button>` : ''}<button type="button" class="v-speed" data-x="voice-speed" data-mid="${esc(m.id)}" aria-label="Playback speed">1×</button></div></div></div>` +
+            (v.transcript ? `<div class="v-text hidden" data-mid="${esc(m.id)}">${esc(v.transcript)}</div>` : '');
     }
 
     function paintVoice(id) {
@@ -394,6 +395,7 @@
         rec.discard = false;
         rec.mr.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) rec.chunks.push(e.data); });
         rec.mr.start(250);
+        startTranscript();
         rec.t0 = Date.now();
         $('rec-time').textContent = '0:00';
         clearInterval(rec.timer);
@@ -403,6 +405,7 @@
     }
 
     function stopRecorder() {
+        stopTranscript();
         return new Promise((resolve) => {
             const mr = rec.mr;
             clearInterval(rec.timer);
@@ -449,11 +452,33 @@
         await sendRecording();
     }
 
+    // Words are captured by the phone's own speech recognition while recording (when the phone supports it).
+    function startTranscript() {
+        rec.transcript = '';
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) return;
+        try {
+            const r = new SR();
+            r.continuous = true; r.interimResults = false; r.lang = navigator.language || 'en-US';
+            const done = [];
+            r.onresult = (ev) => {
+                for (let i = ev.resultIndex; i < ev.results.length; i++) if (ev.results[i].isFinal) done.push(ev.results[i][0].transcript.trim());
+                rec.transcript = done.join(' ');
+            };
+            r.onerror = () => {};
+            r.onend = () => { if (rec.state === 'recording') { try { r.start(); } catch (e) { /* ignore */ } } };
+            r.start();
+            rec.sr = r;
+        } catch (e) { rec.sr = null; }
+    }
+    function stopTranscript() { if (rec.sr) { const r = rec.sr; rec.sr = null; r.onend = null; try { r.stop(); } catch (e) { /* ignore */ } } }
+
     async function sendRecording() {
         setRecUi('sending', 'Sending…');
         try {
             const dataUrl = await blobToDataUrl(rec.blob);
             const body = { action: 'voice', audio: dataUrl, duration: rec.duration };
+            if (rec.transcript && rec.transcript.trim()) body.transcript = rec.transcript.trim();
             const reply = G.state.replyTo;
             if (reply) body.replyTo = reply.id;
             const data = await G.api(API, { method: 'POST', body });
@@ -684,9 +709,15 @@
         const inPlusMenu = e.target.closest && e.target.closest('#plus-popup');
         if (inPlusMenu) {
             const pollBtn = e.target.closest('#btn-poll');
+            const stickerBtn = e.target.closest('#btn-sticker');
+            const sheetBtn = e.target.closest('#btn-sheet');
+            const shareBtn = e.target.closest('#btn-share');
             if (e.target.closest('#btn-smart')) { toggleSmart(); return; }
             setPlus(false);
             if (pollBtn) openPollModal();
+            if (stickerBtn) openStickers();
+            if (sheetBtn) openSheetForm();
+            if (shareBtn) openShare();
             return;
         }
         if (!$('plus-popup').classList.contains('hidden')) setPlus(false);
@@ -705,6 +736,21 @@
                 playVoice(t.dataset.mid, frac);
                 break;
             }
+            case 'emb-rsvp': embedRsvp(t.dataset.eid, t.dataset.r, t.dataset.url); break;
+            case 'share-close': closeShare(); break;
+            case 'share-pick': sharePick(t.dataset.link); break;
+            case 'slot-claim': slotAction('claim', t.dataset.sid, t.dataset.slot); break;
+            case 'slot-release': slotAction('release', t.dataset.sid, t.dataset.slot); break;
+            case 'sheet-close': closeSheetForm(); break;
+            case 'sheet-create': createSheet(); break;
+            case 'thread-open': G.closeActions(); openThread(t.dataset.id); break;
+            case 'thread-close': closeThread(); break;
+            case 'thread-send': sendThreadReply(); break;
+            case 'sticker-send': sendSticker(t.dataset.id); break;
+            case 'sticker-close': closeStickers(); break;
+            case 'catchup-run': runCatchUp(); break;
+            case 'catchup-close': closeCatchUp(); break;
+            case 'voice-text': { const el = document.querySelector(`.v-text[data-mid="${CSS.escape(t.dataset.mid)}"]`); if (el) el.classList.toggle('hidden'); break; }
             case 'sched-open': openSchedList(); break;
             case 'sched-close': closeSched(); break;
             case 'sched-quick': { const q = sched._quick && sched._quick[Number(t.dataset.i)]; if (q) scheduleAt(q.when); break; }
@@ -749,19 +795,278 @@
     window.addEventListener('chowaniec-group-started', bindOnceStarted);
     if (G.state && G.state.started) bindOnceStarted();
 
+    // ---------------------------------------------------------------- stickers
+
+    let stickerList = null;
+    const stickerOf = (id) => (stickerList || FALLBACK_STICKERS).find((x) => x.id === id);
+    const FALLBACK_STICKERS = [
+      { id: 'bravo', emoji: '👏', label: 'Bravo!' }, { id: 'break-a-leg', emoji: '🎭', label: 'Break a leg!' }, { id: 'curtain-up', emoji: '🎬', label: 'Curtain up!' },
+      { id: 'standing-o', emoji: '🙌', label: 'Standing ovation' }, { id: 'on-my-way', emoji: '🚗', label: 'On my way' }, { id: 'running-late', emoji: '⏰', label: 'Running late' },
+      { id: 'dinner', emoji: '🍝', label: 'Dinner time' }, { id: 'love-you', emoji: '❤️', label: 'Love you' }, { id: 'thank-you', emoji: '🙏', label: 'Thank you' },
+      { id: 'congrats', emoji: '🎉', label: 'Congrats!' }, { id: 'need-help', emoji: '🆘', label: 'Need a hand' }, { id: 'good-night', emoji: '🌙', label: 'Good night' },
+      { id: 'good-morning', emoji: '☀️', label: 'Good morning' }, { id: 'rehearsal', emoji: '🎤', label: 'Rehearsal time' }, { id: 'hug', emoji: '🤗', label: 'Big hug' }, { id: 'cheers', emoji: '🥂', label: 'Cheers!' }
+    ];
+    function stickerHtml(m) {
+        const st = stickerOf(m.sticker);
+        return `<div class="sticker"><span class="st-emoji">${esc(st.emoji)}</span><span class="st-label">${esc(st.label)}</span></div>`;
+    }
+    function openStickers() {
+        closeStickers();
+        const el = document.createElement('div');
+        el.id = 'sticker-sheet';
+        el.className = 'x-sheet';
+        el.innerHTML = `<div class="x-sheet-head"><b>Stickers</b><button type="button" data-x="sticker-close" aria-label="Close">✕</button></div><div class="sticker-grid">` +
+            FALLBACK_STICKERS.map((st) => `<button type="button" class="sticker-pick" data-x="sticker-send" data-id="${esc(st.id)}"><span class="st-emoji">${esc(st.emoji)}</span><span class="st-label">${esc(st.label)}</span></button>`).join('') + `</div>`;
+        document.body.appendChild(el);
+    }
+    function closeStickers() { const el = $('sticker-sheet'); if (el) el.remove(); }
+    async function sendSticker(id) {
+        closeStickers();
+        try {
+            const body = { action: 'sticker', id };
+            const reply = G.state.replyTo;
+            if (reply) body.replyTo = reply.id;
+            const data = await G.api(API, { method: 'POST', body });
+            if (data && data.message) { G.state.confirmed.add(data.message.id); G.upsert([data.message]); }
+            if (reply) G.setReply(null);
+            G.render('bottom');
+        } catch (e) { if (e.status !== 401) G.toast(e.message || 'Couldn’t send the sticker.', 'error'); }
+    }
+
+    // ---------------------------------------------------------------- link previews and the share picker
+
+    const PREVIEW = '/.netlify/functions/preview';
+    const previewCache = {};
+    const INTERNAL = /(^|\/\/)(chowaniec\.net|localhost(:\d+)?|127\.0\.0\.1(:\d+)?|[\w.-]*netlify\.app)?\/(notes|calendar|meet|group)\/?\?/i;
+    function previewCard(p, url) {
+        if (!p) return '';
+        const btns = (p.buttons || []).map((b) => `<a class="emb-btn${b.primary ? ' primary' : ''}" href="${esc(b.href)}">${esc(b.label)}</a>`).join('');
+        const rsvp = p.rsvp && p.eventId ? ['going', 'maybe', 'no'].map((k) => `<button type="button" class="emb-btn${p.mine === k ? ' on' : ''}" data-x="emb-rsvp" data-eid="${esc(p.eventId)}" data-r="${k}" data-url="${esc(url)}">${k === 'going' ? 'Going' : k === 'maybe' ? 'Maybe' : 'Can’t'}</button>`).join('') : '';
+        return `<div class="emb-top"><span class="emb-ic" aria-hidden="true">${p.icon || '🔗'}</span><span class="emb-main"><b>${esc(p.title)}</b><span class="emb-sub">${esc(p.subtitle || '')}</span></span></div>` +
+            (p.snippet ? `<div class="emb-snip">${esc(p.snippet)}</div>` : '') +
+            (btns || rsvp ? `<div class="emb-actions">${btns}${rsvp}</div>` : '');
+    }
+    async function fillEmbed(el) {
+        const url = el.dataset.url;
+        try {
+            if (!(url in previewCache)) previewCache[url] = G.api(`${PREVIEW}?url=${encodeURIComponent(url)}`).then((d) => d.preview).catch(() => null);
+            const p = await previewCache[url];
+            if (!p) { el.remove(); return; }
+            el.innerHTML = previewCard(p, url);
+            el.classList.add('ready', p.locked ? 'locked' : 'open');
+        } catch (e) { el.remove(); }
+    }
+    function addEmbeds() {
+        document.querySelectorAll('#messages .msg-text a[href], .msg-text a[href]').forEach((a) => {
+            const href = a.getAttribute('href') || '';
+            if (!INTERNAL.test(href)) return;
+            const bubble = a.closest('.bubble');
+            if (!bubble || bubble.querySelector(`.embed[data-url="${CSS.escape(href)}"]`)) return;
+            if (bubble.querySelectorAll('.embed').length >= 2) return;
+            const el = document.createElement('div');
+            el.className = 'embed';
+            el.dataset.url = href;
+            el.innerHTML = '<span class="emb-sub">Loading preview…</span>';
+            bubble.insertBefore(el, bubble.querySelector('.stamp'));
+            fillEmbed(el);
+        });
+    }
+    async function embedRsvp(eid, response, url) {
+        try {
+            const cur = (await previewCache[url]) || {};
+            const next = cur.mine === response ? '' : response;
+            await G.api('/.netlify/functions/calendar', { method: 'POST', body: { action: 'rsvp', id: eid, response: next } });
+            delete previewCache[url];
+            document.querySelectorAll(`.embed[data-url="${CSS.escape(url)}"]`).forEach(fillEmbed);
+        } catch (e) { G.toast(e.message || 'Couldn’t save your answer.', 'error'); }
+    }
+
+    // "Share" picker: pick a note, event or meeting and its link goes into the message box.
+    function openShare() {
+        closeShare();
+        const el = document.createElement('div');
+        el.id = 'share-sheet';
+        el.className = 'x-sheet';
+        el.innerHTML = `<div class="x-sheet-head"><b>Share a link</b><button type="button" data-x="share-close" aria-label="Close">✕</button></div><div id="share-body" class="share-body"><p class="emb-sub">Loading…</p></div>`;
+        document.body.appendChild(el);
+        G.api(`${PREVIEW}?share=1`).then((d) => {
+            const origin = location.origin;
+            const group = (title, items, label) => items.length ? `<h4>${title}</h4>` + items.map((i) => `<button type="button" class="share-item" data-x="share-pick" data-link="${esc(origin + i.path)}"><b>${esc(i.title)}</b><span>${esc(label(i))}</span></button>`).join('') : '';
+            const meeting = d.meeting && d.meeting.path ? [{ title: 'Join my latest meeting', path: d.meeting.path }] : [];
+            const html = group('Notes', d.notes || [], (i) => `by ${i.owner}`) + group('Coming up', d.events || [], (i) => i.when) + group('Meeting', meeting, () => 'Share the join link');
+            $('share-body').innerHTML = html || '<p class="emb-sub">Nothing to share yet.</p>';
+        }).catch(() => { $('share-body').innerHTML = '<p class="emb-sub">Couldn’t load. Try again.</p>'; });
+    }
+    function closeShare() { const el = $('share-sheet'); if (el) el.remove(); }
+    function sharePick(link) {
+        closeShare();
+        const ta = $('composer-input');
+        ta.value = (ta.value ? ta.value.replace(/\s*$/, ' ') : '') + link + ' ';
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        ta.focus();
+        G.toast('Link added. Add a note if you like, then send.');
+    }
+
+    // ---------------------------------------------------------------- sign-up sheets
+
+    const SIGNUP = '/.netlify/functions/signup';
+    const sheets = {};
+    let sheetTimer = null;
+    async function loadSheets() {
+        try {
+            const data = await G.api(`${SIGNUP}?room=${encodeURIComponent(G.room())}`);
+            let changed = false;
+            (data.sheets || []).forEach((sh) => { if (JSON.stringify(sheets[sh.id]) !== JSON.stringify(sh)) { sheets[sh.id] = sh; changed = true; } });
+            if (changed) G.render('auto');
+        } catch (e) { /* ignore */ }
+    }
+    function sheetSig(m) { const sh = m.sheet && sheets[m.sheet]; return sh ? sh.slots.map((x) => x.claimedBy || '').join('|') + sh.title : ''; }
+    function sheetHtml(m) {
+        const sh = sheets[m.sheet];
+        if (!sh) return `<div class="sheet"><b>${esc(m.text)}</b><span class="sheet-note">Loading…</span></div>`;
+        const me = G.myName();
+        const open = sh.slots.filter((x) => !x.claimedBy).length;
+        return `<div class="sheet"><b>📝 ${esc(sh.title)}</b><span class="sheet-note">${open ? `${open} of ${sh.slots.length} still open` : 'All spots taken'}</span>` +
+            sh.slots.map((x) => {
+                const mine = x.claimedBy && G.sameName(x.claimedBy, me);
+                return `<div class="slot ${x.claimedBy ? 'taken' : ''}"><span class="slot-label">${esc(x.label)}</span>` +
+                    (x.claimedBy ? `<span class="slot-who">${mine ? 'You' : esc(x.claimedBy)}</span>${mine ? `<button type="button" class="slot-btn" data-x="slot-release" data-sid="${esc(sh.id)}" data-slot="${esc(x.id)}">Give back</button>` : ''}`
+                        : `<button type="button" class="slot-btn go" data-x="slot-claim" data-sid="${esc(sh.id)}" data-slot="${esc(x.id)}">I’ll do it</button>`) + `</div>`;
+            }).join('') + `</div>`;
+    }
+    async function slotAction(kind, sid, slot) {
+        try {
+            const data = await G.api(SIGNUP, { method: 'POST', body: { action: kind, id: sid, slot } });
+            sheets[data.sheet.id] = data.sheet;
+            G.render('auto');
+        } catch (e) { G.toast(e.message || 'Couldn’t update.', 'error'); loadSheets(); }
+    }
+    function openSheetForm() {
+        closeSheetForm();
+        const el = document.createElement('div');
+        el.id = 'signup-form';
+        el.className = 'x-sheet';
+        el.innerHTML = `<div class="x-sheet-head"><b>New sign-up sheet</b><button type="button" data-x="sheet-close" aria-label="Close">✕</button></div>` +
+            `<form id="signup-new" class="sheet-new" autocomplete="off"><label>What is it for?<input id="signup-title" type="text" maxlength="100"></label>` +
+            `<label>Slots, one per line<textarea id="signup-slots" rows="5"></textarea></label><button type="button" class="thread-send" data-x="sheet-create">Post sheet</button></form>`;
+        document.body.appendChild(el);
+        $('signup-new').addEventListener('submit', (e) => e.preventDefault());
+    }
+    function closeSheetForm() { const el = $('signup-form'); if (el) el.remove(); }
+    async function createSheet() {
+        const title = $('signup-title').value.trim();
+        const slots = $('signup-slots').value.split('\n').map((x) => x.trim()).filter(Boolean);
+        if (!title || !slots.length) { G.toast('Add a name and at least one slot.', 'error'); return; }
+        try {
+            const data = await G.api(SIGNUP, { method: 'POST', body: { action: 'create', title, slots } });
+            sheets[data.sheet.id] = data.sheet;
+            closeSheetForm();
+            G.state.confirmed.add(data.message.id); G.upsert([data.message]); G.render('bottom');
+        } catch (e) { G.toast(e.message || 'Couldn’t create the sheet.', 'error'); }
+    }
+    window.addEventListener('chowaniec-group-started', () => {
+        loadSheets();
+        clearInterval(sheetTimer);
+        sheetTimer = setInterval(() => { if (document.visibilityState === 'visible') loadSheets(); }, 8000);
+    });
+
+    // ---------------------------------------------------------------- threads
+
+    const thread = { id: null, timer: null, seen: new Set() };
+    function threadMsgHtml(m) {
+        const mine = G.isMine(m);
+        const body = m.sticker && stickerOf(m.sticker) ? `${esc(stickerOf(m.sticker).emoji)} ${esc(stickerOf(m.sticker).label)}` : esc(m.text || '');
+        return `<div class="t-msg ${mine ? 'mine' : ''}"><b>${esc(m.kind === 'ai' ? m.user : m.user)}${m.onBehalfOf ? ` <i>for ${esc(m.onBehalfOf)}</i>` : ''}</b><span>${body}</span></div>`;
+    }
+    async function loadThread() {
+        if (!thread.id) return;
+        try {
+            const data = await G.api(`${API}?thread=${encodeURIComponent(thread.id)}`);
+            const box = $('thread-body');
+            if (!box || !thread.id) return;
+            const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
+            box.innerHTML = [data.root].concat(data.replies || []).map(threadMsgHtml).join('');
+            if (stick || !thread.seen.size) box.scrollTop = box.scrollHeight;
+            thread.seen = new Set((data.replies || []).map((r) => r.id));
+            if (!thread.seen.size) thread.seen.add('root');
+        } catch (e) { if (e.status === 404) { closeThread(); G.toast('That message is gone.'); } }
+    }
+    function openThread(id) {
+        closeThread();
+        thread.id = id;
+        thread.seen = new Set();
+        const el = document.createElement('div');
+        el.id = 'thread-sheet';
+        el.className = 'x-sheet thread-sheet';
+        el.innerHTML = `<div class="x-sheet-head"><b>Thread</b><button type="button" data-x="thread-close" aria-label="Close thread">✕</button></div><div id="thread-body" class="thread-body"></div>` +
+            `<form id="thread-form" class="thread-form" autocomplete="off"><input id="thread-input" type="text" maxlength="2000" aria-label="Reply in this thread"><button type="button" data-x="thread-send" class="thread-send" aria-label="Send reply">Send</button></form>`;
+        document.body.appendChild(el);
+        $('thread-form').addEventListener('submit', (e) => { e.preventDefault(); sendThreadReply(); });
+        loadThread();
+        thread.timer = setInterval(() => { if (document.visibilityState === 'visible') loadThread(); }, 4000);
+    }
+    function closeThread() {
+        clearInterval(thread.timer); thread.timer = null; thread.id = null;
+        const el = $('thread-sheet'); if (el) el.remove();
+    }
+    async function sendThreadReply() {
+        const input = $('thread-input');
+        const text = input && input.value.trim();
+        if (!text || !thread.id) return;
+        input.value = '';
+        try {
+            const data = await G.api(API, { method: 'POST', body: { text, thread: thread.id } });
+            if (data && data.message) { G.state.confirmed.add(data.message.id); G.upsert([data.message]); G.render('auto'); }
+            loadThread();
+        } catch (e) { input.value = text; if (e.status !== 401) G.toast(e.message || 'Couldn’t send.', 'error'); }
+    }
+
+    // ---------------------------------------------------------------- catch-up ("what you missed")
+
+    window.addEventListener('chowaniec-group-opened', () => setTimeout(showCatchUp, 500));
+    function showCatchUp() {
+        const slot = $('catchup-slot');
+        const last = G.state.openRead && G.state.openRead.id;
+        if (!slot || !last) return;
+        const unseen = G.state.messages.filter((m) => m.id > last && m.kind !== 'system' && !m.thread && !G.isMine(m)).length;
+        if (unseen < 8) return;
+        slot.innerHTML = `<div class="catchup"><div class="catchup-row"><span>${unseen}${G.state.hasMore ? '+' : ''} new messages since you last looked.</span><button type="button" class="btn" data-x="catchup-run">What did I miss?</button><button type="button" data-x="catchup-close" aria-label="Dismiss">✕</button></div><div id="catchup-text" class="catchup-text hidden"></div></div>`;
+    }
+    function closeCatchUp() { const slot = $('catchup-slot'); if (slot) slot.innerHTML = ''; }
+    async function runCatchUp() {
+        const box = $('catchup-text');
+        if (!box) return;
+        box.classList.remove('hidden');
+        box.textContent = 'Reading the chat…';
+        try {
+            const data = await G.api(API, { method: 'POST', body: { action: 'catchup', since: G.state.openRead && G.state.openRead.id } });
+            box.innerHTML = '';
+            const lines = String(data.summary || '').split('\n').map((l) => l.replace(/^[-*•]\s*/, '').trim()).filter(Boolean);
+            if (!lines.length) { box.textContent = 'Nothing new to catch up on.'; return; }
+            const ul = document.createElement('ul');
+            lines.forEach((l) => { const li = document.createElement('li'); li.textContent = l; ul.appendChild(li); });
+            box.appendChild(ul);
+        } catch (e) { box.textContent = e.message || 'Couldn’t summarise right now.'; }
+    }
+
     // ---------------------------------------------------------------- hooks used by group.js
 
     window.GroupExtras = {
         richHtml(m) {
             if (m && m.poll && Array.isArray(m.poll.options)) return pollHtml(m);
+            if (m && m.sheet) return sheetHtml(m);
+            if (m && m.sticker && stickerOf(m.sticker)) return stickerHtml(m);
             if (m && m.voice && m.voice.id) return voiceHtml(m);
             return '';
         },
-        richClass(m) { return m.poll ? 'rich-poll' : 'rich-voice'; },
+        richClass(m) { return m.poll ? 'rich-poll' : m.sheet ? 'rich-poll' : m.sticker ? 'rich-sticker' : 'rich-voice'; },
+        sig: sheetSig,
         menuItems(m) {
-            if (!canClosePoll(m)) return '';
-            return `<button type="button" role="menuitem" data-x="close-poll" data-id="${esc(m.id)}" class="mi"><i data-lucide="lock"></i>Close poll</button>`;
+            let out = '';
+            if (canClosePoll(m)) out += `<button type="button" role="menuitem" data-x="close-poll" data-id="${esc(m.id)}" class="mi"><i data-lucide="lock"></i>Close poll</button>`;
+            if (!m.thread && m.kind !== 'system' && !m._pending) out += `<button type="button" role="menuitem" data-x="thread-open" data-id="${esc(m.id)}" class="mi"><i data-lucide="messages-square"></i>Reply in thread</button>`;
+            return out;
         },
-        afterRender() { if (player.id) paintVoice(player.id); }
+        afterRender() { if (player.id) paintVoice(player.id); addEmbeds(); }
     };
 })();

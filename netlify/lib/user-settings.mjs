@@ -9,7 +9,8 @@ export const DEFAULT_SETTINGS = {
   notifications: {
     messages: 'all',                                   // 'all' | 'mentions' | 'off'
     quietHours: { on: false, start: '22:00', end: '07:00', tz: 'America/New_York' }
-  }
+  },
+  ai: { digest: false }                                // a short morning summary from the AI
 };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -29,7 +30,9 @@ export function cleanSettings(input, base = DEFAULT_SETTINGS) {
   const n = (input && input.notifications) || {};
   const q = n.quietHours || {};
   const d = base.notifications;
+  const a = (input && input.ai) || {};
   return {
+    ai: { digest: typeof a.digest === 'boolean' ? a.digest : !!(base.ai && base.ai.digest) },
     notifications: {
       messages: ['all', 'mentions', 'off'].includes(n.messages) ? n.messages : d.messages,
       quietHours: {
@@ -76,6 +79,7 @@ export async function whoWantsPush(names, kind, now = new Date()) {
     try {
       const n = (await getSettings(name)).notifications;
       if (n.messages === 'off') return null;
+      if (kind === 'important') return name;           // an @important ping gets through quiet hours and "mentions only"
       if (n.messages === 'mentions' && kind === 'message') return null;
       if (inQuietHours(n.quietHours, now)) return null;
       return name;

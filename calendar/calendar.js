@@ -86,7 +86,23 @@
         renderList();
     }
 
+    function rsvpHtml(e) {
+        const r = e.rsvp || {};
+        const mine = state.user && r[state.user.name];
+        const names = (k) => Object.keys(r).filter((n) => r[n] === k);
+        const parts = [];
+        if (names('going').length) parts.push(`Going: ${names('going').map(esc).join(', ')}`);
+        if (names('maybe').length) parts.push(`Maybe: ${names('maybe').map(esc).join(', ')}`);
+        if (names('no').length) parts.push(`Can’t: ${names('no').map(esc).join(', ')}`);
+        const btn = (k, label) => `<button type="button" class="rsvp-btn${mine === k ? ' on' : ''}" data-rsvp="${k}" data-eid="${esc(e.id)}" aria-pressed="${mine === k}">${label}</button>`;
+        return `<div class="rsvp"><div class="rsvp-row">${btn('going', 'Going')}${btn('maybe', 'Maybe')}${btn('no', 'Can’t go')}</div>${parts.length ? `<div class="rsvp-who">${parts.join(' · ')}</div>` : ''}</div>`;
+    }
+
     function eventCard(e) {
+        return `<div class="ev-wrap">${eventCardInner(e)}${rsvpHtml(e)}</div>`;
+    }
+
+    function eventCardInner(e) {
         return `<button type="button" class="ev${state.flash === e.id ? ' flash' : ''}" data-id="${esc(e.id)}">
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0"><div class="font-medium text-[15px] truncate">${esc(e.title)}</div>
@@ -166,7 +182,7 @@
             state.month = { y: p.y, m: p.m };
             await load();
             render();
-            toast(state.editing ? 'Event saved' : 'Event added. Everyone invited was notified.');
+            toast(data.clashes && data.clashes.length ? `Saved. Heads up: it overlaps with ${data.clashes.map((c) => c.title).join(', ')}.` : (state.editing ? 'Event saved' : 'Event added. Everyone invited was notified.'));
         } catch (e) {
             $('form-error').textContent = e.message;
             $('form-error').classList.remove('gone');
@@ -199,7 +215,20 @@
             const p = parse(b.dataset.day);
             if (p.m !== state.month.m) { state.month = { y: p.y, m: p.m }; load().then(render); } else render();
         });
-        $('list').addEventListener('click', (e) => {
+        $('list').addEventListener('click', async (e) => {
+            const r = e.target.closest('[data-rsvp]');
+            if (r) {
+                const ev = state.events.find((x) => x.id === r.dataset.eid);
+                const mine = ev && (ev.rsvp || {})[state.user.name];
+                const response = mine === r.dataset.rsvp ? '' : r.dataset.rsvp;
+                try {
+                    const data = await api(API, { method: 'POST', body: { action: 'rsvp', id: r.dataset.eid, response } });
+                    state.events = state.events.map((x) => (x.id === data.event.id ? data.event : x));
+                    renderList();
+                    if (data.clashes && data.clashes.length) toast(`Heads up: that overlaps with ${data.clashes.map((c) => c.title).join(', ')}.`);
+                } catch (err) { toast(err.message); }
+                return;
+            }
             const b = e.target.closest('[data-id]');
             const found = b && state.events.find((x) => x.id === b.dataset.id);
             if (found) openForm(found);

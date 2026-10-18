@@ -1,0 +1,49 @@
+/* Bob the robot (see robot.js) */
+.bob-face { width: 100%; height: 100%; color: #4c1d95; }
+.bob { position: relative; width: 112px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.bob-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.bob .bob-mouth-open { opacity: 0; transform-origin: 60px 64px; }
+.bob .bob-bulb { transition: fill .2s; }
+.bob .bob-z, .bob .bob-bubbles { opacity: 0; }
+.bob-body { transform-origin: 60px 100px; }
+/* asleep: eyes closed, little z */
+.bob[data-state="asleep"] .bob-eye { transform-box: fill-box; transform-origin: center; transform: scaleY(.12); }
+.bob[data-state="asleep"] .bob-bulb { fill: #9ca3af; }
+.bob[data-state="asleep"] .bob-body { transform: translateY(5px) rotate(-3deg); }
+.bob[data-state="asleep"] .bob-z { opacity: 1; animation: bob-z 2.4s ease-in-out infinite; }
+/* awake */
+.bob:not([data-state="asleep"]) .bob-eye { animation: bob-blink 4s infinite; transform-box: fill-box; transform-origin: center; }
+.bob:not([data-state="asleep"]) .bob-body { animation: bob-bounce 2.6s ease-in-out infinite; }
+.bob[data-state="listening"] .bob-bulb { fill: #34d399; animation: bob-pulse 1s ease-in-out infinite; }
+.bob[data-state="listening"] .bob-eye { transform-box: fill-box; transform-origin: center; transform: scale(1.15); animation: none; }
+/* thinking: typing on the laptop + thought bubbles */
+.bob[data-state="thinking"] .bob-arm.l { animation: bob-type .28s ease-in-out infinite alternate; }
+.bob[data-state="thinking"] .bob-arm.r { animation: bob-type .28s ease-in-out infinite alternate-reverse; }
+.bob[data-state="thinking"] .bob-eyes { animation: bob-look 3s ease-in-out infinite; }
+.bob[data-state="thinking"] .bob-bulb { fill: #fbbf24; animation: bob-pulse .7s ease-in-out infinite; }
+.bob[data-state="thinking"] .bob-bubbles { opacity: 1; }
+/* talking: mouth moves */
+.bob[data-state="talking"] .bob-mouth-closed { opacity: 0; }
+.bob[data-state="talking"] .bob-mouth-open { animation: bob-talk .32s ease-in-out infinite alternate; }
+.bob-arm { transform-box: fill-box; transform-origin: center; }
+.bob-bubbles { position: absolute; top: -6px; right: -6px; display: flex; gap: 4px; align-items: flex-end; transition: opacity .2s; }
+.bob-bubbles i { display: block; width: 8px; height: 8px; border-radius: 9999px; background: #ddd6fe; border: 2px solid #7c3aed; animation: bob-bubble 1.2s ease-in-out infinite; }
+.bob-bubbles i:nth-child(2) { width: 11px; height: 11px; animation-delay: .2s; }
+.bob-bubbles i:nth-child(3) { width: 15px; height: 15px; animation-delay: .4s; }
+.bob-say { position: absolute; bottom: 100%; right: 0; margin-bottom: 8px; width: max-content; max-width: min(260px, 64vw); max-height: 40vh; overflow-y: auto; background: #fff; color: #111827; border: 2px solid #7c3aed; border-radius: 18px 18px 4px 18px; padding: 10px 14px; font-size: 14px; line-height: 1.35; box-shadow: 0 6px 24px rgba(0,0,0,.18); text-align: left; }
+.bob-say.hidden { display: none; }
+@keyframes bob-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes bob-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes bob-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes bob-type { from { transform: translateY(0) rotate(0); } to { transform: translateY(9px) rotate(6deg); } }
+@keyframes bob-look { 0%, 100% { transform: translate(0, 0); } 30% { transform: translate(-3px, -3px); } 70% { transform: translate(3px, -3px); } }
+@keyframes bob-talk { from { transform: scaleY(.25) scaleX(.8); } to { transform: scaleY(1.15) scaleX(1.05); } }
+@keyframes bob-bubble { 0%, 100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(-6px); opacity: 1; } }
+@keyframes bob-z { 0%, 100% { transform: translate(0, 0); opacity: .3; } 50% { transform: translate(6px, -10px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bob *, .bob { animation: none !important; } }
+
+/* Bob in the Meet call: sits at the bottom-right edge, out of the way of the video. */
+#bob-wrap { position: fixed; right: 10px; bottom: 76px; width: 84px; z-index: 40; }
+#bob-wrap .bob { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; outline: none; }
+#bob-wrap .bob:focus-visible { outline: 2px solid #a78bfa; border-radius: 12px; }
+@media (max-width: 640px) { #bob-wrap { width: 64px; bottom: 84px; right: 6px; } }

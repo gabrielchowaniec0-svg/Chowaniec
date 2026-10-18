@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#000000">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <title>Messages</title>
+    <script>
+        (function () {
+            var pref = 'auto';
+            try { pref = localStorage.getItem('chowaniec_theme') || localStorage.getItem('chowaniec_group_theme') || 'auto'; } catch (e) {}
+            var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+    <script src="/pwa.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../passwords.js"></script>
+    <script src="../auth-gate.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+    <link rel="stylesheet" href="/settings/settings.css">
+    <link rel="stylesheet" href="/robot.css">
+    <style>
+        .dm-row { display: flex; align-items: center; gap: 12px; padding: 12px 4px; min-height: 64px; text-decoration: none; color: inherit; border-top: 1px solid var(--line, #eee); }
+        .dm-row:first-child { border-top: 0; }
+        .dm-av { width: 44px; height: 44px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; flex-shrink: 0; background: #6b7280; }
+        .dm-av.ai { background: #7c3aed; padding: 6px; }
+        .dm-av.ai .bob-face { color: #f5f3ff; }
+        .dm-main { flex: 1; min-width: 0; }
+        .dm-name { font-weight: 600; font-size: 16px; }
+        .dm-last { font-size: 13.5px; color: var(--muted, #6b7280); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dm-badge { background: #dc2626; color: #fff; font-size: 12px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
+        .dm-time { font-size: 12px; color: var(--muted, #6b7280); }
+        .dm-empty { color: var(--muted, #6b7280); font-size: 14px; padding: 8px 0; }
+    </style>
+</head>
+<body>
+<div id="app-root">
+    <header class="topbar"><div class="topbar-in">
+        <a class="back" href="/" aria-label="Back to Chowaniec home">&#8592;</a>
+        <h1 class="serif">Messages</h1>
+    </div></header>
+    <main class="wrap" id="main">
+        <section class="card" aria-labelledby="h-talk">
+            <h2 id="h-talk">Your conversations</h2>
+            <div id="talked"><p class="dm-empty">Loading&hellip;</p></div>
+        </section>
+        <section class="card" aria-labelledby="h-new">
+            <h2 id="h-new">Start a conversation</h2>
+            <div id="others"></div>
+        </section>
+    </main>
+</div>
+<script src="/robot.js"></script>
+<script src="/settings/settings.js"></script>
+<script src="/messages/messages.js"></script>
+</body>
+</html>

@@ -62,6 +62,7 @@
 
             <!-- Pinned message -->
             <div id="pinned-bar" class="pinned hidden"></div>
+            <div id="catchup-slot"></div>
 
             <!-- Connection banner -->
             <div id="error-banner" role="alert" class="banner hidden">
@@ -108,6 +109,9 @@
                         <button id="btn-photo" type="button" role="menuitem" class="mi"><i data-lucide="image-plus"></i>Photo</button>
                         <button id="btn-camera" type="button" role="menuitem" class="mi"><i data-lucide="camera"></i>Take a photo</button>
                         <button id="btn-poll" type="button" role="menuitem" class="mi"><i data-lucide="chart-no-axes-column"></i>Poll</button>
+                        <button id="btn-share" type="button" role="menuitem" class="mi"><i data-lucide="link"></i>Share a note, event or meeting</button>
+                        <button id="btn-sheet" type="button" role="menuitem" class="mi"><i data-lucide="clipboard-check"></i>Sign-up sheet</button>
+                        <button id="btn-sticker" type="button" role="menuitem" class="mi"><i data-lucide="smile-plus"></i>Sticker</button>
                         <button id="btn-smart" type="button" role="menuitemcheckbox" aria-checked="true" class="mi" title="Turns plans in your message into calendar events and questions into polls"><i data-lucide="wand-sparkles"></i><span id="smart-label">Smart detect: on</span></button>
                     </div>
 
@@ -184,6 +188,13 @@
                 <button type="button" class="x" id="search-clear" title="Clear search" aria-label="Clear search"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
 
+            <div id="search-filters" class="search-filters">
+                <label>From person <select id="search-user"><option value="">Anyone</option></select></label>
+                <label>From date <input id="search-from" type="date"></label>
+                <label>To date <input id="search-to" type="date"></label>
+                <button type="button" id="search-filter-clear" class="btn btn-ghost">Clear filters</button>
+            </div>
+
             <div id="search-results" class="hidden"></div>
 
             <div id="sheet-sections">
@@ -253,6 +264,7 @@
     <!-- Toast -->
     <div id="toast" role="status" aria-live="polite" class="toast hidden"></div>
 
+    <script src="/robot.js"></script>
     <script src="group.js"></script>
     <script src="extras.js"></script>
 </body>
