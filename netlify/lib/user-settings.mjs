@@ -10,8 +10,13 @@ export const DEFAULT_SETTINGS = {
     messages: 'all',                                   // 'all' | 'mentions' | 'off'
     quietHours: { on: false, start: '22:00', end: '07:00', tz: 'America/New_York' }
   },
-  ai: { digest: false }                                // a short morning summary from the AI
+  ai: { digest: false },                               // a short morning summary from the AI
+  // How the app looks for this person (follows them to every device). See /theme.js and /robot.js.
+  look: { theme: 'classic', mode: 'auto', custom: { accent: '#7c3aed', bg: '#ffffff', bg2: '#f4f4f5', gradient: false }, season: 'auto', motion: 'full', onboarded: 0 },
+  robot: { type: 'bob', accessories: [], seasonal: true }
 };
+const ID = /^[a-z0-9-]{1,40}$/;
+const HEX = /^#[0-9a-fA-F]{6}$/;
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -31,7 +36,27 @@ export function cleanSettings(input, base = DEFAULT_SETTINGS) {
   const q = n.quietHours || {};
   const d = base.notifications;
   const a = (input && input.ai) || {};
+  const lk = (input && input.look) || {}, lb = base.look || DEFAULT_SETTINGS.look, lc = lk.custom || {}, lbc = lb.custom || DEFAULT_SETTINGS.look.custom;
+  const rb = (input && input.robot) || {}, rbase = base.robot || DEFAULT_SETTINGS.robot;
   return {
+    look: {
+      theme: ID.test(lk.theme) ? lk.theme : lb.theme,
+      mode: ['auto', 'light', 'dark'].includes(lk.mode) ? lk.mode : lb.mode,
+      custom: {
+        accent: HEX.test(lc.accent) ? lc.accent : lbc.accent,
+        bg: HEX.test(lc.bg) ? lc.bg : lbc.bg,
+        bg2: HEX.test(lc.bg2) ? lc.bg2 : lbc.bg2,
+        gradient: typeof lc.gradient === 'boolean' ? lc.gradient : !!lbc.gradient
+      },
+      season: lk.season === 'auto' || lk.season === 'off' || ID.test(lk.season) ? lk.season : lb.season,
+      motion: ['full', 'reduced'].includes(lk.motion) ? lk.motion : lb.motion,
+      onboarded: Number.isInteger(lk.onboarded) && lk.onboarded >= 0 && lk.onboarded < 1000 ? lk.onboarded : lb.onboarded
+    },
+    robot: {
+      type: ID.test(rb.type) ? rb.type : rbase.type,
+      accessories: Array.isArray(rb.accessories) ? [...new Set(rb.accessories.filter((x) => ID.test(x)))].slice(0, 6) : rbase.accessories,
+      seasonal: typeof rb.seasonal === 'boolean' ? rb.seasonal : !!rbase.seasonal
+    },
     ai: { digest: typeof a.digest === 'boolean' ? a.digest : !!(base.ai && base.ai.digest) },
     notifications: {
       messages: ['all', 'mentions', 'off'].includes(n.messages) ? n.messages : d.messages,
