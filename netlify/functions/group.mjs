@@ -118,6 +118,20 @@ export default async (req, context) => {
       await touchPresence(user.name, room);
       // Send any scheduled messages that are due (the once-a-minute scheduler also does this).
       context.waitUntil(nextScheduledAt().then((at) => (at != null && at <= Date.now() ? deliverDue(publishMessage) : null)).catch((e) => console.error('Scheduled check failed:', e.message)));
+      // Long-poll: with ?wait=1 hold the request open (up to ~7s) until a new message arrives or someone starts typing,
+      // so new messages show up within about a second instead of waiting for the next 3-second poll.
+      if (sinceId && url.searchParams.get('wait') === '1') {
+        const sig = (list) => JSON.stringify((list || []).map((p) => [p.user, p.online, p.typing, p.lastReadId]));
+        const first = await listPresence(room);
+        const baseline = sig(first);
+        const deadline = Date.now() + 7000;
+        while (Date.now() < deadline) {
+          const fresh = await since(sinceId, 1, room);
+          if (fresh.length) break;
+          await new Promise((r) => setTimeout(r, 900));
+          if (sig(await listPresence(room)) !== baseline) break;
+        }
+      }
       const [page, presence, pinned] = await Promise.all([
         sinceId ? since(sinceId, 200, room).then((messages) => ({ messages }))
           : beforeId ? before(beforeId, 50, room)

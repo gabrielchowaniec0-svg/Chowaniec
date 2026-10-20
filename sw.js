@@ -1,5 +1,5 @@
 // Chowaniec service worker: offline fallback, light caching, and push notifications.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `chowaniec-${VERSION}`;
 const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/badge-96.png', '/manifest.webmanifest'];
 // The app shell: shared scripts and the main pages, cached on a best-effort basis so the app opens instantly
@@ -44,7 +44,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Scripts, styles, fonts and images: serve from cache when offline, refresh in the background.
+  // Our own scripts and styles: network first (so an update is never hidden behind an old copy), cache when offline or slow.
+  if (url.origin === self.location.origin && /\.(js|css)$/.test(url.pathname)) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE);
+      try {
+        const response = await Promise.race([
+          fetch(request),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('slow')), 5000))
+        ]);
+        if (response.ok) cache.put(request, response.clone());
+        return response;
+      } catch (e) {
+        return (await cache.match(request)) || fetch(request);
+      }
+    })());
+    return;
+  }
+
+  // Fonts and images: serve from cache when available, refresh in the background.
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(request);

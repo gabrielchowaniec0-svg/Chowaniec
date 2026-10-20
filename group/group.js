@@ -397,15 +397,27 @@
         else if (method !== 'POST' && !/[?&]room=/.test(url)) url += `${url.includes('?') ? '&' : '?'}room=${encodeURIComponent(ROOM)}`;
         if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
         let res;
+        const send = (target) => fetch(target, {
+            method: opts.method || 'GET',
+            headers,
+            body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+            cache: 'no-store'
+        });
+        // Some browsers, extensions and networks block "/.netlify/" addresses; "/api/" reaches the same place.
+        const alt = (target) => target.replace('/.netlify/functions/', '/api/');
+        let useAlt = false;
+        try { useAlt = sessionStorage.getItem('chowaniec_api_alt') === '1'; } catch (e) { /* storage unavailable */ }
         try {
-            res = await fetch(url, {
-                method: opts.method || 'GET',
-                headers,
-                body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-                cache: 'no-store'
-            });
+            try {
+                res = await send(useAlt ? alt(url) : url);
+                if (useAlt && res.status === 404) throw new TypeError('alt missing');
+            } catch (first) {
+                res = await send(useAlt ? url : alt(url));
+                if (res.status === 404 && !useAlt) throw first;
+                try { sessionStorage.setItem('chowaniec_api_alt', useAlt ? '0' : '1'); } catch (e) { /* storage unavailable */ }
+            }
         } catch (e) {
-            throw new ApiError(0, 'Could not reach the server. Check your connection.');
+            throw new ApiError(0, navigator.onLine === false ? 'This device is offline.' : 'Could not reach the server. Check your connection.');
         }
         let data = {};
         try { data = await res.json(); } catch (e) { data = {}; }
@@ -926,6 +938,27 @@
         show($('error-banner'), 'block');
     }
     function hideBanner() { hide($('error-banner'), 'block'); }
+    // After repeated failures, offer to clear the saved app files and sign-in helpers that can get stuck on one device.
+    function offerRepair() {
+        const banner = $('error-banner');
+        if (!banner || banner.querySelector('#btn-repair')) return;
+        const b = document.createElement('button');
+        b.type = 'button'; b.id = 'btn-repair'; b.textContent = 'Repair';
+        b.setAttribute('aria-label', 'Repair the app on this device: clears its saved files and reloads');
+        b.addEventListener('click', async () => {
+            b.disabled = true; b.textContent = 'Repairing…';
+            try {
+                const regs = await (navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : []);
+                await Promise.all(regs.map((r) => r.unregister()));
+                if (window.caches) await Promise.all((await caches.keys()).map((k) => caches.delete(k)));
+                sessionStorage.removeItem('chowaniec_api_alt');
+            } catch (e) { /* reload anyway */ }
+            location.reload();
+        });
+        const retry = $('btn-retry');
+        b.className = retry ? retry.className : '';
+        if (retry && retry.parentNode) retry.parentNode.appendChild(b); else banner.appendChild(b);
+    }
 
     function schedulePoll(ms) {
         clearTimeout(state.pollTimer);
@@ -933,7 +966,7 @@
         let delay = ms;
         if (delay == null) {
             if (state.failures > 0) delay = Math.min(30000, 2000 * Math.pow(2, state.failures - 1));
-            else delay = document.visibilityState === 'hidden' ? POLL_HIDDEN_MS : POLL_VISIBLE_MS;
+            else delay = document.visibilityState === 'hidden' ? POLL_HIDDEN_MS : 250;
         }
         state.pollTimer = setTimeout(poll, delay);
     }
@@ -945,7 +978,7 @@
         clearTimeout(state.pollTimer);
         try {
             const full = !state.latestId || !state.loaded || Date.now() - state.lastFull > FULL_SYNC_MS;
-            const data = await api(full ? API : `${API}?since=${encodeURIComponent(state.latestId)}`);
+            const data = await api(full ? API : `${API}?since=${encodeURIComponent(state.latestId)}${document.visibilityState === 'visible' ? '&wait=1' : ''}`);
             const list = Array.isArray(data.messages) ? data.messages : [];
             applyExtras(data);
             let fresh;
@@ -983,6 +1016,7 @@
             if (e.status === 401) return;
             state.failures++;
             const wait = Math.round(Math.min(30000, 2000 * Math.pow(2, state.failures - 1)) / 1000);
+            if (state.failures >= 3) offerRepair();
             showBanner(`${state.loaded ? 'Can’t reach the chat' : 'Couldn’t load messages'}: ${e.message.replace(/\.$/, '')}. Retrying in ${wait}s.`);
             if (!state.loaded) {
                 $('initial-loading').innerHTML = `<i data-lucide="wifi-off" class="w-6 h-6"></i><span class="eyebrow mt-3">Waiting for connection&hellip;</span>`;
