@@ -83,7 +83,12 @@ export async function sendPush(users, payload, { exclude, kind = 'other', room =
     const record = await store().get(b.key, { type: 'json' });
     if (!record) return 0;
     try {
-      await webpush.sendNotification(record.subscription, body, { TTL: 60 * 60 * 24 });
+      // "high" urgency tells Chrome/Android to wake the device now instead of batching the message (which can delay it by hours).
+      await webpush.sendNotification(record.subscription, body, {
+        TTL: 60 * 60 * 24,
+        urgency: ['message', 'mention', 'important', 'test'].includes(kind) ? 'high' : 'normal',
+        timeout: 10000
+      });
       return 1;
     } catch (err) {
       // 404/410: the device unsubscribed or the subscription expired.
