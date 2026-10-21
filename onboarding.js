@@ -66,11 +66,11 @@
       }, next: "Let's go" },
       { title: 'Pick your theme', sub: 'Colors, seasons, gradients, or make your own.', render(body) {
         if (window.ChowaniecTheme && window.ChowaniecTheme.mountPicker) window.ChowaniecTheme.mountPicker(body, {});
-        else body.innerHTML = '<p>Themes are not available right now.</p>';
+        else body.innerHTML = '<p style="text-align:center">The theme picker didn\u2019t load. <button type="button" class="ob-btn ob-ghost" data-reload>Reload</button></p>';
       }, next: 'Next' },
       { title: 'Choose your robot', sub: 'Pick a helper and dress it up.', render(body) {
         if (window.ChowaniecRobot && window.ChowaniecRobot.mountPicker) window.ChowaniecRobot.mountPicker(body, {});
-        else body.innerHTML = '<p>Robots are not available right now.</p>';
+        else body.innerHTML = '<p style="text-align:center">The robot picker didn\u2019t load. <button type="button" class="ob-btn ob-ghost" data-reload>Reload</button></p>';
       }, next: 'All done' }
     ];
     let i = 0;
@@ -99,6 +99,16 @@
       if (t.hasAttribute('data-next')) { if (i < steps.length - 1) { i++; show(); } else finish(false); }
       else if (t.hasAttribute('data-back')) { i--; show(); }
       else if (t.hasAttribute('data-skip')) finish(true);
+      else if (t.hasAttribute('data-reload')) {
+        (async () => {
+          try {
+            const regs = await (navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : []);
+            await Promise.all(regs.map((r) => r.unregister()));
+            if (window.caches) await Promise.all((await caches.keys()).map((k) => caches.delete(k)));
+          } catch (err) { /* reload anyway */ }
+          location.reload();
+        })();
+      }
     });
     root.addEventListener('keydown', (e) => { if (e.key === 'Escape') finish(true); });
     show();
@@ -117,12 +127,19 @@
       try { localStorage.setItem(`chowaniec_onboarded_${u.name}`, String(ONBOARD_VERSION)); } catch (e) { /* storage blocked */ }
       return;
     }
-    // Give theme.js/robot.js a moment to load.
-    if (!window.ChowaniecRobot && !document.querySelector('script[data-ob-robot]')) {
-      const sc = document.createElement('script'); sc.src = '/robot.js'; sc.setAttribute('data-ob-robot', '1'); document.head.appendChild(sc);
-    }
-    const ready = () => window.ChowaniecTheme && window.ChowaniecRobot;
-    for (let n = 0; n < 20 && !ready(); n++) await new Promise((r) => setTimeout(r, 150));
+    // Make sure the full theme and robot pickers are loaded. A device can hold an older copy of these scripts
+    // right after an update, so if a picker is missing, fetch a fresh copy (the new address skips the old cache).
+    const themeOk = () => window.ChowaniecTheme && typeof window.ChowaniecTheme.mountPicker === 'function';
+    const robotOk = () => window.ChowaniecRobot && typeof window.ChowaniecRobot.mountPicker === 'function';
+    const waitFor = async (ok, ms) => { for (let n = 0; n < ms / 150 && !ok(); n++) await new Promise((r) => setTimeout(r, 150)); return ok(); };
+    const fresh = (src) => new Promise((resolve) => {
+      const sc = document.createElement('script');
+      sc.src = `${src}?fresh=${Date.now()}`; sc.onload = () => resolve(true); sc.onerror = () => resolve(false);
+      document.head.appendChild(sc);
+    });
+    if (!window.ChowaniecRobot) { const sc = document.createElement('script'); sc.src = '/robot.js'; document.head.appendChild(sc); }
+    if (!(await waitFor(robotOk, 2500))) { await fresh('/robot.js'); await waitFor(robotOk, 2500); }
+    if (!(await waitFor(themeOk, 1500))) { await fresh('/theme.js'); await waitFor(themeOk, 2500); }
     run(u, settings);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(() => start(0), 600)); else setTimeout(() => start(0), 600);
