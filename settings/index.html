@@ -78,6 +78,10 @@
             <h2 id="h-look">Appearance</h2>
             <div id="look-host"></div>
             <div class="row">
+                <div class="grow"><div class="t">Welcome tour</div><div class="s">Pick your theme and robot again, step by step.</div></div>
+                <button type="button" id="btn-replay-welcome" class="btn">Show it again</button>
+            </div>
+            <div class="row">
                 <div class="grow"><div class="t" id="lbl-size">Text size</div>
                     <div class="seg" id="size-seg" role="group" aria-labelledby="lbl-size" style="margin-top:8px">
                         <button type="button" data-size="normal">Normal</button><button type="button" data-size="large">Large</button><button type="button" data-size="xl">Extra large</button>
@@ -144,6 +148,7 @@
 <script src="/settings/settings.js"></script>
 <script src="/settings/polish-settings.js"></script>
 <script src="/settings/robot-settings.js"></script>
+<script>document.getElementById('btn-replay-welcome').addEventListener('click', function () { if (window.ChowaniecOnboarding) window.ChowaniecOnboarding.replay(); });</script>
 <script>
 (function () {
     var S = window.ChowaniecSettings, $ = S.$;
