@@ -8,6 +8,9 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <script src="/pwa.js" defer></script>
     <title>Chowaniec AI</title>
+    <link rel="stylesheet" href="/theme.css">
+    <script src="/theme.js"></script>
+
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -24,8 +27,8 @@
         html, body { height: 100%; }
         body {
             font-family: 'Outfit', sans-serif;
-            background-color: #fafafa;
-            color: #111827;
+            background-color: var(--bg);
+            color: var(--text);
         }
 
         .font-serif { font-family: 'Playfair Display', serif; }
@@ -33,8 +36,8 @@
 
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+        ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--faint); }
 
         .sr-only-label {
             position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -56,12 +59,12 @@
         /* Streaming caret */
         .streaming-caret::after {
             content: ''; display: inline-block; width: 0.5em; height: 1em; margin-left: 2px;
-            vertical-align: -0.15em; background: #111827; border-radius: 2px;
+            vertical-align: -0.15em; background: var(--text); border-radius: 2px;
             animation: blink 1s steps(2, start) infinite;
         }
         @keyframes blink { to { visibility: hidden; } }
 
-        .typing-dots span { width: 6px; height: 6px; border-radius: 9999px; background: #9ca3af; display: inline-block; animation: dot 1.2s infinite ease-in-out; }
+        .typing-dots span { width: 6px; height: 6px; border-radius: 9999px; background: var(--faint); display: inline-block; animation: dot 1.2s infinite ease-in-out; }
         .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
         .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
         @keyframes dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
@@ -79,39 +82,39 @@
         .tok-ref { background: rgba(255,255,255,0.16); color: #a7f3d0; }
 
         /* Rendered Markdown (Tailwind preflight strips default element styles) */
-        .md-preview { font-size: 15px; line-height: 1.7; color: #1f2937; overflow-wrap: anywhere; min-width: 0; }
+        .md-preview { font-size: 15px; line-height: 1.7; color: var(--text-2); overflow-wrap: anywhere; min-width: 0; }
         .md-preview > *:first-child { margin-top: 0; }
         .md-preview > *:last-child { margin-bottom: 0; }
-        .md-preview h1, .md-preview h2, .md-preview h3 { font-family: 'Playfair Display', serif; color: #000; line-height: 1.3; }
+        .md-preview h1, .md-preview h2, .md-preview h3 { font-family: 'Playfair Display', serif; color: var(--text); line-height: 1.3; }
         .md-preview h1 { font-size: 1.5rem; margin: 1.4rem 0 0.7rem; }
-        .md-preview h2 { font-size: 1.25rem; margin: 1.3rem 0 0.6rem; padding-bottom: 0.35rem; border-bottom: 1px solid #f3f4f6; }
+        .md-preview h2 { font-size: 1.25rem; margin: 1.3rem 0 0.6rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--line); }
         .md-preview h3 { font-size: 1.08rem; margin: 1.2rem 0 0.5rem; }
-        .md-preview h4, .md-preview h5, .md-preview h6 { font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280; margin: 1.1rem 0 0.4rem; }
+        .md-preview h4, .md-preview h5, .md-preview h6 { font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 1.1rem 0 0.4rem; }
         .md-preview p { margin: 0.6rem 0; }
-        .md-preview a { color: #000; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #d1d5db; }
-        .md-preview a:hover { text-decoration-color: #000; }
-        .md-preview strong { font-weight: 600; color: #000; }
+        .md-preview a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+        .md-preview a:hover { text-decoration-color: var(--text); }
+        .md-preview strong { font-weight: 600; color: var(--text); }
         .md-preview em { font-style: italic; }
         .md-preview ul, .md-preview ol { margin: 0.6rem 0; padding-left: 1.4rem; }
         .md-preview ul { list-style: disc; }
         .md-preview ol { list-style: decimal; }
         .md-preview ul ul { list-style: circle; }
         .md-preview li { margin: 0.2rem 0; }
-        .md-preview li::marker { color: #9ca3af; }
+        .md-preview li::marker { color: var(--faint); }
         .md-preview li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.4rem; }
-        .md-preview input[type="checkbox"] { width: 1rem; height: 1rem; margin-right: 0.5rem; vertical-align: -0.15rem; accent-color: #000; }
-        .md-preview blockquote { margin: 0.9rem 0; padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid #e5e7eb; color: #6b7280; font-style: italic; }
-        .md-preview code { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.1rem 0.35rem; }
+        .md-preview input[type="checkbox"] { width: 1rem; height: 1rem; margin-right: 0.5rem; vertical-align: -0.15rem; accent-color: var(--accent); }
+        .md-preview blockquote { margin: 0.9rem 0; padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--line-strong); color: var(--muted); font-style: italic; }
+        .md-preview code { font-family: 'JetBrains Mono', monospace; font-size: 0.85em; background: var(--surface-3); border: 1px solid var(--line-strong); border-radius: 6px; padding: 0.1rem 0.35rem; }
         .md-preview pre { margin: 0.9rem 0; background: #111827; color: #f9fafb; border-radius: 16px; padding: 1rem 1.25rem; overflow-x: auto; }
         .md-preview pre code { background: transparent; border: 0; padding: 0; color: inherit; font-size: 0.82rem; }
-        .md-preview hr { border: 0; border-top: 1px dashed #e5e7eb; margin: 1.4rem 0; }
+        .md-preview hr { border: 0; border-top: 1px dashed var(--line-strong); margin: 1.4rem 0; }
         .md-preview img { max-width: 100%; border-radius: 12px; }
-        .md-preview .table-wrap { overflow-x: auto; margin: 0.9rem 0; border: 1px solid #e5e7eb; border-radius: 14px; }
+        .md-preview .table-wrap { overflow-x: auto; margin: 0.9rem 0; border: 1px solid var(--line-strong); border-radius: 14px; }
         .md-preview table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        .md-preview th, .md-preview td { border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
+        .md-preview th, .md-preview td { border-bottom: 1px solid var(--line-strong); border-right: 1px solid var(--line-strong); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
         .md-preview th:last-child, .md-preview td:last-child { border-right: 0; }
         .md-preview tbody tr:last-child td { border-bottom: 0; }
-        .md-preview th { background: #f9fafb; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; font-weight: 500; }
+        .md-preview th { background: var(--surface-2); font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
     </style>
 </head>
 <body class="h-[100dvh] flex flex-col selection:bg-gray-200 relative overflow-hidden">

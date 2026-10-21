@@ -189,7 +189,7 @@ button { -webkit-user-select: none; user-select: none; }
 .fade-in { animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-#app-shell { height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: var(--bg); }
+#app-shell { height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: var(--page-bg, var(--bg)); }
 .wrap { max-width: 760px; margin: 0 auto; width: 100%; }
 
 /* ---------- people palette ---------- */
@@ -289,7 +289,7 @@ button { -webkit-user-select: none; user-select: none; }
 #scroller {
     flex: 1; overflow-y: auto; overflow-x: hidden; position: relative;
     overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
-    background-color: var(--bg);
+    background-color: var(--chat-bg, var(--bg));
     background-image: radial-gradient(var(--bg-dot) 1px, transparent 1.3px);
     background-size: 20px 20px;
     --ring: var(--bg);

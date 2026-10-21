@@ -27,7 +27,7 @@
 @media (prefers-color-scheme: dark) { #qj .qj-box { background: #1c1c1f; color: #f4f4f5; } #qj input { background: #27272a; color: #f4f4f5; border-color: #3f3f46; } #qj li[aria-selected="true"] { background: #2e2e33; } }
 #qj label { font-size: 12px; font-weight: 600; padding: 14px 16px 6px; opacity: .65; }
 #qj input { margin: 0 12px 8px; min-height: 46px; border: 1px solid #d4d4d8; border-radius: 12px; padding: 0 14px; font: 16px system-ui, sans-serif; outline: none; }
-#qj input:focus { border-color: var(--chowaniec-accent, #6d28d9); box-shadow: 0 0 0 3px color-mix(in srgb, var(--chowaniec-accent, #6d28d9) 25%, transparent); }
+#qj input:focus { border-color: var(--accent, #6d28d9); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #6d28d9) 25%, transparent); }
 #qj ul { list-style: none; margin: 0; padding: 4px 8px 10px; overflow-y: auto; }
 #qj li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; cursor: pointer; min-height: 44px; justify-content: center; }
 #qj li[aria-selected="true"] { background: #f4f4f5; }

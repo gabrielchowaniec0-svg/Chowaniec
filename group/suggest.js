@@ -187,7 +187,7 @@
 .sg-chip span { font-weight: 500; opacity: .7; }
 .sg-chip:hover, .sg-chip:focus-visible { background: rgba(124,58,237,.18); outline: none; }
 .sg-chip:active { transform: scale(.96); }
-.sg-go { background: var(--chowaniec-accent, #6d28d9); color: #fff; border-color: transparent; }
+.sg-go { background: var(--accent, #6d28d9); color: var(--accent-ink, #fff); border-color: transparent; }
 .sg-x { width: 36px; height: 36px; border: 0; background: transparent; color: inherit; opacity: .5; font-size: 18px; border-radius: 999px; cursor: pointer; }
 .sg-x:hover { opacity: 1; }
 .sg-form { display: grid; gap: 8px; width: min(340px, 100%); padding: 10px; border-radius: 14px; border: 1px solid rgba(128,128,128,.3); background: rgba(128,128,128,.08); font-size: 12px; }
