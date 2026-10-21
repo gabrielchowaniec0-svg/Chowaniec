@@ -41,7 +41,8 @@
   #ob-foot{display:flex;gap:10px;justify-content:space-between;align-items:center;padding:12px 18px 18px}
   .ob-btn{min-height:46px;padding:0 22px;border-radius:14px;border:0;font:600 15px inherit;cursor:pointer;transition:transform .15s ease,opacity .2s ease}
   .ob-btn:active{transform:scale(.96)}
-  .ob-primary{background:var(--accent,#111);color:var(--on-accent,#fff);flex:1;max-width:240px;margin-left:auto}
+  .ob-btn:focus:not(:focus-visible){outline:none}
+  .ob-primary{background:var(--accent,#111);color:var(--accent-ink,#fff);flex:1;max-width:240px;margin-left:auto}
   .ob-ghost{background:transparent;color:inherit;opacity:.65}
   .ob-hello{text-align:center;padding:10px 0 4px}
   .ob-hello .ob-bot{width:120px;margin:0 auto 10px}
@@ -85,9 +86,9 @@
       $('#ob-foot').querySelector('[data-next]').focus({ preventScroll: true });
     }
     async function finish(skipped) {
-      const look = { ...(settings.look || {}), onboarded: ONBOARD_VERSION };
       // The pickers already saved the person's choices; this just records that the welcome is done.
-      await saveLook(u, { onboarded: ONBOARD_VERSION });
+      if (window.ChowaniecTheme && window.ChowaniecTheme.markOnboarded) { try { await window.ChowaniecTheme.markOnboarded(ONBOARD_VERSION); } catch (e) { await saveLook(u, { onboarded: ONBOARD_VERSION }); } }
+      else await saveLook(u, { onboarded: ONBOARD_VERSION });
       try { localStorage.setItem(`chowaniec_onboarded_${u.name}`, String(ONBOARD_VERSION)); } catch (e) { /* storage blocked */ }
       root.classList.remove('in');
       setTimeout(() => { root.remove(); style.remove(); }, reduced() ? 0 : 450);
@@ -103,9 +104,11 @@
     show();
   }
 
-  async function start() {
+  async function start(tries) {
+    tries = tries || 0;
     const u = user();
-    if (!u || !u.key || u.name === 'Guest') return;
+    if (!u || !u.key) { if (tries < 60) setTimeout(() => start(tries + 1), 2000); return; }   // signed in later on this page (the hub)
+    if (u.name === 'Guest') return;
     if (/^\/meet\/?/.test(location.pathname) && document.getElementById('call-screen') && !document.getElementById('call-screen').classList.contains('hidden')) return;
     try { if (Number(localStorage.getItem(`chowaniec_onboarded_${u.name}`)) >= ONBOARD_VERSION) return; } catch (e) { /* storage blocked */ }
     let settings;
@@ -115,9 +118,12 @@
       return;
     }
     // Give theme.js/robot.js a moment to load.
+    if (!window.ChowaniecRobot && !document.querySelector('script[data-ob-robot]')) {
+      const sc = document.createElement('script'); sc.src = '/robot.js'; sc.setAttribute('data-ob-robot', '1'); document.head.appendChild(sc);
+    }
     const ready = () => window.ChowaniecTheme && window.ChowaniecRobot;
     for (let n = 0; n < 20 && !ready(); n++) await new Promise((r) => setTimeout(r, 150));
     run(u, settings);
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(start, 600)); else setTimeout(start, 600);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(() => start(0), 600)); else setTimeout(() => start(0), 600);
 })();

@@ -64,7 +64,6 @@ html[data-look] .bg-\[\#474a4d\] { background-color: color-mix(in srgb, var(--su
   html.cz-fade, html.cz-fade *, html.cz-fade *::before, html.cz-fade *::after { transition: background-color .4s ease, color .4s ease, border-color .4s ease, fill .4s ease, box-shadow .4s ease !important; }
 }
 html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: .4s; animation-timing-function: ease; }
 @keyframes cz-page-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes cz-pop { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes cz-bubble { from { opacity: 0; transform: translateY(10px) scale(.9); } to { opacity: 1; transform: none; } }

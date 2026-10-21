@@ -5,7 +5,7 @@ const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/badge-96.png',
 // The app shell: shared scripts and the main pages, cached on a best-effort basis so the app opens instantly
 // and still shows something when you have no signal.
 const SHELL = ['/', '/group/', '/messages/', '/ai/', '/notes/', '/calendar/', '/lists/', '/settings/',
-  '/theme.js', '/theme.css', '/theme-fx.js', '/polish.js', '/quickjump.js', '/robot-float.js', '/robot.js', '/robot.css', '/haptics.js', '/pwa.js', '/passwords.js', '/auth-gate.js', '/directory.js',
+  '/theme.js', '/theme.css', '/theme-fx.js', '/onboarding.js', '/polish.js', '/quickjump.js', '/robot-float.js', '/robot.js', '/robot.css', '/haptics.js', '/pwa.js', '/passwords.js', '/auth-gate.js', '/directory.js',
   '/group/group.js', '/group/extras.js', '/group/group.css', '/calendar/calendar.js', '/lists/lists.js', '/settings/settings.js', '/settings/settings.css', '/settings/robot-settings.js'];
 
 self.addEventListener('install', (event) => {

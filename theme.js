@@ -286,9 +286,6 @@
       return info;
     };
     var smooth = opts.animate !== false && applied && root.getAttribute('data-motion') !== 'reduced';
-    if (smooth && document.startViewTransition) {
-      try { document.startViewTransition(run); return; } catch (e) { /* fall through */ }
-    }
     if (smooth) {
       root.classList.add('cz-fade');
       clearTimeout(applyLook._t);
@@ -321,7 +318,9 @@
     });
   }
 
+  var edited = false;
   function save(look) {
+    edited = true;
     look = cleanLook(look, current);
     lsSet(LS_LOOK, JSON.stringify(look));
     applyLook(look);
@@ -335,7 +334,7 @@
     if (!userKey()) { if ((tries || 0) < 40) setTimeout(function () { syncFromServer((tries || 0) + 1); }, 250); return; }
     synced = true;
     fetchLook().then(function (remote) {
-      if (!remote) return;
+      if (!remote || edited) return;   // never undo a choice made while this was loading
       var look = cleanLook(remote, DEFAULT_LOOK);
       lsSet(LS_LOOK, JSON.stringify(look));
       if (JSON.stringify(look) !== JSON.stringify(current)) applyLook(look);
@@ -503,6 +502,8 @@
     root.classList.add('cz-ready');
     watchEnter();
     setTimeout(function () { syncFromServer(0); }, 300);
+    // first time after an update: a short welcome that asks for a theme and a robot (/onboarding.js decides if it is needed)
+    var s = document.createElement('script'); s.src = '/onboarding.js'; s.defer = true; document.head.appendChild(s);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 
