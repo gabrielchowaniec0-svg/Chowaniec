@@ -50,7 +50,7 @@ html[data-look] .bg-\[\#474a4d\] { background-color: color-mix(in srgb, var(--su
 
 /* ---------- motion ---------- */
 @media (prefers-reduced-motion: no-preference) {
-  html[data-motion="full"] body { animation: cz-page-in .38s ease-out both; }
+  html[data-motion="full"] body { animation: cz-page-in .38s ease-out backwards; }
   html[data-motion="full"] :where(button, a, input, select, textarea, summary, [role="button"], .btn, .card, .seg button, .tile, .hit, .dm-row, .day) {
     transition: background-color .2s ease, color .2s ease, border-color .2s ease, box-shadow .25s ease, transform .2s cubic-bezier(.34, 1.4, .5, 1), opacity .2s ease;
   }
