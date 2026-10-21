@@ -114,16 +114,17 @@
     show();
   }
 
-  async function start(tries) {
+  async function start(tries, force) {
     tries = tries || 0;
+    if (!force && /[?&]welcome=1\b/.test(location.search)) force = true;   // chowaniec.net/?welcome=1 shows it again
     const u = user();
     if (!u || !u.key) { if (tries < 60) setTimeout(() => start(tries + 1), 2000); return; }   // signed in later on this page (the hub)
     if (u.name === 'Guest') return;
     if (/^\/meet\/?/.test(location.pathname) && document.getElementById('call-screen') && !document.getElementById('call-screen').classList.contains('hidden')) return;
-    try { if (Number(localStorage.getItem(`chowaniec_onboarded_${u.name}`)) >= ONBOARD_VERSION) return; } catch (e) { /* storage blocked */ }
+    try { if (!force && Number(localStorage.getItem(`chowaniec_onboarded_${u.name}`)) >= ONBOARD_VERSION) return; } catch (e) { /* storage blocked */ }
     let settings;
     try { settings = await loadSettings(u); } catch (e) { return; }
-    if ((settings.look && settings.look.onboarded) >= ONBOARD_VERSION) {
+    if (!force && (settings.look && settings.look.onboarded) >= ONBOARD_VERSION) {
       try { localStorage.setItem(`chowaniec_onboarded_${u.name}`, String(ONBOARD_VERSION)); } catch (e) { /* storage blocked */ }
       return;
     }
@@ -142,5 +143,6 @@
     if (!(await waitFor(themeOk, 1500))) { await fresh('/theme.js'); await waitFor(themeOk, 2500); }
     run(u, settings);
   }
+  window.ChowaniecOnboarding = { replay: () => { if (!document.getElementById('ob-root')) start(0, true); } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(() => start(0), 600)); else setTimeout(() => start(0), 600);
 })();
