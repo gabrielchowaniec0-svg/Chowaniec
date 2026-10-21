@@ -15,8 +15,10 @@ export const DEFAULT_SETTINGS = {
   look: { theme: 'classic', mode: 'auto', custom: { accent: '#7c3aed', bg: '#ffffff', bg2: '#f4f4f5', gradient: false }, season: 'auto', motion: 'full', onboarded: 0 },
   robot: { type: 'bob', accessories: [], seasonal: true }
 };
-const ID = /^[a-z0-9-]{1,40}$/;
-const HEX = /^#[0-9a-fA-F]{6}$/;
+const ID_RE = /^[a-z0-9-]{1,40}$/;
+const ID = { test: (v) => typeof v === 'string' && ID_RE.test(v) };   // (a bare RegExp.test(undefined) would say yes)
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+const HEX = { test: (v) => typeof v === 'string' && HEX_RE.test(v) };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -36,8 +38,8 @@ export function cleanSettings(input, base = DEFAULT_SETTINGS) {
   const q = n.quietHours || {};
   const d = base.notifications;
   const a = (input && input.ai) || {};
-  const lk = (input && input.look) || {}, lb = base.look || DEFAULT_SETTINGS.look, lc = lk.custom || {}, lbc = lb.custom || DEFAULT_SETTINGS.look.custom;
-  const rb = (input && input.robot) || {}, rbase = base.robot || DEFAULT_SETTINGS.robot;
+  const lk = (input && input.look) || {}, lb = { ...DEFAULT_SETTINGS.look, ...(base.look || {}) }, lc = lk.custom || {}, lbc = lb.custom || DEFAULT_SETTINGS.look.custom;
+  const rb = (input && input.robot) || {}, rbase = { ...DEFAULT_SETTINGS.robot, ...(base.robot || {}) };
   return {
     look: {
       theme: ID.test(lk.theme) ? lk.theme : lb.theme,

@@ -283,11 +283,13 @@
   const readKey = (key) => { try { return localStorage.getItem(key); } catch (e) { return null; } };
 
   function getTheme() {
+    if (window.ChowaniecTheme) return window.ChowaniecTheme.current().mode;
     const v = readKey(THEME_KEY) || readKey('chowaniec_group_theme');
     return v === 'light' || v === 'dark' ? v : 'auto';
   }
 
   function applyTheme() {
+    if (window.ChowaniecTheme) return;   // /theme.js owns light/dark when it is on the page
     const pref = getTheme();
     const dark = pref === 'dark' || (pref === 'auto' && !!window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -296,6 +298,7 @@
   }
 
   function setTheme(pref) {
+    if (window.ChowaniecTheme) { window.ChowaniecTheme.setMode(pref === 'light' || pref === 'dark' ? pref : 'auto'); return; }
     try {
       if (pref === 'light' || pref === 'dark') localStorage.setItem(THEME_KEY, pref);
       else { localStorage.removeItem(THEME_KEY); localStorage.removeItem('chowaniec_group_theme'); }
@@ -303,7 +306,7 @@
     applyTheme();
   }
 
-  const getReduceMotion = () => readKey(MOTION_KEY) === '1';
+  const getReduceMotion = () => (window.ChowaniecTheme ? window.ChowaniecTheme.current().motion === 'reduced' : readKey(MOTION_KEY) === '1');
 
   function applyReduceMotion() {
     let style = document.getElementById('chowaniec-reduce-motion');
@@ -318,6 +321,7 @@
   }
 
   function setReduceMotion(on) {
+    if (window.ChowaniecTheme) { const c = window.ChowaniecTheme.current(); window.ChowaniecTheme.save(Object.assign({}, c, { motion: on ? 'reduced' : 'full' })); return; }
     try { if (on) localStorage.setItem(MOTION_KEY, '1'); else localStorage.removeItem(MOTION_KEY); } catch (e) { /* ignore */ }
     applyReduceMotion();
   }

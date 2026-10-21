@@ -1861,7 +1861,10 @@
     // ---------- theme ----------
     const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
+    // The theme engine (/theme.js) owns light/dark now; this keeps the chat-info Light/Dark/Auto buttons working.
     function readTheme() {
+        const T = window.ChowaniecTheme;
+        if (T) return T.current().mode;
         try {
             const v = localStorage.getItem(THEME_KEY) || localStorage.getItem(OLD_THEME_KEY);
             return v === 'light' || v === 'dark' ? v : 'auto';
@@ -1871,6 +1874,7 @@
     }
 
     function applyTheme() {
+        if (window.ChowaniecTheme) return;
         const pref = state.theme;
         const dark = pref === 'dark' || (pref === 'auto' && !!(darkQuery && darkQuery.matches));
         document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -1880,14 +1884,18 @@
 
     function setTheme(pref) {
         state.theme = pref === 'light' || pref === 'dark' ? pref : 'auto';
-        try {
-            if (state.theme === 'auto') { localStorage.removeItem(THEME_KEY); localStorage.removeItem(OLD_THEME_KEY); }
-            else localStorage.setItem(THEME_KEY, state.theme);
-        } catch (e) { /* storage blocked: still applies for this visit */ }
-        applyTheme();
+        if (window.ChowaniecTheme) window.ChowaniecTheme.setMode(state.theme);
+        else {
+            try {
+                if (state.theme === 'auto') { localStorage.removeItem(THEME_KEY); localStorage.removeItem(OLD_THEME_KEY); }
+                else localStorage.setItem(THEME_KEY, state.theme);
+            } catch (e) { /* storage blocked: still applies for this visit */ }
+            applyTheme();
+        }
         renderThemeSeg();
     }
 
+    window.addEventListener('chowaniec-theme-change', (e) => { state.theme = e.detail.look.mode; renderThemeSeg(); });
     function renderThemeSeg() {
         document.querySelectorAll('#theme-seg [data-theme-choice]').forEach((b) => {
             b.setAttribute('aria-pressed', String(b.dataset.themeChoice === state.theme));

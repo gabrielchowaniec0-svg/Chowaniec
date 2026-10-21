@@ -1,12 +1,12 @@
 // Chowaniec service worker: offline fallback, light caching, and push notifications.
-const VERSION = 'v2';
+const VERSION = 'v4';
 const CACHE = `chowaniec-${VERSION}`;
 const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/badge-96.png', '/manifest.webmanifest'];
 // The app shell: shared scripts and the main pages, cached on a best-effort basis so the app opens instantly
 // and still shows something when you have no signal.
 const SHELL = ['/', '/group/', '/messages/', '/ai/', '/notes/', '/calendar/', '/lists/', '/settings/',
-  '/polish.js', '/quickjump.js', '/robot-float.js', '/robot.js', '/robot.css', '/haptics.js', '/pwa.js', '/passwords.js', '/auth-gate.js', '/directory.js',
-  '/group/group.js', '/group/extras.js', '/group/group.css', '/calendar/calendar.js', '/lists/lists.js', '/settings/settings.js', '/settings/settings.css'];
+  '/theme.js', '/theme.css', '/theme-fx.js', '/polish.js', '/quickjump.js', '/robot-float.js', '/robot.js', '/robot.css', '/haptics.js', '/pwa.js', '/passwords.js', '/auth-gate.js', '/directory.js',
+  '/group/group.js', '/group/extras.js', '/group/group.css', '/calendar/calendar.js', '/lists/lists.js', '/settings/settings.js', '/settings/settings.css', '/settings/robot-settings.js'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then(async (cache) => {

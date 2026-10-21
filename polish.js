@@ -11,21 +11,10 @@
   const set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } };
 
   // ---- Appearance
-  const ACCENTS = {
-    violet: '#6d28d9', blue: '#2563eb', teal: '#0f766e', green: '#15803d', rose: '#be123c', orange: '#c2410c'
-  };
   const TEXT_SIZES = { normal: '100%', large: '112.5%', xl: '125%' };
 
   function applyAppearance() {
     const root = document.documentElement;
-    const accent = get('chowaniec_accent', '');
-    if (ACCENTS[accent]) {
-      root.setAttribute('data-accent', accent);
-      root.style.setProperty('--chowaniec-accent', ACCENTS[accent]);
-    } else {
-      root.removeAttribute('data-accent');
-      root.style.removeProperty('--chowaniec-accent');
-    }
     const size = get('chowaniec_textsize', 'normal');
     root.style.fontSize = TEXT_SIZES[size] && size !== 'normal' ? TEXT_SIZES[size] : '';
   }
@@ -33,9 +22,6 @@
   const css = document.createElement('style');
   css.id = 'polish-css';
   css.textContent = `
-html[data-accent] { accent-color: var(--chowaniec-accent); --accent: var(--chowaniec-accent); --accent-ink: #fff; }
-html[data-accent] ::selection { background: color-mix(in srgb, var(--chowaniec-accent) 30%, transparent); }
-html[data-accent] .mine .bubble { background: var(--chowaniec-accent); color: #fff; }
 .sk, .sk-line { background: linear-gradient(90deg, rgba(128,128,128,.14) 25%, rgba(128,128,128,.26) 37%, rgba(128,128,128,.14) 63%); background-size: 400% 100%; animation: sk-shimmer 1.4s ease infinite; border-radius: 10px; }
 .sk-line { height: 14px; margin: 10px 0; }
 .sk-line.short { width: 55%; }
@@ -210,5 +196,5 @@ html[data-accent] .mine .bubble { background: var(--chowaniec-accent); color: #f
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 
-  window.ChowaniecPolish = { ACCENTS, TEXT_SIZES, applyAppearance, confetti, celebrate, skeleton, birthdays, daysUntil, get, set };
+  window.ChowaniecPolish = { TEXT_SIZES, applyAppearance, confetti, celebrate, skeleton, birthdays, daysUntil, get, set };
 })();

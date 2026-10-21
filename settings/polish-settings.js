@@ -7,30 +7,10 @@
   var set = function (k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } };
 
   function appearance() {
-    var seg = $('accent-seg');
-    var names = { none: 'Default', violet: 'Violet', blue: 'Blue', teal: 'Teal', green: 'Green', rose: 'Rose', orange: 'Orange' };
-    Object.keys(names).forEach(function (key) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.setAttribute('data-accent', key);
-      b.textContent = names[key];
-      var COLORS = { violet: '#6d28d9', blue: '#2563eb', teal: '#0f766e', green: '#15803d', rose: '#be123c', orange: '#c2410c' };
-      if (COLORS[key]) b.style.borderBottom = '3px solid ' + COLORS[key];
-      seg.appendChild(b);
-    });
     function paint() {
-      var now = get('chowaniec_accent', 'none');
-      seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.accent === now || (now === '' && b.dataset.accent === 'none'))); });
       var size = get('chowaniec_textsize', 'normal');
       $('size-seg').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.size === size)); });
     }
-    seg.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-accent]');
-      if (!b) return;
-      set('chowaniec_accent', b.dataset.accent === 'none' ? '' : b.dataset.accent);
-      if (window.ChowaniecPolish) window.ChowaniecPolish.applyAppearance();
-      paint();
-    });
     $('size-seg').addEventListener('click', function (e) {
       var b = e.target.closest('[data-size]');
       if (!b) return;

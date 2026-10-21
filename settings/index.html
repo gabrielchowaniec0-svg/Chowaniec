@@ -7,14 +7,9 @@
     <meta name="theme-color" content="#000000">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <title>Settings</title>
-    <script>
-        (function () {
-            var pref = 'auto';
-            try { pref = localStorage.getItem('chowaniec_theme') || localStorage.getItem('chowaniec_group_theme') || 'auto'; } catch (e) {}
-            var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-        })();
-    </script>
+    <link rel="stylesheet" href="/theme.css">
+    <script src="/theme.js"></script>
+
     <script src="/pwa.js" defer></script>
     <!-- Tailwind is only used by the shared passcode box -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -80,23 +75,8 @@
         </section>
 
         <section class="card" aria-labelledby="h-look">
-            <h2 id="h-look">Display &amp; appearance</h2>
-            <div class="row">
-                <div class="grow"><div class="t">Theme</div><div class="s">Applies to Settings and Group Chat on this device.</div></div>
-                <div class="seg" id="theme-seg" role="group" aria-label="Theme">
-                    <button type="button" data-theme-choice="auto">Auto</button>
-                    <button type="button" data-theme-choice="light">Light</button>
-                    <button type="button" data-theme-choice="dark">Dark</button>
-                </div>
-            </div>
-            <div class="row">
-                <div class="grow"><div class="t"><label for="sw-motion">Reduce animations</label></div><div class="s">Calmer screens with less movement, on every page of this device.</div></div>
-                <span class="switch"><input type="checkbox" id="sw-motion" role="switch"><span class="track"></span></span>
-            </div>
-            <div class="row">
-                <div class="grow"><div class="t" id="lbl-accent">Colour</div><div class="s">Your own colour for buttons, your chat bubbles and the little helpers on this device.</div>
-                    <div class="seg" id="accent-seg" role="group" aria-labelledby="lbl-accent" style="flex-wrap:wrap;margin-top:8px"></div></div>
-            </div>
+            <h2 id="h-look">Appearance</h2>
+            <div id="look-host"></div>
             <div class="row">
                 <div class="grow"><div class="t" id="lbl-size">Text size</div>
                     <div class="seg" id="size-seg" role="group" aria-labelledby="lbl-size" style="margin-top:8px">
@@ -111,6 +91,12 @@
                 <div class="grow"><div class="t"><label for="sw-voice">AI reads replies aloud</label></div><div class="s">Chowaniec AI speaks its answers. You can still tap Listen on any single reply.</div></div>
                 <span class="switch"><input type="checkbox" id="sw-voice" role="switch"><span class="track"></span></span>
             </div>
+        </section>
+
+        <section class="card" aria-labelledby="h-robot">
+            <h2 id="h-robot">Robot</h2>
+            <p style="color:var(--muted);font-size:13px">Pick the helper robot you see in the AI chat, meetings and the family chat, and dress it up.</p>
+            <div id="robot-host"></div>
         </section>
 
         <section class="card hidden" id="bday-card" aria-labelledby="h-bday">
@@ -157,6 +143,7 @@
 </div>
 <script src="/settings/settings.js"></script>
 <script src="/settings/polish-settings.js"></script>
+<script src="/settings/robot-settings.js"></script>
 <script>
 (function () {
     var S = window.ChowaniecSettings, $ = S.$;
@@ -167,20 +154,7 @@
         $('you-role').textContent = user.name === 'Guest' ? 'Guest' : user.host ? 'Head of the family' : 'Family member';
 
         var pwa = window.ChowaniecPWA;
-        function paintTheme() {
-            document.querySelectorAll('#theme-seg [data-theme-choice]').forEach(function (b) {
-                b.setAttribute('aria-pressed', String(b.dataset.themeChoice === pwa.getTheme()));
-            });
-        }
-        paintTheme();
-        $('theme-seg').addEventListener('click', function (e) {
-            var b = e.target.closest('[data-theme-choice]');
-            if (!b) return;
-            pwa.setTheme(b.dataset.themeChoice);
-            paintTheme();
-        });
-        $('sw-motion').checked = pwa.getReduceMotion();
-        $('sw-motion').addEventListener('change', function (e) { pwa.setReduceMotion(e.target.checked); });
+        if (window.ChowaniecTheme) window.ChowaniecTheme.mountPicker($('look-host'), { autosave: true });
 
         $('btn-signout').addEventListener('click', function () {
             window.clearChowaniecSession();

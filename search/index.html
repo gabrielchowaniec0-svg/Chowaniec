@@ -8,18 +8,21 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <script src="/pwa.js" defer></script>
     <title>Chowaniec Search</title>
+    <link rel="stylesheet" href="/theme.css">
+    <script src="/theme.js"></script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
-        body { font-family: 'Outfit', sans-serif; background-color: #fafafa; color: #111827; }
+        body { font-family: 'Outfit', sans-serif; background-color: var(--bg); color: var(--text); }
         .font-serif { font-family: 'Playfair Display', serif; }
         .gone { display: none !important; }
-        .hit { display: block; background: #fff; border: 1px solid #f3f4f6; border-radius: 18px; padding: 14px 16px; text-decoration: none; color: inherit; }
-        .hit:hover { border-color: #d1d5db; }
-        .hit mark { background: #fde68a; border-radius: 3px; padding: 0 1px; }
+        .hit { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; text-decoration: none; color: inherit; }
+        .hit:hover { border-color: var(--line-strong); }
+        .hit mark { background: var(--warn-bg); color: inherit; outline: 1px solid var(--warn-line); border-radius: 3px; padding: 0 1px; }
         .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
