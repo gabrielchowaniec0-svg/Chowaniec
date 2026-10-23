@@ -3,6 +3,7 @@ import { deliverDue } from '../lib/group-store.mjs';
 import { publishMessage } from '../lib/group-post.mjs';
 import { sendDueReminders } from '../lib/calendar-store.mjs';
 import { runAiAuto } from '../lib/ai-auto.mjs';
+import { sweepCalls } from '../lib/calls.mjs';
 
 export default async () => {
   const sent = await deliverDue(publishMessage);
@@ -11,6 +12,11 @@ export default async () => {
     reminders = await sendDueReminders();
   } catch (e) {
     console.error('Calendar reminders failed:', e.message);
+  }
+  try {
+    await sweepCalls();
+  } catch (e) {
+    console.error('Call sweep failed:', e.message);
   }
   // The AI's own jobs (briefings, follow-ups, ...) look at the whole calendar and chats, so they run every 5 minutes.
   let auto = null;

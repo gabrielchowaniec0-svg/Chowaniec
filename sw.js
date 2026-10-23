@@ -1,11 +1,11 @@
 // Chowaniec service worker: offline fallback, light caching, and push notifications.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = `chowaniec-${VERSION}`;
 const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/badge-96.png', '/manifest.webmanifest'];
 // The app shell: shared scripts and the main pages, cached on a best-effort basis so the app opens instantly
 // and still shows something when you have no signal.
 const SHELL = ['/', '/group/', '/messages/', '/ai/', '/notes/', '/calendar/', '/lists/', '/settings/',
-  '/theme.js', '/theme.css', '/theme-fx.js', '/onboarding.js', '/polish.js', '/quickjump.js', '/robot-float.js', '/robot.js', '/robot.css', '/haptics.js', '/pwa.js', '/passwords.js', '/auth-gate.js', '/directory.js',
+  '/theme.js', '/theme.css', '/theme-fx.js', '/onboarding.js', '/polish.js', '/quickjump.js', '/robot-float.js', '/robot.js', '/robot.css', '/haptics.js', '/pwa.js', '/calls.js', '/passwords.js', '/auth-gate.js', '/directory.js',
   '/group/group.js', '/group/extras.js', '/group/group.css', '/calendar/calendar.js', '/lists/lists.js', '/settings/settings.js', '/settings/settings.css', '/settings/robot-settings.js'];
 
 self.addEventListener('install', (event) => {
@@ -64,12 +64,28 @@ self.addEventListener('push', (event) => {
     data = { body: event.data ? event.data.text() : '' };
   }
   const title = data.title || 'Chowaniec';
+  if (data.call && data.call.id) {
+    // An incoming call: stays on screen until answered or dismissed, with a long buzz on phones that allow it.
+    event.waitUntil(self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/badge-96.png',
+      tag: data.tag || `call-${data.call.id}`,
+      renotify: true,
+      requireInteraction: true,
+      vibrate: [600, 250, 600, 250, 600, 250, 600, 250, 600],
+      data: { url: data.url || '/', callId: data.call.id },
+      actions: [{ action: 'answer', title: 'Answer' }, { action: 'decline', title: 'Decline' }]
+    }));
+    return;
+  }
   event.waitUntil(self.registration.showNotification(title, {
     body: data.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/badge-96.png',
     tag: data.tag || undefined,
-    renotify: !!data.tag,
+    renotify: !!data.tag && !data.silent,
+    silent: !!data.silent,
     data: { url: data.url || '/', replyUrl: data.replyable ? `${data.url}${String(data.url).includes('?') ? '&' : '?'}reply=1` : null },
     actions: data.replyable ? [{ action: 'reply', title: 'Reply' }] : []
   }));
@@ -78,9 +94,26 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const info = event.notification.data || {};
+  if (info.callId) {
+    // Answer (or a tap on the notification) joins the call; Decline tells the caller and opens nothing.
+    const action = event.action === 'decline' ? 'decline' : 'answer';
+    const told = fetch('/.netlify/functions/call', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, id: info.callId })
+    }).catch(() => null);
+    if (action === 'decline') { event.waitUntil(told); return; }
+    event.waitUntil(Promise.all([told, openPage(new URL(info.url || '/', self.location.origin).href)]));
+    return;
+  }
   const wanted = event.action === 'reply' && info.replyUrl ? info.replyUrl : (info.url || '/');
-  const target = new URL(wanted, self.location.origin).href;
-  event.waitUntil((async () => {
+  event.waitUntil(openPage(new URL(wanted, self.location.origin).href));
+});
+
+// Focuses an open Chowaniec window (moving it to `target`) or opens a new one.
+function openPage(target) {
+  return (async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of windows) {
       if (new URL(client.url).origin === self.location.origin) {
@@ -90,8 +123,8 @@ self.addEventListener('notificationclick', (event) => {
       }
     }
     await self.clients.openWindow(target);
-  })());
-});
+  })();
+}
 
 // Browsers occasionally rotate push subscriptions; renew it with the server (signed in via cookie).
 self.addEventListener('pushsubscriptionchange', (event) => {

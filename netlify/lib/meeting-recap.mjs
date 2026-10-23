@@ -50,7 +50,7 @@ export async function latestMeetingFor(name) {
 export function chatForAttendees(attendees) {
   const family = familyNames();
   const names = Object.keys(attendees || {}).filter((n) => family.includes(n));
-  const order = ['core', 'no-emilia', 'everyone'];
+  const order = ['core', 'gel', 'no-emilia', 'everyone'];
   return order.find((id) => names.every((n) => roomMembers(id).includes(n))) || 'everyone';
 }
 

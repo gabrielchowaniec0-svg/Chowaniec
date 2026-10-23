@@ -7,7 +7,8 @@ export const DEFAULT_ROOM = 'everyone';
 const ROOMS = [
   { id: 'everyone', name: 'Everyone', blurb: 'The whole family', members: () => familyNames() },
   { id: 'no-emilia', name: 'Everyone but Emilia', blurb: 'Everyone except Emilia', members: () => familyNames().filter((n) => n !== 'Emilia') },
-  { id: 'core', name: 'Vicky, Gabriel & Nicole', blurb: 'Only Vicky, Gabriel and Nicole', members: () => ['Victoria', 'Gabriel', 'Nicole'].filter((n) => familyNames().includes(n)) }
+  { id: 'core', name: 'Vicky, Gabriel & Nicole', blurb: 'Only Vicky, Gabriel and Nicole', members: () => ['Victoria', 'Gabriel', 'Nicole'].filter((n) => familyNames().includes(n)) },
+  { id: 'gel', name: 'Gabriel, Emilia & Liliana', blurb: 'Only Gabriel, Emilia and Liliana', members: () => ['Gabriel', 'Emilia', 'Liliana'].filter((n) => familyNames().includes(n)) }
 ];
 
 export const ROOM_IDS = ROOMS.map((r) => r.id);
