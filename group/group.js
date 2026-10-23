@@ -2433,6 +2433,13 @@
         // Chat info sheet
         $('btn-info').addEventListener('click', () => openSheet(false));
         $('btn-search').addEventListener('click', () => openSheet(true));
+        // Calling (see /calls.js): rings everyone else in this chat.
+        $('btn-call').addEventListener('click', () => {
+            if (!window.ChowaniecCalls) { toast('Calling is still loading. Try again in a moment.'); return; }
+            const others = state.people.filter((n) => !sameName(n, myName()));
+            const mine = state.rooms.find((r) => r.id === ROOM);
+            window.ChowaniecCalls.confirmStart(ROOM, state.dm ? state.dm.name : (mine ? mine.name : 'this chat'), others);
+        });
         $('sheet-close').addEventListener('click', () => closeSheet(false));
         $('sheet-backdrop').addEventListener('click', () => closeSheet(false));
         $('sheet-notify').addEventListener('click', (e) => {
@@ -2526,6 +2533,7 @@
         } catch (e) { location.replace('/messages/'); return; }
         const back = $('btn-back');
         if (back) back.onclick = () => { location.href = '/messages/'; };
+        if (state.dm.ai) $('btn-call').classList.add('hidden');
         const bar = $('room-bar');
         if (bar) bar.classList.add('hidden');
         document.title = `${state.dm.name} · Messages`;
