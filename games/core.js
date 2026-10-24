@@ -541,7 +541,7 @@
     }
     const card = modal(`<h2>${esc(title || 'Game over')}</h2><div class="cg-score">${fmt(score)}<small>${esc(unit())}</small></div><p class="cg-best">Saving…</p>` +
       '<div class="cg-row col"><button type="button" class="primary" data-cg="again">Play again</button>' +
-      '<button type="button" data-cg="family">👥 Challenge the family</button><button type="button" data-cg="board">🏆 Leaderboard</button></div>', { onClose: again });
+      '<button type="button" data-cg="family">👥 Challenge the family</button><button type="button" data-cg="board">🏆 Leaderboard</button></div>', { sticky: true });
     card.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-cg]');
       if (!b) return;
