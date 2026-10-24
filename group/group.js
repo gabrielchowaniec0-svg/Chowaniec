@@ -596,7 +596,7 @@
         if (!mine && flags.start) {
             name = m.kind === 'ai'
                 ? `<div class="msg-name"><i data-lucide="sparkles" class="w-3 h-3"></i>${escapeHtml(displayName(m))}${m.onBehalfOf ? ` <span class="msg-for">for ${escapeHtml(m.onBehalfOf)}</span>` : ''}</div>`
-                : `<div class="msg-name acc-text ${personClass(m.user)}">${escapeHtml(displayName(m))}</div>`;
+                : `<div class="msg-name acc-text ${personClass(m.user)}">${escapeHtml(displayName(m))}${ex && ex.nameBadge ? ex.nameBadge(m.user) : ''}</div>`;
         }
         const avatar = mine ? '' : `<div class="av-slot">${flags.end ? avatarHtml(m.user, '', { ai: m.kind === 'ai' }) : ''}</div>`;
         const swipe = m._pending ? '' : `<span class="swipe-ic" aria-hidden="true"><i data-lucide="reply"></i></span>`;

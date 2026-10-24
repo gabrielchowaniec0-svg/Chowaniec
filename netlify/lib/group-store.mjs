@@ -153,7 +153,7 @@ export async function getImage(id) {
 }
 
 // Stores a message and returns it. `author` is a family name or AI_NAME.
-export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, video, gif, link, onBehalfOf, sticker, thread, sheet, important, room = DEFAULT_ROOM }) {
+export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, video, gif, link, onBehalfOf, sticker, thread, sheet, important, game, gamenight, record, room = DEFAULT_ROOM }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
   const wantsImportant = kind !== 'system' && !!(important || hasImportant(clean));
   if (wantsImportant && !isHostName(onBehalfOf || author)) {
@@ -186,12 +186,28 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user',
     ...(onBehalfOf ? { onBehalfOf } : {}),
     ...(sticker ? { sticker } : {}),
     ...(sheet ? { sheet } : {}),
+    ...(game ? { game } : {}),            // a live game card: { session, gameId, by, snap? } (see games-cards.mjs)
+    ...(gamenight ? { gamenight } : {}),  // a game night card: { id, view: 'card' | 'score', after? }
+    ...(record ? { record } : {}),        // a "new family record" card: { game, name, score }
     ...(wantsImportant ? { important: true } : {}),
     ...(thread ? { thread } : {})
   };
   await messages().setJSON(keyOf(message.id, room), message, { onlyIfNew: true });
   if (thread) await bumpThread(thread, room, author, message.createdAt);
   return message;
+}
+
+// Changes a stored message with `change(message)` (return false to leave it). Returns the message or null.
+export async function updateMessage(id, room, change) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const found = await getMessage(id, room);
+    if (!found) return null;
+    const message = found.message;
+    if (change(message) === false) return message;
+    const { modified } = await messages().setJSON(keyOf(id, room), message, { onlyIfMatch: found.etag });
+    if (modified) return message;
+  }
+  return null;
 }
 
 // --- Threads: side conversations under one message ---

@@ -108,6 +108,8 @@ Things drawn *inside* the game world (a fruit on a card, a sticker on a dress) c
 - `ChowGames.race.others()` returns `[{ name, color, state, age }]`: the other players' latest states.
   Draw them as see-through "ghosts" (with their name) where it makes sense, e.g. other dinos and cars.
   Their state is up to 0.6 s old, so interpolate gently.
+- Rank by finishing order instead of points: put `place` (1 = best) in your race state once known (e.g. Block
+  Drop's last one standing). An optional short `detail` string ("62 WPM · 98%") shows next to the name in results.
 - When you die or finish: `ChowGames.gameOver({ score })`. In a race this reports your finish and shows
   live results. The host can start the next round, which fires `multiStart` again.
 - A once-a-day game (Daily Word) must call `ChowGames.race.finish(score)` instead of `gameOver` in a race,
@@ -125,6 +127,7 @@ Things drawn *inside* the game world (a fruit on a card, a sticker on a dress) c
 - `await ChowGames.turns.commit(newShared, { done })` saves a move. It returns false if someone else
   moved first; the fresh board then arrives through 'shared'. Set `done: true` on the final move.
 - When the game ends, every device calls `ChowGames.gameOver({ title: 'Amelia wins!', detail, score })`.
+  Pass `winner: 'Amelia'` too (or omit it on a draw) so the chat's results card names the right winner.
   `score` is what to add to the family leaderboard for this person (e.g. 1 for a win, else 0).
 - Store the player names inside `shared` and find yourself with `ChowGames.me()`: if someone leaves
   mid-game they drop out of `info.players`, so indexes can shift. People who open the link after the game

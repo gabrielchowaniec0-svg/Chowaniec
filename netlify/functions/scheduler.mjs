@@ -1,4 +1,5 @@
-// Runs every minute (Netlify scheduled function): sends scheduled group messages and calendar reminders that are due.
+// Runs every minute (Netlify scheduled function): sends scheduled group messages and calendar reminders that are due,
+// and starts game nights whose time has come.
 import { deliverDue } from '../lib/group-store.mjs';
 import { publishMessage } from '../lib/group-post.mjs';
 import { sendDueReminders } from '../lib/calendar-store.mjs';
@@ -6,6 +7,7 @@ import { runAiAuto } from '../lib/ai-auto.mjs';
 import { sweepCalls } from '../lib/calls.mjs';
 import { sweepSessions } from '../lib/games-store.mjs';
 import { sweepUploads } from '../lib/video-store.mjs';
+import { runDueNights } from '../lib/game-night.mjs';
 
 export default async () => {
   const sent = await deliverDue(publishMessage);
@@ -14,6 +16,12 @@ export default async () => {
     reminders = await sendDueReminders();
   } catch (e) {
     console.error('Calendar reminders failed:', e.message);
+  }
+  let nights = 0;
+  try {
+    nights = await runDueNights();     // game nights whose start time has come
+  } catch (e) {
+    console.error('Game nights failed:', e.message);
   }
   try {
     await sweepCalls();
@@ -41,7 +49,7 @@ export default async () => {
   } catch (e) {
     console.error('AI auto jobs failed:', e.message);
   }
-  return new Response(JSON.stringify({ sent, reminders, auto }), { headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify({ sent, reminders, auto, nights }), { headers: { 'Content-Type': 'application/json' } });
 };
 
 export const config = { schedule: '* * * * *' };
