@@ -397,7 +397,9 @@
   function renderResults() {
     const s = multi.session;
     const rows = raceStandings();
-    const allDone = rows.every((r) => !r.alive || !r.started) && rows.some((r) => r.started);
+    // Someone whose first update hasn't arrived is still playing, unless 15 s have passed (they never started).
+    const grace = Date.now() - Date.parse(s.startAt) > 15000;
+    const allDone = rows.every((r) => (r.started && !r.alive) || (!r.started && grace)) && rows.some((r) => r.started);
     const html = `<h2>${allDone ? (rows[0].name === me() ? '🏆 You win!' : `🏆 ${esc(rows[0].name)} wins!`) : 'Waiting for the others…'}</h2>` +
       '<ol class="cg-list">' + rows.map((r, i) => `<li class="${r.name === me() ? 'mine' : ''}"><span class="m">${allDone ? medal(i) : (r.alive ? '🏃' : '🏁')}</span><span class="n"><i class="dot" style="background:${r.color}"></i>${esc(r.name)}</span><span class="s">${fmt(r.score)}</span></li>`).join('') + '</ol>' +
       `<div class="cg-row">${isHost() ? `<button type="button" class="primary" data-cg="again"${allDone ? '' : ' disabled'}>Play again</button>` : `<span class="cg-wait">${allDone ? `Waiting for ${esc(s.host)} to start again…` : ''}</span>`}<button type="button" data-cg="leave">Leave</button></div>`;
@@ -618,6 +620,7 @@
   window.ChowGames = {
     mount, on, rng, sfx, toast, modal, closeModal, modalOpen, gameOver, submitScore, showLeaderboard, openLobby,
     me, colors: COLORS,
+    countingDown: () => !!document.getElementById('cg-countdown'),
     isMulti: () => inSession() && multi.round > 0 && multi.session.round === multi.round,
     session: () => multi.session,
     muted: () => muted,

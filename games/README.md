@@ -59,6 +59,7 @@ ChowGames.mount({
   It already respects the mute button.
 - `ChowGames.rng(seed)` returns a seeded `() => number in [0,1)`. **Use it for everything random in a
   multiplayer round**, so every player gets the same course.
+- `ChowGames.countingDown()` is true during the 3-2-1 before a multiplayer round: ignore input then.
 - `ChowGames.on('pause', fn)` fires when the page is hidden. Pause solo games.
 - `ChowGames.toast(text)`, `ChowGames.modal(html)`/`closeModal()`, `ChowGames.modalOpen()`: don't let
   keyboard or tap input drive the game while a modal is open.
