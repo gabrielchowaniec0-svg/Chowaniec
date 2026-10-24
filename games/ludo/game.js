@@ -520,7 +520,7 @@
     busy = true;
     const shared = S;
     let ok = false;
-    try { ok = await G.turns.commit(shared, { done: shared.winner != null }); } catch (e) { ok = false; }
+    try { ok = await G.turns.commit(shared, { done: shared.winner != null, quiet: true }); } catch (e) { ok = false; }
     if (ok) { busy = false; renderStatus(); if (settledNow()) afterSettle(); return; }
     const fresh = G.turns.shared();
     if (attempt < 2 && fresh && multi && fresh.gid === multi.gid && fresh.seq === baseSeq && S === shared) {

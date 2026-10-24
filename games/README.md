@@ -55,7 +55,7 @@ ChowGames.mount({
 - Show your own start screen ("Tap to start") for solo play.
 - When a solo game ends: `ChowGames.gameOver({ score, title: 'Game over', again: restartFn })`. The core saves
   the score, shows the personal/family record, and offers Play again, Challenge the family and the leaderboard.
-- `ChowGames.sfx(name)`: `jump flap coin score point hit crash click tick drop flip match wrong win lose go whoosh`.
+- `ChowGames.sfx(name)`: `jump flap coin score point hit crash click tick drop flip match wrong win lose go whoosh roll shuffle deal`.
   It already respects the mute button.
 - `ChowGames.rng(seed)` returns a seeded `() => number in [0,1)`. **Use it for everything random in a
   multiplayer round**, so every player gets the same course.
@@ -129,7 +129,7 @@ Things drawn *inside* the game world (a fruit on a card, a sticker on a dress) c
 - `ChowGames.on('multiStart', info)` fires, then `ChowGames.on('shared', (shared, info) => …)` fires
   with the board, and again whenever anyone moves. `info.players`, `info.myIndex` (-1 = watching),
   `info.colors`. Store whose turn it is inside `shared` and only let that player move.
-- `await ChowGames.turns.commit(newShared, { done })` saves a move. It returns false if someone else
+- `await ChowGames.turns.commit(newShared, { done, quiet })` saves a move (`quiet: true` skips the "Someone else moved first" toast when your game retries by itself). A player who left can no longer move (the server refuses), so skip their turns from the first player still present. It returns false if someone else
   moved first; the fresh board then arrives through 'shared'. Set `done: true` on the final move.
 - When the game ends, every device calls `ChowGames.gameOver({ title: 'Amelia wins!', detail, score })`.
   Pass `winner: 'Amelia'` too (or omit it on a draw) so the chat's results card names the right winner.

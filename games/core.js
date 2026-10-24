@@ -136,7 +136,10 @@
     win: [['square', 523, 523, 0.12, 0.08], ['square', 659, 659, 0.12, 0.08, 0.12], ['square', 784, 784, 0.12, 0.08, 0.24], ['square', 1047, 1047, 0.35, 0.08, 0.36]],
     lose: [['triangle', 392, 392, 0.18, 0.1], ['triangle', 330, 330, 0.18, 0.1, 0.2], ['triangle', 262, 196, 0.4, 0.1, 0.4]],
     go: [['square', 784, 784, 0.25, 0.1]],
-    whoosh: [['sawtooth', 300, 900, 0.2, 0.04]]
+    whoosh: [['sawtooth', 300, 900, 0.2, 0.04]],
+    roll: [['square', 220, 260, 0.04, 0.05], ['square', 300, 240, 0.04, 0.05, 0.06], ['square', 260, 320, 0.04, 0.05, 0.12], ['square', 340, 280, 0.04, 0.05, 0.19], ['triangle', 180, 120, 0.12, 0.08, 0.27]],
+    shuffle: [['sawtooth', 1200, 800, 0.05, 0.02], ['sawtooth', 1300, 900, 0.05, 0.02, 0.07], ['sawtooth', 1100, 700, 0.05, 0.02, 0.14], ['sawtooth', 1250, 850, 0.05, 0.02, 0.21]],
+    deal: [['triangle', 900, 600, 0.06, 0.05]]
   };
   function sfx(name) {
     if (muted || !SOUNDS[name]) return;
@@ -534,7 +537,7 @@
   }
 
   // ----- turn games -----
-  async function commit(shared, { done } = {}) {
+  async function commit(shared, { done, quiet } = {}) {
     if (!inSession()) return false;
     try {
       const { session } = await api('POST', '', { action: 'move', id: multi.session.id, version: multi.session.version, shared, done: !!done });
@@ -546,7 +549,7 @@
         multi.session = e.data.session;
         multi.lastVersion = e.data.session.version;
         emit('shared', multi.session.shared, turnInfo());
-        toast('Someone else moved first.');
+        if (!quiet) toast('Someone else moved first.');
       } else toast(e.message);
       return false;
     }

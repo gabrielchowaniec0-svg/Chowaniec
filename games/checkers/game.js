@@ -623,7 +623,7 @@
     renderStatus();
     const shared = game;
     let ok = false;
-    try { ok = await G.turns.commit(shared, { done: shared.winner != null }); } catch (e) { ok = false; }
+    try { ok = await G.turns.commit(shared, { done: shared.winner != null, quiet: true }); } catch (e) { ok = false; }
     if (ok) { busy = false; renderStatus(); return true; }
     const fresh = G.turns.shared();
     // The core may have held a stale copy (a poll racing our last move): if the board it now has is the
