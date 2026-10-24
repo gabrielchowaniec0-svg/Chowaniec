@@ -1,0 +1,39 @@
+/* Block Drop: the stage (one canvas for the well, previews and opponents) plus the hold button and cards. */
+.bd {
+  position: absolute; inset: 0; overflow: hidden; touch-action: none;
+  background: radial-gradient(120% 70% at 50% 0%, #e0f7fb 0%, #ede9fe 55%, var(--cg-bg) 100%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bd { background: radial-gradient(120% 70% at 50% 0%, #10233a 0%, #1a1336 55%, var(--cg-bg) 100%); }
+}
+:root[data-theme="dark"] .bd { background: radial-gradient(120% 70% at 50% 0%, #10233a 0%, #1a1336 55%, var(--cg-bg) 100%); }
+.bd canvas { position: absolute; inset: 0; display: block; touch-action: none; }
+
+.bd-hold { position: absolute; z-index: 2; margin: 0; padding: 0; border: 0; border-radius: 14px; background: transparent; cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.bd-hold:focus:not(:focus-visible) { outline: none; }
+.bd-hold:focus-visible { outline: 3px solid #a78bfa; outline-offset: 2px; }
+.bd-hold:active, .bd-hold.pop { animation: bdPop .25s ease-out; }
+
+.bd-overlay { position: absolute; inset: 0; z-index: 3; display: none; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: rgba(20, 16, 50, .18); }
+.bd-overlay.show { display: flex; animation: bdFade .2s ease-out; }
+.bd-card { width: 100%; max-width: 340px; box-sizing: border-box; text-align: center; padding: 20px 20px 18px; border-radius: 24px; background: var(--cg-surface); color: var(--cg-ink); box-shadow: 0 22px 50px rgba(30, 20, 80, .3); animation: bdUp .3s cubic-bezier(.2, .9, .3, 1.2); }
+.bd-card h2 { margin: 6px 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
+.bd-card p { margin: 0 0 14px; color: var(--cg-muted); font-size: 14.5px; line-height: 1.4; }
+.bd-logo { display: inline-flex; animation: bdBob 1.8s ease-in-out infinite alternate; }
+.bd-btn { display: flex; width: 100%; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 0 18px; border-radius: 16px; border: 1px solid var(--cg-line); background: transparent; color: var(--cg-ink); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.bd-btn.primary { min-height: 58px; border: 0; color: #fff; font-size: 19px; font-weight: 800; background: linear-gradient(135deg, #22d3ee, #7c3aed); box-shadow: 0 4px 0 #5b21b6, 0 10px 22px rgba(124, 58, 237, .35); }
+.bd-btn.primary:active { transform: translateY(3px); box-shadow: 0 1px 0 #5b21b6; }
+.bd-btn .cg-ic { flex: none; }
+.bd-btn[data-act="solo"] .cg-ic, .bd-btn[data-act="resume"] .cg-ic { fill: currentColor; }
+.bd-btn.primary[data-act="resume"] .cg-ic { fill: #fff; }
+.bd-card .bd-note { margin: 8px 2px 14px; font-size: 13px; }
+.bd-card .bd-tips { margin: 12px 0 0; font-size: 12.5px; }
+
+/* The family live scoreboard would sit on the Next panel on a phone; the small wells show the same scores. */
+@media (max-width: 720px) { body.bd-page #cg-race { display: none; } }
+
+@keyframes bdPop { 0% { transform: scale(1); } 40% { transform: scale(.94); } 100% { transform: scale(1); } }
+@keyframes bdFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bdUp { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes bdBob { from { transform: translateY(-3px) rotate(-4deg); } to { transform: translateY(3px) rotate(4deg); } }
+@media (prefers-reduced-motion: reduce) { .bd-logo, .bd-card, .bd-overlay.show, .bd-hold.pop { animation: none; } }
