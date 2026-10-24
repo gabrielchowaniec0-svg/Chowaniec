@@ -39,7 +39,7 @@ Never use `placeholder` attributes (house rule: no placeholder text anywhere).
 
 ```js
 ChowGames.mount({
-  id: 'dino', title: 'Dino Dash', emoji: '🦖',
+  id: 'dino', title: 'Dino Dash',
   mode: 'race',                 // 'race' (everyone plays at once, same seed) or 'turns' (shared board)
   minPlayers: 2, maxPlayers: 2, // turns only
   scoreLabel: 'points',         // shown under the score on the game-over card

@@ -369,7 +369,7 @@
     }
     if (opts.mode === 'race' && multi.round === s.round) {
       renderRaceBoard();
-      if (multi.finished) renderResults();
+      if (multi.finished && !multi.starting) renderResults();    // not while the host is picking the next round
     }
     if (isLobbyOpen()) renderLobby();
   }
@@ -509,6 +509,7 @@
 
   // ----- lobby -----
   async function startRound() {
+    multi.starting = true;
     try {
       const s = multi.session;
       const body = { action: 'start', id: s.id };
@@ -518,7 +519,7 @@
       const { session } = await api('POST', '', body);
       multi.session = session;
       react();
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message); } finally { multi.starting = false; }
   }
 
   let chats = null;
