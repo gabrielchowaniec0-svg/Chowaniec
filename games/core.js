@@ -336,6 +336,7 @@
         if (!multi.session || multi.session.round !== s.round) { cd.remove(); return; }
       }
       cd.textContent = 'Go!';
+      cd.classList.add('go');
       cd.classList.remove('pop'); void cd.offsetWidth; cd.classList.add('pop');
       sfx('go');
       setTimeout(() => cd.remove(), 650);
@@ -383,7 +384,7 @@
   function hideRaceBoard() { const el = $('#cg-race'); if (el) el.remove(); }
 
   async function raceFinish(score, extra) {
-    if (!inSession() || multi.finished) return;
+    if (!inSession() || multi.finished || !multi.round || multi.session.round !== multi.round) return;
     multi.finished = true;
     multi.myState = Object.assign({}, multi.myState, extra || {}, { score: Math.round(score), alive: false, done: true });
     try {
@@ -405,7 +406,7 @@
       `<div class="cg-row">${isHost() ? `<button type="button" class="primary" data-cg="again"${allDone ? '' : ' disabled'}>Play again</button>` : `<span class="cg-wait">${allDone ? `Waiting for ${esc(s.host)} to start again…` : ''}</span>`}<button type="button" data-cg="leave">Leave</button></div>`;
     let card = $('#cg-modal .cg-card.results');
     if (!card) {
-      card = modal(html);
+      card = modal(html, { sticky: true });
       card.classList.add('results');
       card.addEventListener('click', onResultsClick);
     } else card.innerHTML = html;
@@ -527,12 +528,13 @@
   // Solo: saves the score and shows it with the family record. Race: reports your finish and shows the
   // live results. Turn games: pass { title, score } (score 0 = nothing to save).
   async function gameOver({ score = 0, title, detail, again } = {}) {
-    if (inSession() && opts.mode === 'race') {
+    const racing = inSession() && multi.round > 0 && multi.session.round === multi.round;
+    if (racing && opts.mode === 'race') {
       await raceFinish(score);
       submitScore(score);
       return;
     }
-    if (inSession() && opts.mode === 'turns') {
+    if (racing && opts.mode === 'turns') {
       if (score > 0) submitScore(score);
       const card = modal(`<h2>${esc(title || 'Game over')}</h2>${detail ? `<p class="cg-sub">${esc(detail)}</p>` : ''}` +
         `<div class="cg-row">${isHost() ? '<button type="button" class="primary" data-cg="again">Play again</button>' : `<span class="cg-wait">Waiting for ${esc(multi.session.host)} to start again…</span>`}<button type="button" data-cg="leave">Leave</button></div>`, { sticky: true });
@@ -620,7 +622,7 @@
   window.ChowGames = {
     mount, on, rng, sfx, toast, modal, closeModal, modalOpen, gameOver, submitScore, showLeaderboard, openLobby,
     me, colors: COLORS,
-    countingDown: () => !!document.getElementById('cg-countdown'),
+    countingDown: () => { const c = document.getElementById('cg-countdown'); return !!c && !c.classList.contains('go'); },
     isMulti: () => inSession() && multi.round > 0 && multi.session.round === multi.round,
     session: () => multi.session,
     muted: () => muted,
