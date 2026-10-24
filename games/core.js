@@ -484,7 +484,7 @@
   }
 
   function renderRaceBoard() {
-    if (!inSession() || opts.mode !== 'race') return;
+    if (!inSession() || opts.mode !== 'race' || opts.raceBoard === false) return;
     let el = $('#cg-race');
     if (!el) { el = document.createElement('div'); el.id = 'cg-race'; el.setAttribute('aria-live', 'off'); document.body.appendChild(el); }
     el.innerHTML = raceStandings().map((r) => `<div class="r${r.name === me() ? ' me' : ''}${r.alive ? '' : ' out'}"><i style="background:${r.color}"></i><b>${esc(r.name)}</b><span>${fmt(r.score)}</span>${r.alive ? '' : `<em>${icon('flag', 12)}</em>`}</div>`).join('');
@@ -510,8 +510,9 @@
     // Someone whose first update hasn't arrived is still playing, unless 15 s have passed (they never started).
     const grace = now() - Date.parse(s.startAt) > 15000;
     const allDone = rows.every((r) => (r.started && !r.alive) || (!r.started && grace)) && rows.some((r) => r.started);
+    const tie = rows.length > 1 && !rows[0].place && rows[0].score === rows[1].score;
     const html = (allDone ? `<div class="cg-hero gold">${icon('crown', 26)}</div>` : `<div class="cg-hero">${icon('timer', 26)}</div>`) +
-      `<h2>${allDone ? (rows[0].name === me() ? 'You win!' : `${esc(rows[0].name)} wins!`) : 'Waiting for the others…'}</h2>` +
+      `<h2>${allDone ? (tie ? 'It’s a tie!' : rows[0].name === me() ? 'You win!' : `${esc(rows[0].name)} wins!`) : 'Waiting for the others…'}</h2>` +
       '<ol class="cg-list">' + rows.map((r, i) => `<li class="${r.name === me() ? 'mine' : ''}"><span class="m">${allDone ? medal(i) : icon(r.alive ? 'footprints' : 'flag', 18)}</span><span class="n"><i class="dot" style="background:${r.color}"></i>${esc(r.name)}${r.detail ? `<small class="cg-detail">${esc(r.detail)}</small>` : ''}</span><span class="s">${fmt(r.score)}</span></li>`).join('') + '</ol>' +
       `<div class="cg-row">${s.night ? nightButton() : (canStart() ? `<button type="button" class="primary" data-cg="again"${allDone ? '' : ' disabled'}>Play again</button>` : `<span class="cg-wait">${allDone ? `Waiting for ${esc(s.host)} to start again…` : ''}</span>`)}<button type="button" data-cg="leave">Leave</button></div>`;
     let card = $('#cg-modal .cg-card.results');
@@ -522,7 +523,7 @@
     } else card.innerHTML = html;
     if (allDone && !multi.resultsShown) {
       multi.resultsShown = true;
-      sfx(rows[0].name === me() ? 'win' : 'score');
+      sfx(!tie && rows[0].name === me() ? 'win' : 'score');
     }
   }
   async function onResultsClick(e) {
@@ -597,7 +598,7 @@
     const card = $('#cg-modal .cg-card.lobby');
     if (!card || !multi.session) return;
     const s = multi.session;
-    const min = opts.mode === 'turns' ? (opts.minPlayers || 2) : 1;
+    const min = opts.mode === 'turns' ? (opts.minPlayers || 2) : (opts.minPlayers || 1);
     const max = opts.maxPlayers || 8;
     const enough = s.players.length >= min;
     const invited = s.invitedTo || [];
@@ -782,7 +783,7 @@
     isMulti: () => inSession() && multi.round > 0 && multi.session.round === multi.round,
     session: () => multi.session,
     muted: () => muted,
-    race: { update: raceUpdate, finish: raceFinish, others: raceOthers, standings: () => (inSession() ? raceStandings() : []) },
+    race: { update: raceUpdate, finish: raceFinish, others: raceOthers, mine: () => { const p = multi.session && multi.players[me()]; return p && p.round === multi.session.round ? p.state : null; }, standings: () => (inSession() ? raceStandings() : []) },
     turns: { shared: () => (multi.session ? multi.session.shared : null), info: () => (multi.session ? turnInfo() : null), commit }
   };
 })();

@@ -91,6 +91,11 @@ Things drawn *inside* the game world (a fruit on a card, a sticker on a dress) c
 ## More frame options
 
 - `syncMs`: how often race states are sent (default 600, minimum 250). Use 300 for live driving.
+- `minPlayers` (race games too): Start stays disabled until enough people have joined.
+- `raceBoard: false`: hide the frame's live race scoreboard (draw your own instead).
+- `ChowGames.race.mine()`: your own last synced race state (e.g. to restore after a reload).
+- Late joiners are added to the session's players, so `info.players` can differ between devices; if a game
+  needs one fixed list (turn order), send it in `roundSetup`'s shared data.
 - `roundSetup(players)` (race games, runs on the host's device when they press Start; may be async and may
   open its own picker): return plain JSON (under 20 KB) that every player receives as `info.shared` in
   `multiStart`, e.g. `{ image: id, pieces: 48 }`. Return `null` to cancel the start.

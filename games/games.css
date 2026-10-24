@@ -110,3 +110,4 @@ body.game-page { overflow: hidden; overscroll-behavior: none; -webkit-user-selec
 #cg-race em { display: inline-flex; font-style: normal; }
 
 .cg-list .n small.cg-detail { margin-left: auto; padding-left: 8px; font-size: 12px; color: var(--cg-muted); font-weight: 500; white-space: nowrap; }
+@media (max-width: 380px) { #cg-mute { display: none; } .cg-bar { gap: 2px; } .cg-bar h1 { gap: 6px; font-size: 15px; } }

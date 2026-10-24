@@ -1,0 +1,65 @@
+<!-- Doodle Guess banner for /games/index.html: a pencil doodles a cat on an easel while guess bubbles pop up
+     ("dog?", "fox?", then "CAT!"). Flat illustrated style matching the other scenes (320×200, slice-fitted).
+     Paste the <style> once and the <svg> inside the card's .art (it uses class="scene", so the page's
+     ".art.run" rule starts and pauses it like the other banners). Everything is scoped to .bn-doodle. -->
+<style>
+.bn-doodle{display:block;width:100%;height:100%}
+.bn-doodle text{font-family:Outfit,system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:800}
+.bn-doodle .bd-ln{fill:none;stroke:#27172b;stroke-linecap:round;stroke-linejoin:round}
+.bn-doodle .bd-a{stroke-dasharray:268;stroke-dashoffset:268;animation:bdOutline 7s linear infinite}
+.bn-doodle .bd-b{stroke-dasharray:12;stroke-dashoffset:12;animation:bdEyes 7s linear infinite}
+.bn-doodle .bd-c{stroke-dasharray:30;stroke-dashoffset:30;animation:bdMouth 7s linear infinite}
+.bn-doodle .bd-d{stroke-dasharray:24;stroke-dashoffset:24;animation:bdWhisk 7s linear infinite}
+.bn-doodle .bd-fill{opacity:0;animation:bdFill 7s ease-out infinite}
+.bn-doodle .bd-pen{animation:bdPen 7s linear infinite}
+.bn-doodle .bd-bub{opacity:0;transform-box:fill-box;transform-origin:50% 100%}
+.bn-doodle .bd-b1{animation:bdB1 7s ease-out infinite}
+.bn-doodle .bd-b2{animation:bdB2 7s ease-out infinite}
+.bn-doodle .bd-b3{animation:bdB3 7s ease-out infinite}
+.bn-doodle .bd-burst{opacity:0;transform-box:fill-box;transform-origin:center;animation:bdBurst 7s ease-out infinite}
+.bn-doodle .bd-tw{transform-box:fill-box;transform-origin:center;animation:bdTw 2.4s ease-in-out infinite}
+.bn-doodle .bd-tw.t2{animation-delay:-.8s}.bn-doodle .bd-tw.t3{animation-delay:-1.6s}
+.bn-doodle .bd-bob{animation:bdBob 2.6s ease-in-out infinite alternate}
+@keyframes bdPen{0%{transform:translate(116px,126px) rotate(-6deg)}4%{transform:translate(130px,104px) rotate(0deg)}5.9%{transform:translate(124px,92px) rotate(0deg)}7.7%{transform:translate(125px,80px) rotate(0deg)}9.3%{transform:translate(131px,71px) rotate(0deg)}12.4%{transform:translate(127px,50px) rotate(0deg)}15.5%{transform:translate(144px,63px) rotate(0deg)}16.8%{transform:translate(153px,61px) rotate(0deg)}18.1%{transform:translate(162px,61px) rotate(0deg)}19.6%{transform:translate(172px,63px) rotate(0deg)}22.7%{transform:translate(189px,50px) rotate(0deg)}25.8%{transform:translate(185px,71px) rotate(0deg)}27.4%{transform:translate(191px,80px) rotate(0deg)}29.1%{transform:translate(192px,92px) rotate(0deg)}31.1%{transform:translate(186px,104px) rotate(0deg)}33.2%{transform:translate(174px,112px) rotate(0deg)}35.2%{transform:translate(160px,115px) rotate(0deg)}37.3%{transform:translate(146px,113px) rotate(0deg)}38.9%{transform:translate(136px,109px) rotate(0deg)}40%{transform:translate(130px,104px) rotate(0deg)}42%{transform:translate(146px,84px) rotate(0deg)}44%{transform:translate(146px,84px) rotate(0deg)}45%{transform:translate(172px,84px) rotate(0deg)}47%{transform:translate(172px,84px) rotate(0deg)}49%{transform:translate(154px,94px) rotate(0deg)}53%{transform:translate(166px,94px) rotate(0deg)}55%{transform:translate(120px,92px) rotate(0deg)}58%{transform:translate(104px,89px) rotate(0deg)}60%{transform:translate(200px,92px) rotate(0deg)}63%{transform:translate(216px,89px) rotate(0deg)}70%{transform:translate(226px,134px) rotate(-6deg)}92%{transform:translate(226px,134px) rotate(-6deg)}100%{transform:translate(116px,126px) rotate(-6deg)}}
+@keyframes bdOutline{0%,4%{stroke-dashoffset:268}40%,90%{stroke-dashoffset:0;opacity:1}96%,100%{stroke-dashoffset:0;opacity:0}}
+@keyframes bdEyes{0%,42%{stroke-dashoffset:12}47%,90%{stroke-dashoffset:0;opacity:1}96%,100%{stroke-dashoffset:0;opacity:0}}
+@keyframes bdMouth{0%,48%{stroke-dashoffset:30}54%,90%{stroke-dashoffset:0;opacity:1}96%,100%{stroke-dashoffset:0;opacity:0}}
+@keyframes bdWhisk{0%,55%{stroke-dashoffset:24}64%,90%{stroke-dashoffset:0;opacity:1}96%,100%{stroke-dashoffset:0;opacity:0}}
+@keyframes bdFill{0%,64%{opacity:0}70%,90%{opacity:1}96%,100%{opacity:0}}
+@keyframes bdB1{0%,20%{opacity:0;transform:scale(.2)}24%{opacity:1;transform:scale(1.12)}27%,88%{opacity:1;transform:scale(1)}93%,100%{opacity:0;transform:scale(.85)}}
+@keyframes bdB2{0%,36%{opacity:0;transform:scale(.2)}40%{opacity:1;transform:scale(1.12)}43%,88%{opacity:1;transform:scale(1)}93%,100%{opacity:0;transform:scale(.85)}}
+@keyframes bdB3{0%,66%{opacity:0;transform:scale(.2) rotate(-10deg)}70%{opacity:1;transform:scale(1.2) rotate(5deg)}74%,88%{opacity:1;transform:scale(1) rotate(0)}93%,100%{opacity:0;transform:scale(.85)}}
+@keyframes bdBurst{0%,67%{opacity:0;transform:scale(.3)}70%{opacity:1;transform:scale(1)}80%{opacity:0;transform:scale(1.5)}100%{opacity:0;transform:scale(1.5)}}
+@keyframes bdTw{0%,100%{transform:scale(.3) rotate(0);opacity:.2}50%{transform:scale(1) rotate(45deg);opacity:1}}
+@keyframes bdBob{from{transform:translateY(-2px)}to{transform:translateY(2px)}}
+@media (prefers-reduced-motion:reduce){.bn-doodle *{animation:none!important}.bn-doodle .bd-a,.bn-doodle .bd-b,.bn-doodle .bd-c,.bn-doodle .bd-d{stroke-dashoffset:0}.bn-doodle .bd-bub,.bn-doodle .bd-fill{opacity:1}.bn-doodle .bd-pen{transform:translate(226px,134px) rotate(-6deg)}}
+</style>
+<svg class="scene bn-doodle" viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+<defs>
+<linearGradient id="bn-doodle-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe4e6"/><stop offset="1" stop-color="#fda4af"/></linearGradient>
+<radialGradient id="bn-doodle-gl" cx=".15" cy="-.05" r=".85"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<pattern id="bn-doodle-dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="8" cy="8" r="1.4" fill="#e11d48" opacity=".12"/></pattern>
+</defs>
+<rect width="320" height="200" fill="url(#bn-doodle-bg)"/><rect width="320" height="200" fill="url(#bn-doodle-dots)"/><rect width="320" height="200" fill="url(#bn-doodle-gl)"/>
+<path class="bd-tw" d="M34 20Q34 26 40 26Q34 26 34 32Q34 26 28 26Q34 26 34 20Z" fill="#fff"/><path class="bd-tw t2" d="M292 25Q292 30 297 30Q292 30 292 35Q292 30 287 30Q292 30 292 25Z" fill="#fff"/><path class="bd-tw t3" d="M300 116Q300 120 304 120Q300 120 300 124Q300 120 296 120Q300 120 300 116Z" fill="#fde047"/><path class="bd-tw t2" d="M22 108Q22 112 26 112Q22 112 22 116Q22 112 18 112Q22 112 22 108Z" fill="#fff"/>
+<rect y="168" width="320" height="32" fill="#be123c" opacity=".22"/><rect y="168" width="320" height="3" fill="#fff" opacity=".35"/>
+<g stroke="#9a3412" stroke-width="5" stroke-linecap="round"><path d="M128 150 116 186"/><path d="M192 150 204 186"/><path d="M160 150V180"/></g>
+<rect x="104" y="146" width="112" height="7" rx="3.5" fill="#c2410c"/>
+<g transform="rotate(-3 160 82)">
+<rect x="99" y="39" width="128" height="96" rx="7" fill="#000" opacity=".14"/>
+<rect x="96" y="34" width="128" height="96" rx="7" fill="#fff"/>
+<g transform="translate(96 34)">
+<path class="bd-fill" d="M34 70Q28 58 28.5 52Q29 46 32 41.5Q35 37 33 26.5Q31 16 39.5 22.5Q48 29 52.5 28Q57 27 61.5 27Q66 27 71 28Q76 29 84.5 22.5Q93 16 91 26.5Q89 37 92 41.5Q95 46 95.5 52Q96 58 93 64Q90 70 84 74Q78 78 71 79.5Q64 81 57 80Q50 79 45 77Q40 75 37 72.5L34 70Z" fill="#fed7aa"/>
+<path class="bd-ln bd-a" d="M34 70Q28 58 28.5 52Q29 46 32 41.5Q35 37 33 26.5Q31 16 39.5 22.5Q48 29 52.5 28Q57 27 61.5 27Q66 27 71 28Q76 29 84.5 22.5Q93 16 91 26.5Q89 37 92 41.5Q95 46 95.5 52Q96 58 93 64Q90 70 84 74Q78 78 71 79.5Q64 81 57 80Q50 79 45 77Q40 75 37 72.5L34 70" stroke-width="3.6"/>
+<path class="bd-ln bd-b" d="M50 49v2M76 49v2" stroke-width="5"/>
+<path class="bd-ln bd-c" d="M60 58l3 2 3-2M63 60q0 4-5 4M63 60q0 4 5 4" stroke-width="2.6"/>
+<path class="bd-ln bd-d" d="M24 58H6M25 63 9 68M104 58h18M103 63l16 5" stroke-width="2.2"/>
+</g>
+<g class="bd-pen"><g transform="rotate(32)"><path d="M-6 -6 0 6 6 -6Z" fill="#fde7c7"/><path d="M-2.4 1.2 0 6 2.4 1.2Z" fill="#27172b"/><rect x="-6" y="-48" width="12" height="42" rx="1.5" fill="#facc15"/><rect x="-6" y="-48" width="4" height="42" fill="#fde047"/><rect x="2" y="-48" width="4" height="42" fill="#eab308"/><rect x="-6" y="-53" width="12" height="6" fill="#cbd5e1"/><rect x="-6" y="-61" width="12" height="9" rx="3" fill="#f9a8d4"/></g></g>
+</g>
+<g transform="translate(30 182) rotate(-8)"><rect x="0" y="-5" width="40" height="10" rx="2" fill="#3b82f6"/><rect x="8" y="-5" width="3" height="10" fill="#1d4ed8"/><rect x="29" y="-5" width="3" height="10" fill="#1d4ed8"/><path d="M40 -5 50 0 40 5Z" fill="#3b82f6"/><path d="M46 -2 50 0 46 2Z" fill="#1d4ed8"/></g><g transform="translate(234 184) rotate(6)"><rect x="0" y="-5" width="40" height="10" rx="2" fill="#22c55e"/><rect x="8" y="-5" width="3" height="10" fill="#15803d"/><rect x="29" y="-5" width="3" height="10" fill="#15803d"/><path d="M40 -5 50 0 40 5Z" fill="#22c55e"/><path d="M46 -2 50 0 46 2Z" fill="#15803d"/></g><g transform="translate(262 176) rotate(-14)"><rect x="0" y="-5" width="40" height="10" rx="2" fill="#a855f7"/><rect x="8" y="-5" width="3" height="10" fill="#7e22ce"/><rect x="29" y="-5" width="3" height="10" fill="#7e22ce"/><path d="M40 -5 50 0 40 5Z" fill="#a855f7"/><path d="M46 -2 50 0 46 2Z" fill="#7e22ce"/></g>
+<g class="bd-bub bd-b1"><rect x="16" y="44" width="56" height="24" rx="12" fill="#3b82f6"/><path d="M52 66 60 77 62 64Z" fill="#3b82f6"/><text x="44" y="60.5" text-anchor="middle" font-size="12.5" fill="#fff">dog?</text></g>
+<g class="bd-bub bd-b2"><rect x="246" y="50" width="58" height="24" rx="12" fill="#f59e0b"/><path d="M258 72 252 83 268 72Z" fill="#f59e0b"/><text x="275" y="66.5" text-anchor="middle" font-size="12.5" fill="#fff">fox?</text></g>
+<g class="bd-burst"><path class="" d="M244 104Q244 110 250 110Q244 110 244 116Q244 110 238 110Q244 110 244 104Z" fill="#fde047"/><path class="" d="M306 99Q306 104 311 104Q306 104 306 109Q306 104 301 104Q306 104 306 99Z" fill="#fff"/><path class="" d="M300 144Q300 150 306 150Q300 150 300 156Q300 150 294 150Q300 150 300 144Z" fill="#fde047"/><path class="" d="M236 142Q236 146 240 146Q236 146 236 150Q236 146 232 146Q236 146 236 142Z" fill="#fff"/></g>
+<g class="bd-bob"><g class="bd-bub bd-b3"><rect x="240" y="112" width="66" height="28" rx="14" fill="#16a34a"/><path d="M254 138 248 150 266 139Z" fill="#16a34a"/><text x="280" y="131.5" text-anchor="middle" font-size="15" fill="#fff">CAT!</text><g transform="translate(255 126)"><circle r="8" fill="#fff"/><path d="M-3.6 0 -1 2.6 3.8 -2.4" fill="none" stroke="#16a34a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></g></g></g>
+</svg>
