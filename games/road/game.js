@@ -298,6 +298,11 @@
       g.fillStyle = '#fff'; g.fillText(text, w / 2, by + bh / 2 + 2);
     };
   }
+  function starPath(g, x, y, ro, ri) {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? ri : ro; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+    g.closePath();
+  }
   function artCoin(g, w, h) {
     const r = w / 2 - 2;
     const gr = g.createRadialGradient(w * 0.38, h * 0.35, 2, w / 2, h / 2, r);
@@ -305,7 +310,7 @@
     circles(g, [[w / 2, h / 2, r]], '#b8790a');
     circles(g, [[w / 2, h / 2, r - 3]], gr);
     g.strokeStyle = 'rgba(160,100,0,.55)'; g.lineWidth = 3; g.beginPath(); g.arc(w / 2, h / 2, r * 0.68, 0, Math.PI * 2); g.stroke();
-    g.fillStyle = '#c98500'; g.font = `900 ${r * 1.05}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('★', w / 2, h / 2 + 2);
+    g.fillStyle = '#c98500'; starPath(g, w / 2, h / 2 + 1, r * 0.5, r * 0.22); g.fill();
     g.fillStyle = 'rgba(255,255,255,.7)'; ell(g, w * 0.36, h * 0.3, r * 0.22, r * 0.12); g.fill();
   }
   function artGlow(color) {
@@ -1313,7 +1318,8 @@
   .rr-tag { margin:14px 0 4px; font-size:15px; font-weight:600; opacity:.92; }
   .rr-ctl { display:flex; flex-direction:column; gap:7px; margin:14px auto 4px; font-size:14px; text-align:left; max-width:330px; }
   .rr-ctl div { display:flex; align-items:center; gap:10px; }
-  .rr-ctl kbd { display:inline-flex; min-width:26px; height:26px; padding:0 6px; align-items:center; justify-content:center; border-radius:7px; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28); border-bottom-width:3px; font:700 13px Outfit, system-ui, sans-serif; }
+  .rr-ctl kbd .cg-ic { display:block; }
+  .rr-ctl kbd { display:inline-flex; gap:2px; min-width:26px; height:26px; padding:0 6px; align-items:center; justify-content:center; border-radius:7px; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28); border-bottom-width:3px; font:700 13px Outfit, system-ui, sans-serif; }
   .rr-ctl .k { flex:none; display:flex; gap:4px; min-width:92px; }
   .rr-go { display:inline-block; margin-top:16px; padding:13px 30px; border-radius:999px; background:linear-gradient(180deg,#ff5a4f,#e8192c); color:#fff; font-weight:800; font-size:19px; letter-spacing:.02em; box-shadow:0 6px 0 #9b0f1c, 0 10px 24px rgba(232,25,44,.45); animation:rrPulse 1.3s ease-in-out infinite; }
   @keyframes rrPulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
@@ -1323,11 +1329,12 @@
   `;
   function ctlHtml() {
     const touch = isTouch();
-    const t = '<div><span class="k"><kbd>👈</kbd><kbd>👉</kbd></span>Hold the left or right side of the screen to steer</div>' +
-      '<div><span class="k"><kbd>👈👉</kbd></span>Hold both sides to brake. You speed up by yourself</div>';
-    const k = '<div><span class="k"><kbd>←</kbd><kbd>→</kbd></span>Steer (or <kbd>A</kbd> <kbd>D</kbd>)</div>' +
-      '<div><span class="k"><kbd>↑</kbd><kbd>W</kbd></span>Go (the car speeds up by itself)</div>' +
-      '<div><span class="k"><kbd>↓</kbd><kbd>S</kbd></span>Brake · <kbd>P</kbd> pause</div>';
+    const ic = (n) => CG.icon(n, 15);
+    const t = `<div><span class="k"><kbd>${ic('arrowLeft')}</kbd><kbd>${ic('arrowRight')}</kbd></span>Hold the left or right side of the screen to steer</div>` +
+      `<div><span class="k"><kbd>${ic('arrowLeft')}${ic('arrowRight')}</kbd></span>Hold both sides to brake. You speed up by yourself</div>`;
+    const k = `<div><span class="k"><kbd>${ic('arrowLeft')}</kbd><kbd>${ic('arrowRight')}</kbd></span>Steer (or <kbd>A</kbd> <kbd>D</kbd>)</div>` +
+      `<div><span class="k"><kbd>${ic('arrowUp')}</kbd><kbd>W</kbd></span>Go (the car speeds up by itself)</div>` +
+      `<div><span class="k"><kbd>${ic('arrowDown')}</kbd><kbd>S</kbd></span>Brake · <kbd>P</kbd> pause</div>`;
     return touch ? t : k;
   }
   function buildOverlays() {
@@ -1406,7 +1413,7 @@
 
   // ---------- Boot ----------
   CG.mount({
-    id: 'road', title: 'Road Rush', emoji: '🏎️', mode: 'race', scoreLabel: 'points',
+    id: 'road', title: 'Road Rush', mode: 'race', scoreLabel: 'points',
     help: '<ul><li><b>Steer</b>: hold the left or right half of the screen, or use ← → (A D).</li>' +
       '<li>Your car speeds up by itself. <b>Brake</b> with ↓ (S) or by holding both sides.</li>' +
       '<li>You start with <b>60 seconds</b>. Drive through a <b>checkpoint</b> for +15 seconds!</li>' +

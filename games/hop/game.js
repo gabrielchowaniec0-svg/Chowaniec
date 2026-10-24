@@ -847,7 +847,7 @@
   }
 
   CG.mount({
-    id: 'hop', title: 'Sky Hop', emoji: '🐤', mode: 'race', scoreLabel: 'points',
+    id: 'hop', title: 'Sky Hop', mode: 'race', scoreLabel: 'points',
     help: '<ul><li><b>Flap:</b> tap the screen, click, or press Space or ↑.</li>' +
       '<li>Fly through the gaps between the clouds and the trees. Each one you pass is +1.</li>' +
       '<li>Catch the smiling stars for +3.</li>' +

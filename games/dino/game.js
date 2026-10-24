@@ -1147,7 +1147,7 @@
   }
 
   CG.mount({
-    id: 'dino', title: 'Dino Dash', emoji: '🦖', mode: 'race', scoreLabel: 'points',
+    id: 'dino', title: 'Dino Dash', mode: 'race', scoreLabel: 'points',
     help: '<ul><li><b>Jump:</b> tap the screen, or press Space or ↑. Hold it down to jump higher.</li>' +
       '<li><b>Duck:</b> swipe down, or press ↓. Ducking in the air drops you down fast.</li>' +
       '<li>Hop over cacti and duck under the birds that fly at head height.</li>' +

@@ -10,16 +10,16 @@
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const THEMES = {
-    animals: { label: 'Animals', icon: '🐶', mark: '🐾', back: ['#34d399', '#059669'], list: ['🐶', '🐱', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐙', '🦄', '🐢'] },
-    fruit: { label: 'Fruit', icon: '🍓', mark: '🧺', back: ['#fb7185', '#e11d48'], list: ['🍎', '🍌', '🍇', '🍓', '🍒', '🍑', '🍍', '🥝', '🍉', '🍋', '🍐', '🥥', '🍊', '🥕', '🌽', '🥑', '🍄', '🥨'] },
-    vehicles: { label: 'Vehicles', icon: '🚗', mark: '🚦', back: ['#60a5fa', '#4f46e5'], list: ['🚗', '🚕', '🚌', '🚓', '🚑', '🚒', '🚜', '🚲', '🛵', '🚂', '✈️', '🚀', '🚁', '⛵', '🚤', '🛸', '🏎️', '🛴'] },
-    mix: { label: 'Mix', icon: '🎲', mark: '⭐', back: ['#fbbf24', '#f97316'], list: null }
+    animals: { label: 'Animals', icon: 'cat', mark: 'cat', back: ['#34d399', '#059669'], list: ['🐶', '🐱', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐙', '🦄', '🐢'] },
+    fruit: { label: 'Fruit', icon: 'apple', mark: 'apple', back: ['#fb7185', '#e11d48'], list: ['🍎', '🍌', '🍇', '🍓', '🍒', '🍑', '🍍', '🥝', '🍉', '🍋', '🍐', '🥥', '🍊', '🥕', '🌽', '🥑', '🍄', '🥨'] },
+    vehicles: { label: 'Vehicles', icon: 'car', mark: 'car', back: ['#60a5fa', '#4f46e5'], list: ['🚗', '🚕', '🚌', '🚓', '🚑', '🚒', '🚜', '🚲', '🛵', '🚂', '✈️', '🚀', '🚁', '⛵', '🚤', '🛸', '🏎️', '🛴'] },
+    mix: { label: 'Mix', icon: 'shuffle', mark: 'star', back: ['#fbbf24', '#f97316'], list: null }
   };
   THEMES.mix.list = [0, 1, 2, 3, 4, 5].flatMap((i) => [THEMES.animals.list[i * 3], THEMES.fruit.list[i * 3 + 1], THEMES.vehicles.list[i * 3 + 2]]);
   const SIZES = {
-    easy: { label: 'Easy', emoji: '🙂', n: 12, grid: '4 × 3' },
-    medium: { label: 'Medium', emoji: '😎', n: 16, grid: '4 × 4' },
-    hard: { label: 'Hard', emoji: '🤯', n: 24, grid: '6 × 4' }
+    easy: { label: 'Easy', n: 12, cols: 4, grid: '4 × 3' },
+    medium: { label: 'Medium', n: 16, cols: 4, grid: '4 × 4' },
+    hard: { label: 'Hard', n: 24, cols: 6, grid: '6 × 4' }
   };
   const REVEAL_MS = 1200, STALE_REVEAL_MS = 4000;
 
@@ -92,8 +92,9 @@
     const T = THEMES[th];
     root.style.setProperty('--back1', T.back[0]);
     root.style.setProperty('--back2', T.back[1]);
+    const backMark = G.icon(T.mark, 24);
     gridEl.innerHTML = cards.map((id, i) => `<button type="button" class="mm-card deal" data-i="${i}" style="--d:${(i * 0.025).toFixed(3)}s" aria-label="Card ${i + 1}">` +
-      `<span class="mm-inner"><span class="mm-face mm-back"><span>${T.mark}</span></span><span class="mm-face mm-front"><span>${T.list[id]}</span></span></span></button>`).join('');
+      `<span class="mm-inner"><span class="mm-face mm-back"><span>${backMark}</span></span><span class="mm-face mm-front"><span>${T.list[id]}</span></span></span></button>`).join('');
     cardsEls = Array.from(gridEl.children);
     setTimeout(() => cardsEls.forEach((c) => c.classList.remove('deal')), 900);
     layout();
@@ -218,7 +219,7 @@
     setTimeout(() => { G.sfx('win'); confetti(); }, 450);
     setTimeout(() => {
       if (mode !== 'solo') return;
-      G.gameOver({ score, title: `🎉 ${solo.moves} moves · ${fmtTime(solo.end - solo.start)}`, again: () => startSolo() });
+      G.gameOver({ score, title: `${solo.moves} moves · ${fmtTime(solo.end - solo.start)}`, again: () => startSolo() });
     }, 1700);
   }
 
@@ -302,7 +303,7 @@
     const title = winners.length === 1 ? `${winners[0]} wins!` : `${winners.join(' & ')} tie!`;
     const detail = S.players.map((n, i) => `${n} ${S.scores[i]}`).join(' · ');
     const mine = M.myIdx >= 0 ? S.scores[M.myIdx] : 0;
-    G.gameOver({ title: `🏆 ${title}`, detail: `Pairs: ${detail}`, score: mine * 10 });
+    G.gameOver({ title, detail: `Pairs: ${detail}`, score: mine * 10 });
   }
 
   const myTurn = () => mode === 'multi' && S && M && M.myIdx >= 0 && S.turn === M.myIdx && S.phase === 'pick';
@@ -402,7 +403,7 @@
     if (mode === 'solo' && solo) {
       const t = solo.start ? (solo.end || performance.now()) - solo.start : 0;
       const pairs = solo.matched.size / 2, total = cards.length / 2;
-      hudEl.innerHTML = `<div class="mm-stats"><span class="st"><i>⏱</i><b>${fmtTime(t)}</b></span><span class="st"><i>👆</i><b>${solo.moves}</b><small>${solo.moves === 1 ? 'move' : 'moves'}</small></span><span class="st"><i>⭐</i><b>${pairs}/${total}</b><small>pairs</small></span></div>`;
+      hudEl.innerHTML = `<div class="mm-stats"><span class="st"><i>${G.icon('timer', 17)}</i><b>${fmtTime(t)}</b></span><span class="st"><i>${G.icon('layers', 17)}</i><b>${solo.moves}</b><small>${solo.moves === 1 ? 'move' : 'moves'}</small></span><span class="st"><i class="gold">${G.icon('star', 17)}</i><b>${pairs}/${total}</b><small>pairs</small></span></div>`;
       statusEl.textContent = '';
       statusEl.className = 'mm-status';
       return;
@@ -412,7 +413,7 @@
       hudEl.innerHTML = `<div class="mm-players">${S.players.map((n, i) => `<span class="mm-pl${i === S.turn && S.phase !== 'done' ? ' on' : ''}${here.includes(n) ? '' : ' gone'}" style="--pc:${colorOf(i)}"><i></i><b>${esc(i === M.myIdx ? 'You' : n)}</b><em>${S.scores[i]}</em></span>`).join('')}</div>`;
       let msg, cls = 'mm-status';
       const cur = S.players[S.turn];
-      if (S.phase === 'done') { msg = 'All pairs found! 🎉'; cls += ' end'; }
+      if (S.phase === 'done') { msg = 'All pairs found!'; cls += ' end'; }
       else if (S.turn === M.myIdx) { msg = S.phase === 'reveal' ? 'Not a pair…' : (S.flipped.length || M.queue.length ? 'Now find its partner!' : 'Your turn – flip two cards'); cls += ' mine'; }
       else msg = S.phase === 'reveal' ? `Not a pair for ${cur}…` : `Waiting for ${cur}…`;
       statusEl.className = cls;
@@ -436,18 +437,18 @@
   }
   function renderMenu() {
     menuEl.querySelector('.mm-menu-card').innerHTML =
-      `<div class="mm-logo" aria-hidden="true"><span>${THEMES[pref.theme].icon}</span><span>❓</span><span>${THEMES[pref.theme].icon}</span></div>` +
+      `<div class="mm-logo" aria-hidden="true" style="--lc:${THEMES[pref.theme].back[1]};--lb1:${THEMES[pref.theme].back[0]};--lb2:${THEMES[pref.theme].back[1]}"><span>${G.icon(THEMES[pref.theme].icon, 28)}</span><span>?</span><span>${G.icon(THEMES[pref.theme].icon, 28)}</span></div>` +
       '<h2>Memory Match</h2><p>Flip two cards. Find all the pairs!</p>' +
-      `<h3>Pictures</h3><div class="mm-themes">${Object.entries(THEMES).map(([k, T]) => `<button type="button" data-theme="${k}" class="${k === pref.theme ? 'sel' : ''}" style="--b1:${T.back[0]};--b2:${T.back[1]}"><span>${T.icon}</span>${T.label}</button>`).join('')}</div>` +
-      `<h3>Play</h3><div class="mm-sizes">${Object.entries(SIZES).map(([k, Z]) => `<button type="button" data-size="${k}" class="${k === pref.size ? 'sel' : ''}"><span>${Z.emoji}</span><b>${Z.label}</b><small>${Z.n} cards</small></button>`).join('')}</div>` +
-      '<div class="mm-more"><button type="button" data-a="family">👥 Play with the family</button></div>';
+      `<h3>Pictures</h3><div class="mm-themes">${Object.entries(THEMES).map(([k, T]) => `<button type="button" data-theme="${k}" class="${k === pref.theme ? 'sel' : ''}" style="--b1:${T.back[0]};--b2:${T.back[1]}"><span>${G.icon(T.icon, 24)}</span>${T.label}</button>`).join('')}</div>` +
+      `<h3>Play</h3><div class="mm-sizes">${Object.entries(SIZES).map(([k, Z]) => `<button type="button" data-size="${k}" class="${k === pref.size ? 'sel' : ''}"><span class="mm-mini" style="--c:${Z.cols}">${'<i></i>'.repeat(Z.n)}</span><b>${Z.label}</b><small>${Z.n} cards</small></button>`).join('')}</div>` +
+      `<div class="mm-more"><button type="button" data-a="family">${G.icon('users', 20)}<span>Play with the family</span></button></div>`;
   }
 
   function build(ctx) {
     root = ctx.root;
     root.classList.add('mm-stage');
     root.innerHTML = '<div class="mm-wrap"><div class="mm-hud"></div><div class="mm-status" aria-live="polite"></div><div class="mm-board"><div class="mm-grid"></div></div>' +
-      '<div class="mm-controls"><button type="button" class="mm-btn" data-a="menu">‹ Menu</button><button type="button" class="mm-btn primary" data-a="restart">↻ New game</button></div></div>' +
+      '<div class="mm-controls"><button type="button" class="mm-btn" data-a="menu">' + G.icon('back', 17) + '<span>Menu</span></button><button type="button" class="mm-btn primary" data-a="restart">' + G.icon('again', 17) + '<span>New game</span></button></div></div>' +
       '<canvas class="mm-fx" aria-hidden="true"></canvas><div class="mm-menu" hidden><div class="mm-menu-card"></div></div>';
     hudEl = $('.mm-hud', root); statusEl = $('.mm-status', root); gridEl = $('.mm-grid', root); controlsEl = $('.mm-controls', root); menuEl = $('.mm-menu', root);
     fx = $('.mm-fx', root); fxc = fx.getContext('2d');
@@ -500,10 +501,10 @@
   G.on('multiEnd', () => { showMenu(); });
 
   G.mount({
-    id: 'memory', title: 'Memory Match', emoji: '🃏', mode: 'turns', minPlayers: 2, maxPlayers: 4, scoreLabel: 'points',
+    id: 'memory', title: 'Memory Match', mode: 'turns', minPlayers: 2, maxPlayers: 4, scoreLabel: 'points',
     help: '<ul><li>Tap a card to flip it, then tap another.</li><li>Same picture? It’s a <b>pair</b> and stays up! Different? They flip back – try to remember where they were.</li>' +
       '<li>Solo: find every pair in as few moves and as fast as you can. Fewer moves = more points.</li>' +
-      '<li>👥 Play together (2–4 players): take turns. Find a pair and you go again. Most pairs wins!</li>' +
+      `<li>${G.icon('users', 17)} <b>Play together</b> (2–4 players): take turns. Find a pair and you go again. Most pairs wins!</li>` +
       '<li>Keyboard: Tab or arrow keys to move, Enter to flip.</li></ul>',
     initialShared,
     onReady: build
