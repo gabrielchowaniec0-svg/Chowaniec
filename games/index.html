@@ -56,6 +56,8 @@
         .game:active, .hero:active { transform: scale(.98); }
         .game:focus-visible, .hero:focus-visible { outline: 3px solid var(--to); outline-offset: 3px; }
         .art { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: linear-gradient(135deg, var(--from), var(--to)); isolation: isolate; }
+        .ext-banner { position: absolute; inset: 0; }
+        .ext-banner > div { position: absolute; inset: 0; }
         .art .scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; transition: transform .45s cubic-bezier(.2,.8,.3,1); }
         .game:hover .scene, .hero:hover .scene { transform: scale(1.045); }
         .art::after { content: ''; position: absolute; inset: 0; box-shadow: inset 0 -1px 0 rgba(0,0,0,.06); pointer-events: none; }
@@ -198,11 +200,19 @@
         }, CG ? CG.meta : {});
 
         const GAMES = [
-            { id: 'kart', name: 'Kart Party', desc: 'Drift round the track and race the family live.', tag: 'Live race', tagIcon: 'live', isNew: true },
-            { id: 'style', name: 'Style Star', desc: 'Dress up for the theme, then win the runway vote.', tag: 'Party', tagIcon: 'sparkles', isNew: true },
-            { id: 'police', name: 'Police Patrol', desc: 'Patrol the town, help neighbours, catch cheeky robbers.', tag: 'Adventure', tagIcon: 'mapPin', isNew: true },
-            { id: 'puzzle', name: 'Picture Puzzle', desc: 'Jigsaw or slide puzzle, made from your own photo.', tag: 'Your photo', tagIcon: 'camera', isNew: true },
-            { id: 'trivia', name: 'Trivia Party', desc: 'A family quiz show. Buzz in fast, answer right.', tag: 'Party', tagIcon: 'party', isNew: true },
+            { id: 'doodle', name: 'Doodle Guess', desc: 'One draws, everyone guesses. Giggles guaranteed.', tag: 'Party', tagIcon: 'palette', isNew: true, pitch: 'One person draws a secret word, everyone else races to guess it on their own phone. Draw, guess, giggle, swap.' },
+            { id: 'golf', name: 'Mini Golf', desc: '18 holes of windmills, loops and pirate coves.', tag: 'Live race', tagIcon: 'live', isNew: true },
+            { id: 'clash', name: 'Color Clash', desc: 'Match colours and numbers, then shout Clash!', tag: '2–6 players', tagIcon: 'users', isNew: true },
+            { id: 'dice', name: 'Dice Party', desc: 'Roll, hold and score the perfect dice combos.', tag: '1–6 players', tagIcon: 'users', isNew: true },
+            { id: 'blocks', name: 'Block Drop', desc: 'Clear lines to send blocks to the family.', tag: 'Versus', tagIcon: 'zap', isNew: true },
+            { id: 'typing', name: 'Type Racer', desc: 'Type fast and race your car to the flag.', tag: 'Race', tagIcon: 'flag', isNew: true },
+            { id: 'checkers', name: 'Checkers', desc: 'Jump, capture and crown your kings.', tag: '2 players', tagIcon: 'users', isNew: true },
+            { id: 'ludo', name: 'Race Home', desc: 'Roll the die and bring all four home first.', tag: '2–4 players', tagIcon: 'users', isNew: true },
+            { id: 'kart', name: 'Kart Party', desc: 'Drift round the track and race the family live.', tag: 'Live race', tagIcon: 'live' },
+            { id: 'style', name: 'Style Star', desc: 'Dress up for the theme, then win the runway vote.', tag: 'Party', tagIcon: 'sparkles' },
+            { id: 'police', name: 'Police Patrol', desc: 'Patrol the town, help neighbours, catch cheeky robbers.', tag: 'Adventure', tagIcon: 'mapPin' },
+            { id: 'puzzle', name: 'Picture Puzzle', desc: 'Jigsaw or slide puzzle, made from your own photo.', tag: 'Your photo', tagIcon: 'camera' },
+            { id: 'trivia', name: 'Trivia Party', desc: 'A family quiz show. Buzz in fast, answer right.', tag: 'Party', tagIcon: 'party' },
             { id: 'dino', name: 'Dino Dash', desc: 'Jump the cacti, duck the birds, run forever.', tag: 'Race', tagIcon: 'flag' },
             { id: 'road', name: 'Road Rush', desc: 'Weave through traffic and beat the clock.', tag: 'Race', tagIcon: 'flag' },
             { id: 'hop', name: 'Sky Hop', desc: 'Flap a little chick through the clouds.', tag: 'Race', tagIcon: 'flag' },
@@ -212,7 +222,7 @@
             { id: 'memory', name: 'Memory Match', desc: 'Flip the cards and find all the pairs.', tag: '1–4 players', tagIcon: 'users' },
             { id: 'word', name: 'Daily Word', desc: 'Guess the family’s word of the day in six tries.', tag: 'Daily', tagIcon: 'calendar' }
         ];
-        const FEATURED = 'kart';
+        const FEATURED = 'doodle';
         const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const fmt = (n) => Number(n || 0).toLocaleString('en-US');
 
@@ -558,7 +568,20 @@
 
         /* ================= Page ================= */
         let uidN = 0;
-        const banner = (g) => SCENES[g.id] ? SCENES[g.id](`${g.id.replace(/[^a-z0-9]/gi, '')}${++uidN}`) : '';
+        // Games without a built-in scene ship their own banner snippet (games/<id>/banner.html), loaded below.
+        const banner = (g) => SCENES[g.id] ? SCENES[g.id](`${g.id.replace(/[^a-z0-9]/gi, '')}${++uidN}`) : `<div class="ext-banner" data-banner="${esc(g.id)}"></div>`;
+        const bannerCache = {};
+        function loadBanners() {
+            document.querySelectorAll('.ext-banner[data-banner]').forEach(async (el) => {
+                const id = el.dataset.banner;
+                try {
+                    bannerCache[id] = bannerCache[id] || fetch(`/games/${id}/banner.html`).then((r) => (r.ok ? r.text() : ''));
+                    el.innerHTML = (await bannerCache[id]).replace(/<!--[\s\S]*?-->/g, '');
+                    const svg = el.querySelector('svg');
+                    if (svg) svg.classList.add('scene');
+                } catch (e) { /* the card still works without its picture */ }
+            });
+        }
         const vars = (g) => { const m = META[g.id] || { from: '#a1a1aa', to: '#52525b' }; return `--from:${m.from};--to:${m.to}`; };
         const tagHtml = (g) => `<span class="tag">${g.tagIcon === 'live' ? '<span class="live" aria-hidden="true"></span>' : icon(g.tagIcon, 12)}${esc(g.tag)}</span>`;
 
@@ -568,14 +591,15 @@
             hero.href = `/games/${featured.id}/`;
             hero.setAttribute('style', vars(featured));
             hero.setAttribute('aria-label', `${featured.name}: ${featured.desc}`);
-            hero.innerHTML = `<div class="art">${banner(featured)}</div><div class="hero-body"><div class="hero-pills"><span class="pill new">${icon('sparkles', 13)}New</span><span class="pill soft">${icon('zap', 13)}Live multiplayer</span></div>` +
-                `<h3>${badge(featured.id, 40)}${esc(featured.name)}</h3><p>Pick a kart, drift round the corners and race everyone in the family at the same time, each on their own phone.</p>` +
+            hero.innerHTML = `<div class="art">${banner(featured)}</div><div class="hero-body"><div class="hero-pills"><span class="pill new">${icon('sparkles', 13)}New</span><span class="pill soft">${icon('users', 13)}Family party</span></div>` +
+                `<h3>${badge(featured.id, 40)}${esc(featured.name)}</h3><p>${esc(featured.pitch || featured.desc)}</p>` +
                 `<span class="play-btn">${icon('play', 16)}Play now</span></div>`;
 
             document.getElementById('grid').innerHTML = GAMES.map((g) =>
                 `<a class="game" href="/games/${g.id}/" style="${vars(g)}"><div class="art">${banner(g)}${tagHtml(g)}${g.isNew ? `<span class="newflag">${icon('sparkles', 11)}New</span>` : ''}<span class="go" aria-hidden="true">${icon('play', 16)}</span></div>` +
                 `<div class="info"><div class="title">${badge(g.id, 28)}<b>${esc(g.name)}</b></div><span class="desc">${esc(g.desc)}</span><div class="scores" data-id="${g.id}"><span class="sk"></span><span class="sk"></span></div></div></a>`).join('');
             document.getElementById('count').textContent = `${GAMES.length} games`;
+            loadBanners();
 
             const STEPS = [
                 ['users', 'Tap Play together', 'Open any game and tap the Play together button.', 'kart'],

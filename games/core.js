@@ -777,6 +777,7 @@
 
   window.ChowGames = {
     mount, on, rng, sfx, toast, modal, closeModal, modalOpen, gameOver, submitScore, showLeaderboard, openLobby,
+    leave: () => leaveSession(),
     me, colors: COLORS, icon, badge, meta: GAME_META, now, toLocal,
     uploadImage,
     countingDown: () => { const c = document.getElementById('cg-countdown'); return !!c && !c.classList.contains('go'); },
