@@ -40,7 +40,8 @@ async function invite(user, session, rawRoom) {
       title: `${user.name} wants to play ${game.name}`,
       body: 'Tap to join the game',
       url: gamePath(session),
-      tag: `game-${session.id}`
+      tag: `game-${session.id}`,
+      from: user.name
     }, { exclude: user.name, kind: 'message', room }).catch((e) => console.error('Game invite push failed:', e.message));
   }
 }

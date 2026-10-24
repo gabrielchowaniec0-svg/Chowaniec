@@ -4,6 +4,9 @@ import { getStore } from '@netlify/blobs';
 import webpush from 'web-push';
 import crypto from 'node:crypto';
 import { whoWantsPush } from './user-settings.mjs';
+import { familyNames } from './auth.mjs';
+import { onlineAmong } from './presence.mjs';
+import { addToInbox } from './inbox.mjs';
 
 const store = () => getStore({ name: 'push-subscriptions', consistency: 'strong' });
 
@@ -52,7 +55,7 @@ export async function removeDeviceById(user, id) {
 // Sends `payload` ({ title, body, url, tag }) to every device of the given users
 // (or everyone when users is '*'), skipping `exclude`. `kind` ('message', 'mention' or 'other')
 // lets each person's own notification settings and quiet hours apply; 'test' always goes through.
-// Returns how many were delivered.
+// Returns how many were delivered (in-app toasts count too).
 // Notifications from the same chat stack under one tag, and chat notifications get a "Reply" button.
 export function withChatTag(payload) {
   const url = String((payload && payload.url) || '');
@@ -61,23 +64,33 @@ export function withChatTag(payload) {
   return { ...payload, tag: payload.tag || `chat-${m[1] || 'everyone'}`, replyable: true };
 }
 
-export async function sendPush(users, payload, { exclude, kind = 'other', room = null } = {}) {
+export async function sendPush(users, payload, { exclude, kind = 'other', room = null, inApp = true } = {}) {
   const config = pushConfig();
-  if (!config) return 0;
+  const { blobs } = await store().list({ prefix: 'sub/' });
+  const ownerOf = (b) => decodeURIComponent(b.key.split('/')[1]);
+  let names = users === '*' ? [...new Set(familyNames().concat(blobs.map(ownerOf)))] : [...new Set(users)];
+  if (exclude) names = names.filter((n) => n !== exclude);
+  if (kind !== 'test') names = await whoWantsPush(names, kind, new Date(), room);
+
+  // People with Chowaniec open get an in-app toast (with quick buttons) instead of a phone notification.
+  // Calls ring with their own popup, and test notifications always go to the phone.
+  let delivered = 0;
+  if (inApp && kind !== 'test' && kind !== 'call' && names.length) {
+    try {
+      const online = await onlineAmong(names);
+      if (online.length) {
+        delivered += await addToInbox(online, withChatTag(payload));
+        names = names.filter((n) => !online.includes(n));
+      }
+    } catch (err) {
+      console.error('In-app notification failed, sending push instead:', err.message);
+    }
+  }
+  if (!config || !names.length) return delivered;
   webpush.setVapidDetails(Netlify.env.get('VAPID_SUBJECT') || 'https://chowaniec.net', config.publicKey, config.privateKey);
 
-  const { blobs } = await store().list({ prefix: 'sub/' });
-  let targets = blobs.filter((b) => {
-    const user = decodeURIComponent(b.key.split('/')[1]);
-    if (exclude && user === exclude) return false;
-    return users === '*' || users.includes(user);
-  });
-  if (kind !== 'test') {
-    const names = [...new Set(targets.map((b) => decodeURIComponent(b.key.split('/')[1])))];
-    const allowed = new Set(await whoWantsPush(names, kind, new Date(), room));
-    targets = targets.filter((b) => allowed.has(decodeURIComponent(b.key.split('/')[1])));
-  }
-
+  const wanted = new Set(names);
+  const targets = blobs.filter((b) => wanted.has(ownerOf(b)));
   const body = JSON.stringify(withChatTag(payload));
   const results = await Promise.all(targets.map(async (b) => {
     const record = await store().get(b.key, { type: 'json' });
@@ -92,5 +105,5 @@ export async function sendPush(users, payload, { exclude, kind = 'other', room =
       return 0;
     }
   }));
-  return results.reduce((a, b) => a + b, 0);
+  return delivered + results.reduce((a, b) => a + b, 0);
 }

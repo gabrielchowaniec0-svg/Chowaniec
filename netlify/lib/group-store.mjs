@@ -327,17 +327,17 @@ export async function notifyMessage(message) {
   if (isDmId(message.room)) {
     // A direct message: always treated like a mention (it is for them), never a group-style notification.
     const to = everyone.filter((n) => n !== skip);
-    if (to.length) await sendPush(to, { title: message.onBehalfOf ? `${AI_NAME} for ${message.onBehalfOf}` : message.user, body, url, tag: `dm-${message.room}` }, { exclude: skip, room: message.room, kind: message.important ? 'important' : 'mention' });
+    if (to.length) await sendPush(to, { title: message.onBehalfOf ? `${AI_NAME} for ${message.onBehalfOf}` : message.user, body, url, tag: `dm-${message.room}`, from: message.onBehalfOf ? AI_NAME : message.user }, { exclude: skip, room: message.room, kind: message.important ? 'important' : 'mention' });
     return;
   }
   if (message.important) {
     // Everyone in the chat is pinged, whatever their notification mode (only a full "off" is respected).
-    await sendPush(everyone, { title: `🚨 Important from ${message.onBehalfOf || message.user}`, body, url, tag: `important-${message.id}`, requireInteraction: true }, { exclude: skip, kind: 'important' });
+    await sendPush(everyone, { title: `🚨 Important from ${message.onBehalfOf || message.user}`, body, url, tag: `important-${message.id}`, requireInteraction: true, from: message.onBehalfOf || message.user }, { exclude: skip, kind: 'important' });
     return;
   }
   await Promise.all([
-    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url }, { exclude: skip, kind: 'mention', room: message.room || DEFAULT_ROOM }) : 0,
-    others.length ? sendPush(others, { title: `${message.user}${threadTitle}`, body, url }, { exclude: skip, kind: 'message', room: message.room || DEFAULT_ROOM }) : 0
+    mentioned.length ? sendPush(mentioned, { title: `${message.user} mentioned you`, body, url, from: message.user }, { exclude: skip, kind: 'mention', room: message.room || DEFAULT_ROOM }) : 0,
+    others.length ? sendPush(others, { title: `${message.user}${threadTitle}`, body, url, from: message.user }, { exclude: skip, kind: 'message', room: message.room || DEFAULT_ROOM }) : 0
   ]);
 }
 
