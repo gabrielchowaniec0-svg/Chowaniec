@@ -1,0 +1,86 @@
+<!-- Color Clash banner: a standalone, self-contained snippet (inline animated SVG + CSS scoped to .bn-clash).
+     Same flat illustrated style as the scenes on /games/index.html (320 × 200 viewBox, sliced to fill). -->
+<div class="bn-clash" aria-hidden="true">
+<style>
+.bn-clash { position: relative; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; background: linear-gradient(135deg, #fca5a5, #7c3aed); isolation: isolate; }
+.bn-clash svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.bn-clash text { font-family: Outfit, system-ui, -apple-system, 'Segoe UI', sans-serif; font-weight: 800; }
+.bn-clash .fb { transform-box: fill-box; transform-origin: center; }
+.bn-clash .tw { animation: bn-clash-tw var(--d, 2.4s) ease-in-out infinite; animation-delay: var(--dl, 0s); transform-box: fill-box; transform-origin: center; }
+.bn-clash .sway { animation: bn-clash-sway 3.2s ease-in-out infinite alternate; transform-box: view-box; transform-origin: 104px 236px; }
+.bn-clash .fly { animation: bn-clash-fly 4s cubic-bezier(.35,.1,.3,1) infinite; }
+.bn-clash .old { animation: bn-clash-old 4s linear infinite; }
+.bn-clash .bubble { animation: bn-clash-bubble 4s cubic-bezier(.3,1.6,.5,1) infinite; transform-box: view-box; transform-origin: 242px 46px; }
+.bn-clash .ring { animation: bn-clash-spin 12s linear infinite; transform-box: view-box; transform-origin: 196px 128px; }
+.bn-clash .hint { animation: bn-clash-hint 4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.bn-clash .bob { animation: bn-clash-bob 1.6s ease-in-out infinite alternate; }
+@keyframes bn-clash-tw { 0%, 100% { transform: scale(.25) rotate(0deg); opacity: .15; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
+@keyframes bn-clash-sway { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+@keyframes bn-clash-fly {
+  0%, 8% { transform: translate(150px, 168px) rotate(8deg) scale(1); opacity: 1; animation-timing-function: cubic-bezier(.3,0,.4,1); }
+  30% { transform: translate(178px, 72px) rotate(200deg) scale(1.25); }
+  46% { transform: translate(208px, 126px) rotate(372deg) scale(1); }
+  50% { transform: translate(208px, 126px) rotate(372deg) scale(1.08); }
+  54%, 88% { transform: translate(208px, 126px) rotate(372deg) scale(1); opacity: 1; }
+  96%, 100% { transform: translate(208px, 126px) rotate(372deg) scale(1); opacity: 0; }
+}
+@keyframes bn-clash-old { 0%, 88% { opacity: 0; } 92%, 100% { opacity: 1; } }
+@keyframes bn-clash-bubble { 0%, 46% { transform: scale(0); opacity: 0; } 54% { transform: scale(1.12); opacity: 1; } 60%, 84% { transform: scale(1); opacity: 1; } 92%, 100% { transform: scale(.6); opacity: 0; } }
+@keyframes bn-clash-spin { to { transform: rotate(360deg); } }
+@keyframes bn-clash-hint { 0%, 44% { transform: scale(.4); opacity: 0; } 50% { transform: scale(1.3); opacity: .9; } 66%, 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes bn-clash-bob { from { transform: translateY(-2px); } to { transform: translateY(2px); } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bn-clash svg { filter: saturate(.94) brightness(.9); } }
+:root[data-theme="dark"] .bn-clash svg { filter: saturate(.94) brightness(.9); }
+@media (prefers-reduced-motion: reduce) { .bn-clash svg * { animation: none !important; } .bn-clash .bubble { transform: none; opacity: 1; } }
+</style>
+<svg class="scene" viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" focusable="false">
+  <defs>
+    <linearGradient id="bn-clash-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fde2f3"/><stop offset="1" stop-color="#c4b5fd"/></linearGradient>
+    <radialGradient id="bn-clash-gl" cx=".15" cy="-.05" r=".85"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="bn-clash-felt" cx=".5" cy=".3" r=".75"><stop offset="0" stop-color="#3fbf7f"/><stop offset=".65" stop-color="#1c9157"/><stop offset="1" stop-color="#11703f"/></radialGradient>
+    <linearGradient id="bn-clash-back" x1="0" y1="0" x2=".7" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#3730a3"/></linearGradient>
+    <!-- one card face, 36 × 54, centred on 0,0 -->
+    <g id="bn-clash-r7"><rect x="-18" y="-27" width="36" height="54" rx="6" fill="#fff"/><rect x="-15.5" y="-24.5" width="31" height="49" rx="4" fill="#f43f5e"/><path d="M-15.5 -6C-6 -16 6 -19 15.5 -18V-20.5Q15.5 -24.5 11.5 -24.5H-11.5Q-15.5 -24.5 -15.5 -20.5Z" fill="#fff" opacity=".18"/><circle r="11.5" fill="#fff"/><text y="6.5" text-anchor="middle" font-size="18" fill="#be123c">7</text><text x="-10" y="-14" text-anchor="middle" font-size="8" fill="#fff">7</text></g>
+    <g id="bn-clash-b7"><rect x="-18" y="-27" width="36" height="54" rx="6" fill="#fff"/><rect x="-15.5" y="-24.5" width="31" height="49" rx="4" fill="#3b82f6"/><circle r="11.5" fill="#fff"/><text y="6.5" text-anchor="middle" font-size="18" fill="#1d4ed8">7</text><text x="-10" y="-14" text-anchor="middle" font-size="8" fill="#fff">7</text></g>
+    <g id="bn-clash-back1"><rect x="-18" y="-27" width="36" height="54" rx="6" fill="#fff"/><rect x="-15.5" y="-24.5" width="31" height="49" rx="4" fill="url(#bn-clash-back)"/><g transform="rotate(-24)"><circle cy="-8" r="3.6" fill="#ff6b6b"/><circle cx="6.5" r="3.6" fill="#ffd93b"/><circle cy="8" r="3.6" fill="#4ade80"/><circle cx="-6.5" r="3.6" fill="#60a5fa"/></g></g>
+  </defs>
+  <rect width="320" height="200" fill="url(#bn-clash-bg)"/><rect width="320" height="200" fill="url(#bn-clash-gl)"/>
+  <!-- sparkles -->
+  <path class="tw" style="--d:2.2s" d="M30 30Q30 37 37 37Q30 37 30 44Q30 37 23 37Q30 37 30 30Z" fill="#fff"/>
+  <path class="tw" style="--d:2.8s;--dl:-1.1s" d="M298 22Q298 28 304 28Q298 28 298 34Q298 28 292 28Q298 28 298 22Z" fill="#fff"/>
+  <path class="tw" style="--d:2.4s;--dl:-.6s" d="M118 18Q118 23 123 23Q118 23 118 28Q118 23 113 23Q118 23 118 18Z" fill="#fff"/>
+  <svg x="0" y="0" width="320" height="200" viewBox="26 40 272 170" overflow="visible">
+  <!-- the table -->
+  <ellipse cx="190" cy="196" rx="190" ry="96" fill="#8a5426"/>
+  <ellipse cx="190" cy="196" rx="181" ry="89" fill="url(#bn-clash-felt)"/>
+  <ellipse cx="190" cy="196" rx="181" ry="89" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="6"/>
+  <!-- direction ring around the piles -->
+  <g class="ring" opacity=".55"><circle cx="196" cy="128" r="54" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="32 20" stroke-linecap="round"/><path d="M196 72l7 5-7 5z" fill="#fff"/><path d="M196 184l-7-5 7-5z" fill="#fff"/></g>
+  <!-- draw pile -->
+  <g transform="translate(160 128)"><g transform="translate(3 3)"><use href="#bn-clash-back1"/></g><g transform="translate(1.5 1.5)"><use href="#bn-clash-back1"/></g><use href="#bn-clash-back1"/></g>
+  <!-- discard pile: green 3 under the blue 7 that was there before -->
+  <g transform="translate(208 126) rotate(-14)"><rect x="-18" y="-27" width="36" height="54" rx="6" fill="#fff"/><rect x="-15.5" y="-24.5" width="31" height="49" rx="4" fill="#22c55e"/><circle r="11.5" fill="#fff"/><text y="6.5" text-anchor="middle" font-size="18" fill="#15803d">3</text></g>
+  <g transform="translate(208 126) rotate(6)"><use href="#bn-clash-b7"/></g>
+  <circle class="hint" cx="208" cy="126" r="30" fill="none" stroke="#fde047" stroke-width="4"/>
+  <!-- my hand, fanned, gently swaying -->
+  <g class="sway">
+    <g transform="translate(68 176) rotate(-24)"><rect x="-18" y="-27" width="36" height="54" rx="6" fill="#fff"/><rect x="-15.5" y="-24.5" width="31" height="49" rx="4" fill="#f59e0b"/><circle r="11.5" fill="#fff"/><circle r="7.5" fill="none" stroke="#b45309" stroke-width="3"/><path d="M-5 5L5 -5" stroke="#b45309" stroke-width="3" stroke-linecap="round"/></g>
+    <g transform="translate(90 168) rotate(-12)"><rect x="-18" y="-27" width="36" height="54" rx="6" fill="#fff"/><rect x="-15.5" y="-24.5" width="31" height="49" rx="4" fill="#22c55e"/><circle r="11.5" fill="#fff"/><text y="6" text-anchor="middle" font-size="15" fill="#15803d">+2</text></g>
+    <g transform="translate(114 165) rotate(0)"><rect x="-18" y="-27" width="36" height="54" rx="6" fill="#fff"/><rect x="-15.5" y="-24.5" width="31" height="49" rx="4" fill="#1f2937"/><circle r="12" fill="#fff"/><path d="M0 0V-10A10 10 0 0 1 10 0Z" fill="#e11d48"/><path d="M0 0H10A10 10 0 0 1 0 10Z" fill="#2563eb"/><path d="M0 0V10A10 10 0 0 1 -10 0Z" fill="#16a34a"/><path d="M0 0H-10A10 10 0 0 1 0 -10Z" fill="#f59e0b"/></g>
+    <g transform="translate(138 168) rotate(12)"><rect x="-18" y="-27" width="36" height="54" rx="6" fill="#fff"/><rect x="-15.5" y="-24.5" width="31" height="49" rx="4" fill="#3b82f6"/><circle r="11.5" fill="#fff"/><text y="6.5" text-anchor="middle" font-size="18" fill="#1d4ed8">4</text></g>
+  </g>
+  <!-- the red 7 flies from the hand onto the pile (a match: same number) -->
+  <g class="fly"><use href="#bn-clash-r7"/></g>
+  <g class="old" transform="translate(208 126) rotate(6)"><use href="#bn-clash-b7"/></g>
+  <!-- other players around the table -->
+  <g class="bob"><circle cx="274" cy="146" r="13" fill="#3b82f6" stroke="#fff" stroke-width="3"/><text x="274" y="151" text-anchor="middle" font-size="13" fill="#fff">L</text><circle cx="284" cy="156" r="6.5" fill="#fff"/><text x="284" y="159" text-anchor="middle" font-size="8" fill="#18181b">1</text></g>
+  <g class="bob" style="animation-delay:-.8s"><circle cx="40" cy="112" r="13" fill="#22c55e" stroke="#fff" stroke-width="3"/><text x="40" y="117" text-anchor="middle" font-size="13" fill="#fff">A</text></g>
+  </svg>
+  <!-- the shout -->
+  <g class="bubble">
+    <path d="M206 30h72a12 12 0 0 1 12 12v8a12 12 0 0 1-12 12h-48l-14 12 3-12h-13a12 12 0 0 1-12-12v-8a12 12 0 0 1 12-12z" fill="#fff"/>
+    <path d="M206 30h72a12 12 0 0 1 12 12v8a12 12 0 0 1-12 12h-48l-14 12 3-12h-13a12 12 0 0 1-12-12v-8a12 12 0 0 1 12-12z" fill="none" stroke="#f97316" stroke-width="3"/>
+    <text x="242" y="53" text-anchor="middle" font-size="19" fill="#e11d48">Clash!</text>
+  </g>
+</svg>
+</div>

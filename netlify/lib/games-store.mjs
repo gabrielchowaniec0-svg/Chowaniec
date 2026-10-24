@@ -3,6 +3,8 @@
 //   daily/<game>/<day>/<name> { score, at }                  once-a-day games (Daily Word)
 //   sess/<id>                 session (see createSession)    lobby, round, shared state for turn games
 //   sess/<id>/p/<name>        { state, at, round }           each player's live state in a race
+//   recpost/<game>/<name>     { at }                         when a "new family record" card was last posted
+//   trophies                  { <name>: { until, title, night, room } }   game night champions (7 days)
 import { getStore } from '@netlify/blobs';
 import crypto from 'node:crypto';
 
@@ -21,7 +23,15 @@ export const GAMES = {
   style: { name: 'Style Star', emoji: '👗', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
   police: { name: 'Police Patrol', emoji: '🚓', kind: 'max', limit: 1e7, mode: 'race', max: 8 },
   puzzle: { name: 'Picture Puzzle', emoji: '🧩', kind: 'max', limit: 1e6, mode: 'race', max: 8 },
-  trivia: { name: 'Trivia Party', emoji: '🧠', kind: 'max', limit: 1e5, mode: 'race', max: 8 }
+  trivia: { name: 'Trivia Party', emoji: '🧠', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
+  doodle: { name: 'Doodle Guess', emoji: '🎨', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
+  clash: { name: 'Color Clash', emoji: '🃏', kind: 'add', limit: 1, mode: 'turns', max: 6 },
+  dice: { name: 'Dice Party', emoji: '🎲', kind: 'max', limit: 2000, mode: 'turns', max: 6 },
+  golf: { name: 'Mini Golf', emoji: '⛳', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
+  blocks: { name: 'Block Drop', emoji: '🧱', kind: 'max', limit: 1e7, mode: 'race', max: 8 },
+  typing: { name: 'Type Racer', emoji: '⌨️', kind: 'max', limit: 1e4, mode: 'race', max: 8 },
+  checkers: { name: 'Checkers', emoji: '⚫', kind: 'add', limit: 1, mode: 'turns', max: 2 },
+  ludo: { name: 'Race Home', emoji: '🎯', kind: 'add', limit: 1, mode: 'turns', max: 4 }
 };
 export const isGame = (id) => Object.prototype.hasOwnProperty.call(GAMES, id);
 
@@ -99,7 +109,10 @@ export async function recordScore(name, game, rawScore, { day } = {}) {
     const { modified } = await store().setJSON(boardKey(game), { rows, migrated: true }, { onlyIfMatch: entry.etag });
     if (!modified) { await new Promise((r) => setTimeout(r, 40 + Math.random() * 120)); continue; }
     const board = sortedRows(game, rows);
-    return { best, previous, isRecord, rank: board.findIndex((r) => r.name === name) + 1, total: board.length };
+    // wasFirst: this person already led the board before this score (for "new family #1" cards).
+    const before = sortedRows(game, { ...rows, ...(prev ? { [name]: prev } : {}) }).filter((r) => prev || r.name !== name);
+    const wasFirst = !!prev && before.length > 0 && before[0].name === name;
+    return { best, previous, isRecord, rank: board.findIndex((r) => r.name === name) + 1, total: board.length, wasFirst };
   }
   throw err(503, 'Lots of scores at once. Try again.');
 }
@@ -165,11 +178,15 @@ async function changeSession(id, change) {
   throw err(409, 'Lots happening at once. Try again.');
 }
 
-export async function createSession(name, game) {
+// `name` hosts the game and is its first player. Options: open (any player may start a round, used for
+// rematches and game nights), night (the game night it belongs to), room (only that chat's members may join),
+// label (shown in the lobby, e.g. "Game night · game 2 of 3"). With no name the first person to join hosts.
+export async function createSession(name, game, { open = false, night = null, room = null, label = '' } = {}) {
   if (!isGame(game)) throw err(404, 'Unknown game.');
   const session = {
-    id: crypto.randomBytes(5).toString('hex'), game, host: name, createdAt: new Date().toISOString(),
-    status: 'lobby', round: 0, seed: newSeed(), startAt: null, players: [name], shared: null, version: 0, invitedTo: []
+    id: crypto.randomBytes(5).toString('hex'), game, host: name || null, createdAt: new Date().toISOString(),
+    status: 'lobby', round: 0, seed: newSeed(), startAt: null, players: name ? [name] : [], shared: null, version: 0, invitedTo: room ? [room] : [],
+    ...(open ? { open: true } : {}), ...(night ? { night } : {}), ...(room ? { room } : {}), ...(label ? { label: String(label).slice(0, 80) } : {})
   };
   await store().setJSON(sessKey(session.id), session, { onlyIfNew: true });
   return session;
@@ -180,12 +197,14 @@ export async function getSession(id) {
   return entry ? entry.data : null;
 }
 
-export function joinSession(id, name) {
+export function joinSession(id, name, { canJoinRoom = () => true } = {}) {
   return changeSession(id, (s) => {
+    if (s.room && !canJoinRoom(s.room)) throw err(403, 'This game is only for the people in that chat.');
     if (s.players.includes(name)) return false;
     if (s.status !== 'lobby' && GAMES[s.game].mode === 'turns') throw err(409, 'This game has already started. You can watch, or start your own!');
     if (s.players.length >= GAMES[s.game].max) throw err(409, 'This game is full.');
     s.players.push(name);
+    if (!s.host) s.host = name;
   });
 }
 
@@ -201,8 +220,13 @@ export function leaveSession(id, name) {
 export function startRound(id, name, shared) {
   if (shared !== undefined && JSON.stringify(shared).length > MAX_SHARED_CHARS) throw err(413, 'That game is too big to save.');
   return changeSession(id, (s) => {
-    if (s.host !== name) throw err(403, 'Only the person who started the game can start a round.');
+    const may = s.host === name || !s.host || (s.open && s.players.includes(name));
+    if (!may) throw err(403, 'Only the person who started the game can start a round.');
+    if (!s.players.includes(name)) s.players.push(name);
+    if (!s.host) s.host = name;
     s.status = 'playing';
+    s.reports = {};
+    s.doneAt = null;
     s.round += 1;
     s.seed = newSeed();
     s.startAt = new Date(Date.now() + 3500).toISOString();
@@ -215,6 +239,7 @@ export function finishRound(id, name) {
   return changeSession(id, (s) => {
     if (!s.players.includes(name) || s.status !== 'playing') return false;
     s.status = 'done';
+    s.doneAt = new Date().toISOString();
   });
 }
 
@@ -226,7 +251,7 @@ export async function makeMove(id, name, version, shared, done) {
     if (s.version !== Number(version)) throw err(409, 'Someone else moved first.');
     s.shared = shared;
     s.version += 1;
-    if (done) s.status = 'done';
+    if (done) { s.status = 'done'; s.doneAt = new Date().toISOString(); }
   });
 }
 
@@ -253,6 +278,164 @@ export async function playerStates(id, players) {
     if (v) out[name] = v;
   }));
   return out;
+}
+
+// ---------- Round results ----------
+// session.results = { round, at, game, mode, standings: [{ name, score, place }], winner (name or null), draw }
+// is the last finished round. Races: worked out from the players' final race states. Turn games: every
+// device reports its own score through gameOver ({ action: 'result' }), the board's final move marks the
+// session done, and the round is settled when everyone has reported (or a few seconds later).
+const RACE_STALE_MS = 45 * 1000;      // a racer who stopped syncing this long ago (closed the page) is out
+const RACE_NO_SHOW_MS = 20 * 1000;    // someone who never sent a state this long after the start never started
+const TURN_REPORT_MS = 8 * 1000;
+
+// A turn game's player reports their result for the round (score as on the family board, optional winner).
+export function reportResult(id, name, { round, score, winner } = {}) {
+  return changeSession(id, (s) => {
+    if (!s.players.includes(name) || GAMES[s.game].mode !== 'turns') return false;
+    if (Number(round) !== s.round || (s.results && s.results.round === s.round)) return false;
+    const sc = Math.round(Number(score));
+    s.reports = s.reports || {};
+    s.reports[name] = { score: Number.isFinite(sc) && sc >= 0 ? Math.min(sc, GAMES[s.game].limit) : 0, ...(typeof winner === 'string' && s.players.includes(winner) ? { winner } : {}) };
+  });
+}
+
+function placed(rows, kind) {
+  const dir = kind === 'min' ? 1 : -1;
+  rows.sort((a, b) => (a.score === b.score ? 0 : (a.score < b.score ? -dir : dir)));
+  let place = 0;
+  return rows.map((r, i) => {
+    if (i === 0 || r.score !== rows[i - 1].score) place = i + 1;
+    return { name: r.name, score: r.score, place };
+  });
+}
+
+// Games where finishing order beats points (e.g. last one standing) report state.place (1 = best).
+function byRank(rows) {
+  rows.sort((a, b) => (a.rank || 99) - (b.rank || 99) || b.score - a.score);
+  let place = 0;
+  return rows.map((r, i) => {
+    if (i === 0 || (r.rank || 99) !== (rows[i - 1].rank || 99) || !r.rank) place = i + 1;
+    return { name: r.name, score: r.score, place, ...(r.detail ? { detail: r.detail } : {}) };
+  });
+}
+
+// Works out the round's results if it is over (pure: returns null when not ready).
+export function settleRound(s, states, now = Date.now()) {
+  if (!s || !s.round || (s.results && s.results.round === s.round)) return null;
+  const g = GAMES[s.game];
+  if (g.mode === 'race') {
+    if (s.status !== 'playing' || !s.startAt) return null;
+    const since = now - Date.parse(s.startAt);
+    const rows = [];
+    let waiting = false;
+    for (const name of s.players) {
+      const p = states[name];
+      const st = p && p.round === s.round && p.state ? p.state : null;
+      if (!st) { if (since < RACE_NO_SHOW_MS) waiting = true; continue; }
+      const over = st.done || st.alive === false || now - p.at > RACE_STALE_MS;
+      if (!over) waiting = true;
+      const pl = Math.round(Number(st.place));
+      rows.push({ name, score: Math.max(0, Math.round(Number(st.score) || 0)), ...(pl >= 1 ? { rank: pl } : {}), ...(st.detail ? { detail: String(st.detail).slice(0, 40) } : {}) });
+    }
+    if (waiting || !rows.length) return null;
+    const standings = rows.some((r) => r.rank) ? byRank(rows) : placed(rows, g.kind);
+    return { round: s.round, at: new Date(now).toISOString(), game: s.game, mode: 'race', standings, winner: standings.length > 1 && standings[1].place === 1 ? null : standings[0].name, draw: standings.length > 1 && standings[1].place === 1 };
+  }
+  if (s.status !== 'done') return null;
+  const reports = s.reports || {};
+  const all = s.players.every((n) => reports[n]);
+  if (!all && !(s.doneAt && now - Date.parse(s.doneAt) > TURN_REPORT_MS)) return null;
+  if (!Object.keys(reports).length && !s.players.length) return null;
+  const scoreOf = (name) => (reports[name] ? reports[name].score : 0);
+  let standings = placed(s.players.map((name) => ({ name, score: scoreOf(name) })), g.kind);
+  // A winner named by the players themselves wins over the scores (e.g. a game whose score is 0 for everyone).
+  const named = {};
+  Object.values(reports).forEach((r) => { if (r.winner) named[r.winner] = (named[r.winner] || 0) + 1; });
+  const top = Object.entries(named).sort((a, b) => b[1] - a[1])[0];
+  let winner = null;
+  if (top) winner = top[0];
+  else if (standings.length === 1 ? standings[0].score > 0 : standings.length > 1 && standings[1].place !== 1) winner = standings[0].name;
+  if (winner) {
+    const rest = placed(standings.filter((r) => r.name !== winner).map((r) => ({ name: r.name, score: r.score })), g.kind).map((r) => ({ ...r, place: r.place + 1 }));
+    standings = [{ name: winner, score: scoreOf(winner), place: 1 }, ...rest];
+  }
+  return { round: s.round, at: new Date(now).toISOString(), game: s.game, mode: 'turns', standings, winner, draw: !winner };
+}
+
+// Settles the round if it is over. Returns { session, settled } where settled is the new results (only for the
+// one request that saved them, so side effects such as chat cards and game night points happen once).
+export async function settleIfOver(id) {
+  const first = await getSession(id);
+  if (!first || !first.round || (first.results && first.results.round === first.round)) return { session: first, settled: null };
+  const mode = GAMES[first.game].mode;
+  if (mode === 'race' ? first.status !== 'playing' : first.status !== 'done') return { session: first, settled: null };
+  const states = mode === 'race' ? await playerStates(id, first.players) : {};
+  let settled = null;
+  const session = await changeSession(id, (s) => {
+    const r = settleRound(s, states);
+    if (!r) return false;
+    s.results = r;
+    s.status = 'done';
+    if (!s.doneAt) s.doneAt = r.at;
+    settled = r;
+  });
+  return { session, settled };
+}
+
+// Someone asked for a rematch: the session goes back to its lobby, the asker becomes the host and anyone in
+// it can start the next round.
+export function rematchSession(id, name) {
+  return changeSession(id, (s) => {
+    if (s.status === 'playing' && !(s.results && s.results.round === s.round)) throw err(409, 'This game is still going. Join it instead!');
+    if (!s.players.includes(name)) {
+      if (s.players.length >= GAMES[s.game].max) throw err(409, 'This game is full.');
+      s.players.push(name);
+    }
+    s.host = name;
+    s.open = true;
+    s.status = 'lobby';
+    s.rematchBy = name;
+    s.rematchAt = new Date().toISOString();
+    s.version += 1;
+  });
+}
+
+// Notes which chat message shows this session's card (so it can be updated).
+export function noteCard(id, room, messageId) {
+  return changeSession(id, (s) => {
+    s.cards = (s.cards || []).filter((c) => c.room !== room).concat([{ room, id: messageId }]);
+  });
+}
+
+// ---------- "New family record" cards: at most one per game per person per hour ----------
+const RECORD_GAP_MS = 60 * 60 * 1000;
+export async function claimRecordPost(game, name, now = Date.now()) {
+  const key = `recpost/${game}/${enc(name)}`;
+  const entry = await store().getWithMetadata(key, { type: 'json' });
+  if (entry && entry.data && now - entry.data.at < RECORD_GAP_MS) return false;
+  const res = await store().setJSON(key, { at: now }, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
+  return !!res.modified;
+}
+
+// ---------- Trophies (game night champions) ----------
+export async function listTrophies(now = Date.now()) {
+  const doc = (await store().get('trophies', { type: 'json' })) || {};
+  const out = {};
+  for (const [name, t] of Object.entries(doc)) if (t && Date.parse(t.until) > now) out[name] = t;
+  return out;
+}
+
+export async function giveTrophy(name, info, days = 7) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const entry = await store().getWithMetadata('trophies', { type: 'json' });
+    const doc = { ...((entry && entry.data) || {}) };
+    for (const [n, t] of Object.entries(doc)) if (!t || Date.parse(t.until) < Date.now()) delete doc[n];
+    doc[name] = { ...info, at: new Date().toISOString(), until: new Date(Date.now() + days * 86400000).toISOString() };
+    const res = await store().setJSON('trophies', doc, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
+    if (res.modified) return doc[name];
+  }
+  throw err(409, 'Please try again.');
 }
 
 // For the once-a-minute scheduler: removes sessions older than a day.

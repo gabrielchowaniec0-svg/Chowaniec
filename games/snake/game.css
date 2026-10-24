@@ -64,7 +64,9 @@ body.cg-multi .sn-padbtn { margin-left: 0; }
 @keyframes snUp { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes snWiggle { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
 @media (prefers-reduced-motion: reduce) { .sn-logo, .sn-card, .sn-overlay.show, .sn-pill.pop { animation: none; } }
-.sn-card.sn-start { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px; text-align: left; max-width: calc(100% - 20px); box-sizing: border-box; }
+.sn-card.sn-start { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 14px 14px 16px; text-align: left; width: 340px; max-width: calc(100% - 20px); box-sizing: border-box; }
+.sn-start .sn-head { display: flex; align-items: center; gap: 12px; }
+.sn-start .ff-actions { margin-top: 12px; }
 .sn-start .sn-txt { min-width: 0; }
 .sn-start h2 { display: block; font-size: 20px; margin: 0; }
 .sn-start p { margin: 0; font-size: 13px; }

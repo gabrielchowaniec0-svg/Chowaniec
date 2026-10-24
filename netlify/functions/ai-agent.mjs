@@ -21,6 +21,8 @@ import { createEvent, listEvents, describeWhen, todayLocal, addDays } from '../l
 import { searchEverything } from '../lib/search.mjs';
 import { notifyMeeting } from './meeting-notify.mjs';
 import { getAttendance, latestMeetingFor, meetingNote, chatForAttendees, isMeetingCode } from '../lib/meeting-recap.mjs';
+import { createGameNight, NIGHT_GAMES } from '../lib/game-night.mjs';
+import { GAMES } from '../lib/games-store.mjs';
 
 const { dailyRequest } = common;
 const MAX_TOOL_ROUNDS = 8;
@@ -205,6 +207,23 @@ const TOOLS = [
     strict: true
   },
   {
+    name: 'create_game_night',
+    description: `Set up a Family Game Night in a group chat: adds it to the calendar, posts a multi-choice poll of 4 to 6 games for everyone to vote on, and a Game Night card. At the start time (or when someone taps "Start game night") the top 3 or 4 games are played one after another with a running scoreboard, and the champion gets a trophy. Game ids: ${NIGHT_GAMES.map((g) => `${g} = ${GAMES[g].name} (${GAMES[g].mode === 'race' ? `everyone at once, up to ${GAMES[g].max}` : `${GAMES[g].max} players take turns`})`).join('; ')}. Prefer games the whole family can play at once.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        chat: { type: 'string', description: 'A group chat id from list_chats.' },
+        date: { type: 'string', description: 'YYYY-MM-DD in the family time zone.' },
+        time: { type: 'string', description: 'HH:MM 24-hour start time (default 19:00).' },
+        games: { type: 'array', items: { type: 'string' }, description: '4 to 6 game ids to put in the poll.' },
+        title: { type: 'string', description: 'Short name, e.g. "Family Game Night".' }
+      },
+      required: ['chat', 'date', 'time', 'games', 'title'],
+      additionalProperties: false
+    },
+    strict: true
+  },
+  {
     name: 'list_calendar',
     description: 'List calendar events this person can see between two dates (inclusive).',
     input_schema: {
@@ -307,6 +326,7 @@ const INPUTS = {
     location: z.string().max(200), notes: z.string().max(1200), chat: z.string().max(40)
   }),
   list_calendar: z.object({ from: z.string().max(10), to: z.string().max(10) }),
+  create_game_night: z.object({ chat: z.string().max(40), date: z.string().max(10), time: z.string().max(5), games: z.array(z.string().max(40)).max(8), title: z.string().max(80) }),
   search_everything: z.object({ query: z.string().max(200) }),
   get_meeting_material: z.object({ code: z.string().max(128) }),
   notify_meeting: z.object({ code: z.string().max(128), everyone: z.boolean(), people: z.array(z.string().max(40)).max(10) }),
@@ -330,6 +350,7 @@ const LABELS = {
   send_direct_message: 'Sending a direct message',
   add_calendar_event: 'Adding to the calendar',
   list_calendar: 'Checking the calendar',
+  create_game_night: 'Setting up game night',
   search_everything: 'Searching everything',
   get_meeting_material: 'Reading the meeting notes',
   notify_meeting: 'Notifying people about the meeting',
@@ -477,6 +498,21 @@ async function runToolInner(name, input, user, turn) {
     const event = await createEvent(user, { title: input.title, date: input.date, time: input.time, endTime: input.end_time, location: input.location, notes: input.notes, room }, { via: 'ai' });
     return { result: { id: event.id, title: event.title, when: describeWhen(event) }, summary: `Added "${event.title}" to the calendar`, url: `/calendar/?event=${event.id}`, action: { label: 'Open the calendar', url: `/calendar/?event=${event.id}` }, undo: { kind: 'event', id: event.id } };
   }
+  if (name === 'create_game_night') {
+    const room = resolveRoom(input.chat, user);
+    guardPost(turn, room);
+    for (const tool of ['add_calendar_event', 'create_poll']) {
+      const blocked = await whyBlocked(user.name, tool);
+      if (blocked) throw new ToolError(blocked);
+    }
+    const { night, event } = await createGameNight(user, { room, date: input.date, time: input.time, games: input.games, title: input.title, via: 'ai' });
+    const link = room === 'everyone' ? '/group/' : `/group/?room=${room}`;
+    return {
+      result: { ok: true, title: night.title, when: night.when, chat: room, poll_games: night.games.map((g) => GAMES[g].name), calendar_event: event ? event.id : null },
+      summary: `Set up ${night.title} for ${night.when}`, url: link, action: { label: 'Open the chat', url: link },
+      ...(event ? { undo: { kind: 'event', id: event.id } } : {})
+    };
+  }
   if (name === 'list_calendar') {
     const ok = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d);
     const from = ok(input.from) ? input.from : todayLocal().date;
@@ -587,6 +623,7 @@ Messages you post to a group chat are sent by you, Chowaniec AI, never as ${user
 Nicknames: ${Object.entries(ALIASES).filter(([, a]) => a.length).map(([n, a]) => `${n} is also called ${a.join(' or ')}`).join('; ')}. Treat a nickname as that person, and use the real name when you post.
 ${defaultChat ? `Unless ${user.name} names another chat, post in "${defaultChat.id}" (${defaultChat.name}); ${user.name} picked it in the app. Don't ask which chat when they haven't named one.` : ''}
 Shared lists (groceries, packing, costumes) live at /lists; use add_to_list when asked to add things to a list.
+The family plays games together at /games/. For a family game night, use create_game_night (it adds the event, a poll of games and a Game Night card to the chat; don't also call add_calendar_event or create_poll for it).
 Only Victoria, Gabriel and Nicole may send an @important ping (post_to_group with important: true). ${user.name} ${user.host ? 'is allowed to' : 'is not allowed to'}.
 If ${user.name} clearly asks you to do something, do it. If an action would notify or involve other people and they haven't clearly asked (for example you think a reminder would help), do not do it: ask first, then call offer_quick_answers with 2 to 4 buttons such as "Yes, send it", "Only some people" and "Not now". Whenever your reply ends with a question or an offer, call offer_quick_answers as your last step so they can answer with one tap, and keep the reply itself short. Never repeat the options in the text.
 Resolve dates like "Friday" or "next week" yourself using today's date, and say the exact date you used.

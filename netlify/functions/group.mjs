@@ -42,11 +42,13 @@ import {
   STICKERS, stickerById, threadRoot, listThread, searchMessages, getStarRefs, toggleStar, markListened, saveImage
 } from '../lib/group-store.mjs';
 import { publishMessage } from '../lib/group-post.mjs';
+import { wantsGameNight, planFromChat } from '../lib/game-night.mjs';
+import { notifyMessage } from '../lib/group-store.mjs';
 import { catchUpSummary } from '../lib/catch-up.mjs';
 import { analyzeMessage } from '../lib/smart-message.mjs';
 import { listDms, dmInfo } from '../lib/dm.mjs';
 import { getMutes, setMute } from '../lib/user-settings.mjs';
-import { isDmId } from '../lib/rooms.mjs';
+import { isDmId, isRoomId } from '../lib/rooms.mjs';
 import { createEvent, describeWhen } from '../lib/calendar-store.mjs';
 import { resolveRoom, roomsFor, canAccessRoom } from '../lib/rooms.mjs';
 import { searchGifs, gifById } from '../lib/gifs.mjs';
@@ -293,7 +295,8 @@ export default async (req, context) => {
       await threadRoot(body.thread, room);
       thread = body.thread;
     }
-    const smart = body.smart === false || body.image || thread || isDmId(room) ? null : analyzeMessage(body.text);
+    const aiGameNight = wantsGameNight(body.text) && /(^|[^\w])@(ai|agent|bob)\b/i.test(String(body.text || ''));
+    const smart = body.smart === false || body.image || thread || isDmId(room) || aiGameNight ? null : analyzeMessage(body.text);
     if (smart && (smart.event || smart.polls.length)) {
       const posted = [];
       const replyTo = isMessageId(body.replyTo) ? body.replyTo : null;
@@ -331,6 +334,11 @@ export default async (req, context) => {
       replyTo: isMessageId(body.replyTo) ? body.replyTo : null
     });
     await clearTyping(user.name, room);
+    // "@AI let's do game night Friday at 7": the AI sets up a game night (event, poll and card) instead of a plain reply.
+    if (message.mentions.includes('AI') && isRoomId(room) && !thread && wantsGameNight(message.text)) {
+      context.waitUntil(notifyMessage(message).catch((e) => console.error('Notify failed:', e.message)).then(() => planFromChat(message)));
+      return json(200, { message });
+    }
     // Notifications and the AI's reply run after the response is sent.
     context.waitUntil(publishMessage(message));
     return json(200, { message });

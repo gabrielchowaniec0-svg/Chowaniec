@@ -1,0 +1,99 @@
+<!-- Mini Golf banner for /games/index.html: a ball rolls round the windmill and drops into the cup.
+     Self-contained: inline SVG (viewBox 320x200, same flat style as the other SCENES) + CSS scoped to .bn-golf.
+     Drop it inside a card's .art box; it fills it. Animations pause with prefers-reduced-motion. -->
+<style>
+.bn-golf { position: absolute; inset: 0; overflow: hidden; }
+.bn-golf svg { display: block; width: 100%; height: 100%; }
+.bn-golf .bn-fb { transform-box: fill-box; transform-origin: center; }
+.bn-golf .bn-cloud { animation: bnGolfDrift 26s linear infinite; }
+.bn-golf .bn-cloud.b { animation-duration: 38s; animation-delay: -14s; }
+.bn-golf .bn-sails { transform-box: view-box; transform-origin: 112px 82px; animation: bnGolfSpin 3.2s linear infinite; }
+.bn-golf .bn-flag { transform-box: fill-box; transform-origin: 0 50%; animation: bnGolfWave .9s ease-in-out infinite alternate; }
+.bn-golf .bn-ball { offset-path: path('M38 176 C70 172 82 160 70 146 C58 132 80 118 112 120 C150 122 168 132 196 140 C222 147 240 150 252 151'); offset-rotate: 0deg; animation: bnGolfRoll 4.2s cubic-bezier(.35,.1,.45,1) infinite; }
+.bn-golf .bn-shadow { offset-path: path('M40 179 C72 175 84 163 72 149 C60 135 82 121 114 123 C152 125 170 135 198 143 C224 150 242 153 254 154'); offset-rotate: 0deg; animation: bnGolfRoll 4.2s cubic-bezier(.35,.1,.45,1) infinite; }
+.bn-golf .bn-hidden { animation: bnGolfBehind 4.2s linear infinite; }
+.bn-golf .bn-ring { transform-box: fill-box; transform-origin: center; animation: bnGolfRing 4.2s ease-out infinite; }
+.bn-golf .bn-spark { transform-box: fill-box; transform-origin: center; animation: bnGolfSpark 4.2s ease-out infinite both; }
+@keyframes bnGolfDrift { from { transform: translateX(0); } to { transform: translateX(-360px); } }
+@keyframes bnGolfSpin { to { transform: rotate(360deg); } }
+@keyframes bnGolfWave { from { transform: skewY(-6deg) scaleX(.94); } to { transform: skewY(5deg) scaleX(1.03); } }
+@keyframes bnGolfRoll {
+  0%, 6% { offset-distance: 0%; transform: scale(1); opacity: 1; }
+  78% { offset-distance: 100%; transform: scale(1); opacity: 1; }
+  84% { offset-distance: 100%; transform: scale(.5) translateY(3px); opacity: 0; }
+  100% { offset-distance: 100%; transform: scale(.5); opacity: 0; }
+}
+@keyframes bnGolfBehind { 0%, 36% { opacity: 1; } 40%, 50% { opacity: 0; } 54%, 100% { opacity: 1; } }
+@keyframes bnGolfRing { 0%, 79% { transform: scale(.3); opacity: 0; } 82% { opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes bnGolfSpark { 0%, 80% { transform: scale(0) rotate(0deg); opacity: 0; } 88% { transform: scale(1.1) rotate(45deg); opacity: 1; } 100% { transform: scale(.4) rotate(90deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bn-golf *, .bn-golf *::before { animation: none !important; } }
+</style>
+<div class="bn-golf" aria-hidden="true">
+  <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" focusable="false">
+    <defs>
+      <linearGradient id="bn-golf-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bae6fd"/><stop offset="1" stop-color="#ecfccb"/></linearGradient>
+      <linearGradient id="bn-golf-felt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#22a34a"/></linearGradient>
+      <radialGradient id="bn-golf-ballg" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#ffffff"/><stop offset=".65" stop-color="#f1f5f9"/><stop offset="1" stop-color="#b6c2cf"/></radialGradient>
+      <radialGradient id="bn-golf-glow" cx=".15" cy="-.05" r=".85"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+      <clipPath id="bn-golf-green"><path d="M14 196 L40 112 L292 112 L314 196 Z"/></clipPath>
+    </defs>
+    <rect width="320" height="200" fill="url(#bn-golf-sky)"/>
+    <rect width="320" height="200" fill="url(#bn-golf-glow)"/>
+    <!-- sun and clouds -->
+    <circle cx="268" cy="38" r="30" fill="#fff" opacity=".4"/><circle cx="268" cy="38" r="18" fill="#fef9c3"/>
+    <g class="bn-cloud"><g fill="#fff" opacity=".9"><circle cx="190" cy="40" r="10"/><circle cx="204" cy="33" r="13"/><circle cx="219" cy="40" r="10"/><rect x="190" y="38" width="29" height="12" rx="2"/></g><g fill="#fff" opacity=".9" transform="translate(360 0)"><circle cx="190" cy="40" r="10"/><circle cx="204" cy="33" r="13"/><circle cx="219" cy="40" r="10"/><rect x="190" y="38" width="29" height="12" rx="2"/></g></g>
+    <g class="bn-cloud b"><g fill="#fff" opacity=".75" transform="translate(40 8) scale(.7)"><circle cx="30" cy="40" r="10"/><circle cx="44" cy="33" r="13"/><circle cx="59" cy="40" r="10"/><rect x="30" y="38" width="29" height="12" rx="2"/></g><g fill="#fff" opacity=".75" transform="translate(400 8) scale(.7)"><circle cx="30" cy="40" r="10"/><circle cx="44" cy="33" r="13"/><circle cx="59" cy="40" r="10"/><rect x="30" y="38" width="29" height="12" rx="2"/></g></g>
+    <!-- hills, trees, flowers -->
+    <path d="M0 116 C40 90 90 92 130 106 C170 120 210 88 260 94 C290 98 308 106 320 112 L320 130 L0 130 Z" fill="#86efac"/>
+    <path d="M0 124 C50 110 110 112 160 120 C210 128 260 110 320 118 L320 140 L0 140 Z" fill="#65d38a"/>
+    <g transform="translate(22 112)"><rect x="-2.5" y="-12" width="5" height="12" rx="2" fill="#92400e"/><circle cx="0" cy="-22" r="12" fill="#22c55e"/><circle cx="-4" cy="-26" r="6" fill="#86efac" opacity=".7"/></g>
+    <g transform="translate(296 112) scale(.85)"><rect x="-2.5" y="-12" width="5" height="12" rx="2" fill="#92400e"/><circle cx="0" cy="-22" r="12" fill="#16a34a"/><circle cx="-4" cy="-26" r="6" fill="#4ade80" opacity=".7"/><circle cx="5" cy="-18" r="2" fill="#ef4444"/><circle cx="-6" cy="-16" r="2" fill="#ef4444"/></g>
+    <!-- the green with timber borders -->
+    <path d="M10 200 L36 108 L296 108 L318 200 Z" fill="#c0813f"/>
+    <path d="M14 196 L40 112 L292 112 L314 196 Z" fill="url(#bn-golf-felt)"/>
+    <g clip-path="url(#bn-golf-green)" fill="#fff" opacity=".07"><path d="M0 150 L320 120 L320 132 L0 162 Z"/><path d="M0 182 L320 152 L320 164 L0 194 Z"/></g>
+    <path d="M36 108 L296 108" stroke="#f3c27e" stroke-width="4" stroke-linecap="round"/>
+    <path d="M10 200 L36 108" stroke="#f3c27e" stroke-width="5" stroke-linecap="round"/>
+    <path d="M318 200 L296 108" stroke="#f3c27e" stroke-width="5" stroke-linecap="round"/>
+    <!-- sand trap -->
+    <ellipse cx="216" cy="182" rx="30" ry="9" fill="#e6c579"/><ellipse cx="216" cy="181" rx="27" ry="7.5" fill="#f4dd9d"/>
+    <!-- tee mat -->
+    <rect x="26" y="171" width="26" height="11" rx="3" fill="#15803d"/><circle cx="31" cy="176.5" r="1.6" fill="#fff"/><circle cx="47" cy="176.5" r="1.6" fill="#fff"/>
+    <!-- the cup and flag -->
+    <ellipse cx="254" cy="152" rx="11" ry="5" fill="#e5e7eb"/><ellipse cx="254" cy="152.4" rx="9.5" ry="4.2" fill="#111827"/>
+    <ellipse class="bn-ring" cx="254" cy="152" rx="10" ry="4.5" fill="none" stroke="#fff" stroke-width="2"/>
+    <rect x="253" y="96" width="2.4" height="56" rx="1.2" fill="#f8fafc"/>
+    <path class="bn-flag" d="M255.4 97 Q266 99 278 97 L278 112 Q266 114 255.4 112 Z" fill="#ef4444"/>
+    <circle cx="254.2" cy="96" r="2.2" fill="#facc15"/>
+    <!-- windmill (the ball rolls behind it) -->
+    <ellipse cx="116" cy="125" rx="40" ry="6" fill="#000" opacity=".14"/>
+    <g>
+      <rect x="86" y="84" width="52" height="40" fill="#fff7ed"/>
+      <rect x="128" y="84" width="10" height="40" fill="#000" opacity=".05"/>
+      <path d="M80 86 L112 54 L144 86 Z" fill="#ef4444"/><path d="M80 86 L144 86 L140 90 L84 90 Z" fill="#b91c1c"/>
+      <path d="M100 124 L100 112 A12 12 0 0 1 124 112 L124 124 Z" fill="#1f2937"/>
+      <path d="M98.5 124 L98.5 112 A13.5 13.5 0 0 1 125.5 112 L125.5 124" fill="none" stroke="#c2410c" stroke-width="2.4"/>
+      <rect x="90" y="94" width="9" height="10" rx="3.5" fill="#7dd3fc"/><rect x="125" y="94" width="9" height="10" rx="3.5" fill="#7dd3fc"/>
+    </g>
+    <!-- ball (hidden while it goes through the windmill's tunnel) -->
+    <g class="bn-hidden">
+      <ellipse class="bn-shadow" cx="0" cy="0" rx="5.5" ry="2.2" fill="#000" opacity=".22"/>
+      <circle class="bn-ball" cx="0" cy="0" r="5.2" fill="url(#bn-golf-ballg)"/>
+    </g>
+    <!-- sails in front -->
+    <g class="bn-sails">
+      <g fill="#fff" stroke="#b45309" stroke-width="1">
+        <path d="M112 82 L112 42" stroke="#92400e" stroke-width="2.4"/><rect x="113" y="44" width="10" height="30"/>
+        <path d="M112 82 L152 82" stroke="#92400e" stroke-width="2.4"/><rect x="120" y="83" width="30" height="10"/>
+        <path d="M112 82 L112 122" stroke="#92400e" stroke-width="2.4"/><rect x="101" y="90" width="10" height="30"/>
+        <path d="M112 82 L72 82" stroke="#92400e" stroke-width="2.4"/><rect x="74" y="71" width="30" height="10"/>
+      </g>
+    </g>
+    <circle cx="112" cy="82" r="4" fill="#92400e"/><circle cx="112" cy="82" r="1.6" fill="#fde047"/>
+    <!-- sparkles when the ball drops -->
+    <path class="bn-spark" d="M266 134 Q266 140 272 140 Q266 140 266 146 Q266 140 260 140 Q266 140 266 134 Z" fill="#fde047"/>
+    <path class="bn-spark" style="animation-delay:.12s" d="M242 130 Q242 134 246 134 Q242 134 242 138 Q242 134 238 134 Q242 134 242 130 Z" fill="#fff"/>
+    <!-- flowers -->
+    <g><circle cx="58" cy="128" r="2.4" fill="#f472b6"/><circle cx="64" cy="131" r="2.4" fill="#fde047"/><circle cx="286" cy="128" r="2.4" fill="#c084fc"/><circle cx="292" cy="131" r="2.4" fill="#fb923c"/></g>
+  </svg>
+</div>

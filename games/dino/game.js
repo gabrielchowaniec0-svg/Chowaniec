@@ -204,9 +204,9 @@
   }
 
   // ---------- Input ----------
-  function press() {
+  function press(fromPointer) {
     if (blocked()) return;
-    if (S.mode === 'ready') { startSolo(); }
+    if (S.mode === 'ready') { if (fromPointer) return; startSolo(); } // on screen: the buttons choose (keys start practice)
     else if (S.mode === 'paused') { S.mode = 'playing'; return; }
     if (S.mode !== 'playing') return;
     S.holding = true;
@@ -220,7 +220,7 @@
     e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     touch = { id: e.pointerId, y: e.clientY, t: performance.now(), swiped: false };
-    press();
+    press(true);
   }
   function onPointerMove(e) {
     if (!touch || e.pointerId !== touch.id || touch.swiped) return;
@@ -1090,12 +1090,7 @@
       const tsz = Math.round(clamp(cssW * 0.11, 34, 64));
       if (counting) { bigText('Get ready!', midY, tsz * 0.8, '#ffffff', '#3b2f5c'); return; }
       ctx.save();
-      bigText('Dino Dash', midY - tsz * 0.55, tsz, '#ffffff', '#3b2f5c');
-      const pulse = 1 + Math.sin(S.time * 4) * 0.04;
-      ctx.translate(cssW / 2, midY + tsz * 0.45);
-      ctx.scale(pulse, pulse);
-      ctx.translate(-cssW / 2, -(midY + tsz * 0.45));
-      bigText('Tap to start', midY + tsz * 0.45, Math.round(tsz * 0.48), '#ffe066', '#3b2f5c');
+      bigText('Dino Dash', ffTop() - tsz * 0.62, tsz, '#ffffff', '#3b2f5c');
       ctx.restore();
       const touchy = matchMedia('(pointer: coarse)').matches;
       ctx.font = `600 ${cssW < 400 ? 14 : 16}px Outfit, system-ui, sans-serif`;
@@ -1111,6 +1106,64 @@
       bigText('Paused', groundY * 0.4, tsz, '#ffffff', '#3b2f5c');
       bigText('Tap to keep running', groundY * 0.4 + tsz, Math.round(tsz * 0.45), '#ffe066', '#3b2f5c');
     }
+  }
+
+  // ---------- Family first: the shared start-screen buttons (same look in every game) ----------
+  // ffButtons({ solo, soloIcon, extra }) -> HTML: a big "Play with the family" button (data-ff="family")
+  // and an optional secondary solo button (data-ff="solo"). Call ffStyle() once.
+  function ffStyle() {
+    if (document.getElementById('ff-style')) return;
+    const s = document.createElement('style');
+    s.id = 'ff-style';
+    s.textContent = '.ff-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;max-width:360px;margin:16px auto 0;}' +
+      '.ff-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;border:0;border-radius:18px;font:inherit;line-height:1.15;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .12s,filter .12s,box-shadow .12s;}' +
+      '.ff-btn:active{transform:translateY(3px) scale(.985);}' +
+      '.ff-btn:focus-visible{outline:3px solid #60a5fa;outline-offset:3px;}' +
+      '.ff-family{min-height:64px;padding:10px 20px;background:linear-gradient(180deg,#34d399,#16a34a);color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.2);box-shadow:0 5px 0 #15803d,0 12px 26px rgba(22,163,74,.35);}' +
+      '.ff-family:hover{filter:brightness(1.06);}.ff-family:active{box-shadow:0 2px 0 #15803d,0 6px 14px rgba(22,163,74,.3);}' +
+      '.ff-family .cg-ic{width:26px;height:26px;flex:none;}' +
+      '.ff-solo{min-height:50px;padding:8px 16px;background:#ffffff;color:#18181b;border:2px solid rgba(0,0,0,.12);font-size:16px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.08);}' +
+      '.ff-solo:hover{filter:brightness(.97);}.ff-solo .cg-ic{flex:none;}' +
+      '.ff-solo[aria-expanded="true"]{border-color:#16a34a;}' +
+      '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}}' +
+      ':root[data-theme="dark"] .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}';
+    document.head.appendChild(s);
+  }
+  function ffButtons({ solo, soloIcon, extra } = {}) {
+    const ic = window.ChowGames.icon;
+    return '<div class="ff-actions">' +
+      `<button type="button" class="ff-btn ff-family" data-ff="family">${ic('users', 26)}<span>Play with the family</span></button>` +
+      (solo ? `<button type="button" class="ff-btn ff-solo" data-ff="solo">${ic(soloIcon || 'play', 19)}<span>${solo}</span></button>` : '') +
+      (extra || '') + '</div>';
+  }
+
+  // Start screen buttons (HTML over the canvas): family race first, practice second.
+  let ffEl = null;
+  function ffTop() { const tsz = Math.round(clamp(cssW * 0.11, 34, 64)); return Math.max(90, groundY * 0.42) + tsz * 0.05; }
+  function buildStart() {
+    ffStyle();
+    ffEl = document.createElement('div');
+    ffEl.className = 'dd-start';
+    ffEl.style.cssText = 'position:absolute;left:16px;right:16px;z-index:2;display:none;';
+    ffEl.innerHTML = ffButtons({ solo: 'Practice alone' });
+    ffEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+    ffEl.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-ff]');
+      if (!b || blocked()) return;
+      b.blur();
+      CG.sfx('click');
+      if (b.dataset.ff === 'family') CG.openLobby();
+      else if (S.mode === 'ready' && !S.multi) startSolo();
+    });
+    root.appendChild(ffEl);
+  }
+  function syncStart() {
+    if (!ffEl) return;
+    const show = S.mode === 'ready' && !S.multi && !document.getElementById('cg-countdown');
+    const top = Math.round(ffTop()) + 'px';
+    if (ffEl.style.top !== top) ffEl.style.top = top;
+    const d = show ? 'block' : 'none';
+    if (ffEl.style.display !== d) ffEl.style.display = d;
   }
 
   // ---------- Setup ----------
@@ -1133,6 +1186,7 @@
     last = now;
     update(dt);
     render();
+    syncStart();
     requestAnimationFrame(loop);
   }
 
@@ -1162,6 +1216,7 @@
       canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:pointer;';
       root.appendChild(canvas);
       ctx = canvas.getContext('2d');
+      buildStart();
       layout();
       reset(c.seed || 1);
       loadHi();

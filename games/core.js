@@ -41,7 +41,15 @@
     style: { icon: 'shirt', from: '#f9a8d4', to: '#a855f7' },
     police: { icon: 'siren', from: '#93c5fd', to: '#1e3a8a' },
     puzzle: { icon: 'puzzle', from: '#5eead4', to: '#0e7490' },
-    trivia: { icon: 'brain', from: '#fde047', to: '#f472b6' }
+    trivia: { icon: 'brain', from: '#fde047', to: '#f472b6' },
+    doodle: { icon: 'palette', from: '#fda4af', to: '#e11d48' },
+    clash: { icon: 'layers', from: '#fca5a5', to: '#7c3aed' },
+    dice: { icon: 'dice', from: '#a5b4fc', to: '#4338ca' },
+    golf: { icon: 'flag', from: '#bef264', to: '#15803d' },
+    blocks: { icon: 'grid', from: '#67e8f9', to: '#7c3aed' },
+    typing: { icon: 'keyboard', from: '#e5e7eb', to: '#334155' },
+    checkers: { icon: 'crown', from: '#fca5a5', to: '#1f2937' },
+    ludo: { icon: 'home', from: '#fde047', to: '#16a34a' }
   };
   function badge(id, size) {
     const m = GAME_META[id] || { icon: 'gamepad', from: '#a1a1aa', to: '#52525b' };
@@ -128,7 +136,10 @@
     win: [['square', 523, 523, 0.12, 0.08], ['square', 659, 659, 0.12, 0.08, 0.12], ['square', 784, 784, 0.12, 0.08, 0.24], ['square', 1047, 1047, 0.35, 0.08, 0.36]],
     lose: [['triangle', 392, 392, 0.18, 0.1], ['triangle', 330, 330, 0.18, 0.1, 0.2], ['triangle', 262, 196, 0.4, 0.1, 0.4]],
     go: [['square', 784, 784, 0.25, 0.1]],
-    whoosh: [['sawtooth', 300, 900, 0.2, 0.04]]
+    whoosh: [['sawtooth', 300, 900, 0.2, 0.04]],
+    roll: [['square', 220, 260, 0.04, 0.05], ['square', 300, 240, 0.04, 0.05, 0.06], ['square', 260, 320, 0.04, 0.05, 0.12], ['square', 340, 280, 0.04, 0.05, 0.19], ['triangle', 180, 120, 0.12, 0.08, 0.27]],
+    shuffle: [['sawtooth', 1200, 800, 0.05, 0.02], ['sawtooth', 1300, 900, 0.05, 0.02, 0.07], ['sawtooth', 1100, 700, 0.05, 0.02, 0.14], ['sawtooth', 1250, 850, 0.05, 0.02, 0.21]],
+    deal: [['triangle', 900, 600, 0.06, 0.05]]
   };
   function sfx(name) {
     if (muted || !SOUNDS[name]) return;
@@ -210,7 +221,7 @@
   async function submitScore(score) {
     const item = { game: opts.id, score: Math.round(score), user: me(), at: Date.now() };
     try {
-      return await api('POST', '', { action: 'score', game: item.game, score: item.score });
+      return await api('POST', '', { action: 'score', game: item.game, score: item.score, session: multi.session ? multi.session.id : undefined });
     } catch (e) {
       if (e.status === 409) return null;                     // e.g. today's puzzle was already played
       if (!e.status || e.status >= 500 || e.status === 429) {
@@ -264,6 +275,8 @@
   };
   const inSession = () => !!multi.session;
   const isHost = () => !!multi.session && multi.session.host === me();
+  // Rematches and game night games are "open": anyone playing may start the next round.
+  const canStart = () => isHost() || (!!multi.session && !!multi.session.open && multi.session.players.includes(me()));
   const colorOf = (name) => {
     const list = multi.session ? multi.session.players : [];
     const i = Math.max(0, list.indexOf(name));
@@ -272,6 +285,7 @@
   const setUrl = (id) => {
     const u = new URL(location.href);
     if (id) u.searchParams.set('s', id); else u.searchParams.delete('s');
+    u.searchParams.delete('rematch');
     history.replaceState(null, '', u.pathname + u.search);
   };
   const shareUrl = () => `${location.origin}/games/${opts.id}/?s=${multi.session.id}`;
@@ -308,6 +322,7 @@
     multi.session = session;
     multi.round = 0;     // a round already running (e.g. after a reload) is picked up by the next tick
     multi.lastVersion = session.version;
+    multi.seenRematch = session.rematchAt || '';
     setUrl(session.id);
     document.body.classList.add('cg-multi');
     renderBarState();
@@ -370,6 +385,15 @@
   function react() {
     const s = multi.session;
     renderBarState();
+    if (s.rematchAt && s.rematchAt !== multi.seenRematch) {
+      multi.seenRematch = s.rematchAt;
+      if (s.rematchBy && s.rematchBy !== me() && s.status === 'lobby') {
+        toast(`${s.rematchBy} wants a rematch!`);
+        sfx('coin');
+        if (!isLobbyOpen()) openLobby();
+        return;
+      }
+    }
     if (s.status === 'playing' && s.round !== multi.round && s.players.includes(me())) {
       beginRound(s);
       return;
@@ -388,7 +412,7 @@
     }
     if (opts.mode === 'race' && multi.round === s.round) {
       renderRaceBoard();
-      if (multi.finished && !multi.starting) renderResults();    // not while the host is picking the next round
+      if (multi.finished && !multi.starting && s.status !== 'lobby') renderResults();    // not while the host is picking the next round
     }
     if (isLobbyOpen()) renderLobby();
   }
@@ -454,13 +478,16 @@
     const rows = s.players.map((name) => {
       const p = name === me() ? { state: multi.myState } : multi.players[name];
       const st = p && p.state && (name === me() || p.round === s.round) ? p.state : null;
-      return { name, color: colorOf(name), score: st ? Number(st.score) || 0 : 0, alive: st ? st.alive !== false : true, started: !!st };
+      const place = st ? Math.round(Number(st.place)) : 0;
+      return { name, color: colorOf(name), score: st ? Number(st.score) || 0 : 0, alive: st ? st.alive !== false : true, started: !!st, place: place >= 1 ? place : 0, detail: st && st.detail ? String(st.detail).slice(0, 40) : '' };
     });
+    // A game can rank by finishing place instead of points (state.place, 1 = best; e.g. last one standing).
+    if (rows.some((r) => r.place)) return rows.sort((a, b) => (a.place || 99) - (b.place || 99) || b.score - a.score);
     return rows.sort((a, b) => b.score - a.score);
   }
 
   function renderRaceBoard() {
-    if (!inSession() || opts.mode !== 'race') return;
+    if (!inSession() || opts.mode !== 'race' || opts.raceBoard === false) return;
     let el = $('#cg-race');
     if (!el) { el = document.createElement('div'); el.id = 'cg-race'; el.setAttribute('aria-live', 'off'); document.body.appendChild(el); }
     el.innerHTML = raceStandings().map((r) => `<div class="r${r.name === me() ? ' me' : ''}${r.alive ? '' : ' out'}"><i style="background:${r.color}"></i><b>${esc(r.name)}</b><span>${fmt(r.score)}</span>${r.alive ? '' : `<em>${icon('flag', 12)}</em>`}</div>`).join('');
@@ -474,6 +501,7 @@
     try {
       const data = await api('POST', '', { action: 'sync', id: multi.session.id, state: multi.myState, round: multi.session.round });
       multi.players = data.players || {};
+      if (data.session) take(data.session);
     } catch (e) { /* the next tick retries */ }
     renderRaceBoard();
     renderResults();
@@ -485,10 +513,11 @@
     // Someone whose first update hasn't arrived is still playing, unless 15 s have passed (they never started).
     const grace = now() - Date.parse(s.startAt) > 15000;
     const allDone = rows.every((r) => (r.started && !r.alive) || (!r.started && grace)) && rows.some((r) => r.started);
+    const tie = rows.length > 1 && !rows[0].place && rows[0].score === rows[1].score;
     const html = (allDone ? `<div class="cg-hero gold">${icon('crown', 26)}</div>` : `<div class="cg-hero">${icon('timer', 26)}</div>`) +
-      `<h2>${allDone ? (rows[0].name === me() ? 'You win!' : `${esc(rows[0].name)} wins!`) : 'Waiting for the others…'}</h2>` +
-      '<ol class="cg-list">' + rows.map((r, i) => `<li class="${r.name === me() ? 'mine' : ''}"><span class="m">${allDone ? medal(i) : icon(r.alive ? 'footprints' : 'flag', 18)}</span><span class="n"><i class="dot" style="background:${r.color}"></i>${esc(r.name)}</span><span class="s">${fmt(r.score)}</span></li>`).join('') + '</ol>' +
-      `<div class="cg-row">${isHost() ? `<button type="button" class="primary" data-cg="again"${allDone ? '' : ' disabled'}>Play again</button>` : `<span class="cg-wait">${allDone ? `Waiting for ${esc(s.host)} to start again…` : ''}</span>`}<button type="button" data-cg="leave">Leave</button></div>`;
+      `<h2>${allDone ? (tie ? 'It’s a tie!' : rows[0].name === me() ? 'You win!' : `${esc(rows[0].name)} wins!`) : 'Waiting for the others…'}</h2>` +
+      '<ol class="cg-list">' + rows.map((r, i) => `<li class="${r.name === me() ? 'mine' : ''}"><span class="m">${allDone ? medal(i) : icon(r.alive ? 'footprints' : 'flag', 18)}</span><span class="n"><i class="dot" style="background:${r.color}"></i>${esc(r.name)}${r.detail ? `<small class="cg-detail">${esc(r.detail)}</small>` : ''}</span><span class="s">${fmt(r.score)}</span></li>`).join('') + '</ol>' +
+      `<div class="cg-row">${s.night ? nightButton() : (canStart() ? `<button type="button" class="primary" data-cg="again"${allDone ? '' : ' disabled'}>Play again</button>` : `<span class="cg-wait">${allDone ? `Waiting for ${esc(s.host)} to start again…` : ''}</span>`)}<button type="button" data-cg="leave">Leave</button></div>`;
     let card = $('#cg-modal .cg-card.results');
     if (!card) {
       card = modal(html, { sticky: true });
@@ -497,7 +526,7 @@
     } else card.innerHTML = html;
     if (allDone && !multi.resultsShown) {
       multi.resultsShown = true;
-      sfx(rows[0].name === me() ? 'win' : 'score');
+      sfx(!tie && rows[0].name === me() ? 'win' : 'score');
     }
   }
   async function onResultsClick(e) {
@@ -508,7 +537,7 @@
   }
 
   // ----- turn games -----
-  async function commit(shared, { done } = {}) {
+  async function commit(shared, { done, quiet } = {}) {
     if (!inSession()) return false;
     try {
       const { session } = await api('POST', '', { action: 'move', id: multi.session.id, version: multi.session.version, shared, done: !!done });
@@ -520,7 +549,7 @@
         multi.session = e.data.session;
         multi.lastVersion = e.data.session.version;
         emit('shared', multi.session.shared, turnInfo());
-        toast('Someone else moved first.');
+        if (!quiet) toast('Someone else moved first.');
       } else toast(e.message);
       return false;
     }
@@ -542,6 +571,7 @@
   }
 
   let chats = null;
+  let trophies = {};      // game night champions: name -> { title, until }
   const isLobbyOpen = () => !!$('#cg-modal .cg-card.lobby');
 
   async function openLobby() {
@@ -571,21 +601,23 @@
     const card = $('#cg-modal .cg-card.lobby');
     if (!card || !multi.session) return;
     const s = multi.session;
-    const min = opts.mode === 'turns' ? (opts.minPlayers || 2) : 1;
+    const min = opts.mode === 'turns' ? (opts.minPlayers || 2) : (opts.minPlayers || 1);
     const max = opts.maxPlayers || 8;
     const enough = s.players.length >= min;
     const invited = s.invitedTo || [];
     const chatButtons = (chats || []).map((c) => `<button type="button" class="chip${invited.includes(c.id) ? ' on' : ''}" data-cg="invite" data-room="${esc(c.id)}">${icon(invited.includes(c.id) ? 'check' : (c.dm ? 'chat' : 'group'), 16)}${esc(c.name)}</button>`).join('');
     const playing = s.status === 'playing' && s.round === multi.round;
     card.querySelector('.lobby-body').innerHTML =
-      `<div class="cg-hero plain">${badge(opts.id, 52)}</div><h2>${esc(opts.title)}</h2><p class="cg-sub">${playing ? 'Game in progress' : `Lobby · ${s.players.length}/${max} players`}</p>` +
-      '<div class="cg-players">' + s.players.map((n) => `<span class="pl"><i style="background:${colorOf(n)}"></i>${esc(n)}${n === s.host ? ' <small>host</small>' : ''}</span>`).join('') + '</div>' +
-      `<h3>Invite</h3><p class="cg-hint">Tap a chat to send everyone there a “Join game” link and a notification.</p><div class="cg-chips">${chats ? chatButtons || '<span class="cg-hint">No chats found.</span>' : '<span class="cg-hint">Loading chats…</span>'}</div>` +
+      `<div class="cg-hero plain">${badge(opts.id, 52)}</div><h2>${esc(opts.title)}</h2>${s.label ? `<p class="cg-sub cg-label">${icon('trophy', 14)} ${esc(s.label)}</p>` : ''}<p class="cg-sub">${playing ? 'Game in progress' : (s.rematchBy && s.status === 'lobby' ? `Rematch · ${s.players.length}/${max} players` : `Lobby · ${s.players.length}/${max} players`)}</p>` +
+      '<div class="cg-players">' + s.players.map((n) => `<span class="pl"><i style="background:${colorOf(n)}"></i>${esc(n)}${trophies[n] ? `<span class="cg-trophy" title="Game night champion">${icon('trophy', 13)}</span>` : ''}${n === s.host ? ' <small>host</small>' : ''}</span>`).join('') + '</div>' +
+      `<h3>Invite</h3><p class="cg-hint">Tap a chat to post a live game card there and notify everyone.</p><div class="cg-chips">${chats ? chatButtons || '<span class="cg-hint">No chats found.</span>' : '<span class="cg-hint">Loading chats…</span>'}</div>` +
       `<div class="cg-row"><button type="button" data-cg="copy">Copy link</button></div>` +
       '<div class="cg-row lobby-actions">' +
-      (isHost()
+      (canStart()
         ? `<button type="button" data-cg="leave">Leave</button><button type="button" class="primary" data-cg="start"${enough ? '' : ' disabled'}>${enough ? (s.round ? 'Start next round' : 'Start the game') : `Waiting for ${min - s.players.length} more…`}</button>`
-        : `<button type="button" data-cg="leave">Leave</button><span class="cg-wait">Waiting for ${esc(s.host)} to start…</span>`) +
+        : (s.players.includes(me())
+          ? `<button type="button" data-cg="leave">Leave</button><span class="cg-wait">Waiting for ${esc(s.host || 'someone')} to start…</span>`
+          : `<button type="button" data-cg="leave">Leave</button><button type="button" class="primary" data-cg="join">Join the game</button>`)) +
       '</div>';
   }
 
@@ -607,6 +639,9 @@
     } else if (act === 'start') {
       b.disabled = true;
       await startRound();
+    } else if (act === 'join') {
+      b.disabled = true;
+      try { const { session } = await api('POST', '', { action: 'join', id: multi.session.id }); multi.session = session; renderLobby(); renderBarState(); } catch (err) { toast(err.message); b.disabled = false; }
     } else if (act === 'leave') {
       leaveSession();
     }
@@ -615,7 +650,24 @@
   // ---------- Game over ----------
   // Solo: saves the score and shows it with the family record. Race: reports your finish and shows the
   // live results. Turn games: pass { title, score } (score 0 = nothing to save).
-  async function gameOver({ score = 0, title, detail, again } = {}) {
+  // Turn games: every device reports its own result once per round (the chat's game card shows the podium).
+  function reportTurnResult(score, winner) {
+    const s = multi.session;
+    if (!s || multi.reported === `${s.id}:${s.round}`) return;
+    multi.reported = `${s.id}:${s.round}`;
+    const body = { action: 'result', id: s.id, round: s.round, score: Math.max(0, Math.round(Number(score) || 0)) };
+    if (typeof winner === 'string' && s.players.includes(winner)) body.winner = winner;
+    const send = (n) => api('POST', '', body).then((d) => { if (d.session) take(d.session); }).catch(() => { if (n < 3) setTimeout(() => send(n + 1), 1500 * (n + 1)); });
+    send(0);
+  }
+
+  // In a game night, the next step happens back in the chat.
+  function nightButton() {
+    const s = multi.session;
+    return `<a class="cg-btn primary" href="${s.room && s.room !== 'everyone' ? `/group/?room=${encodeURIComponent(s.room)}` : '/group/'}">${icon('trophy', 18)} Back to game night</a>`;
+  }
+
+  async function gameOver({ score = 0, title, detail, again, winner } = {}) {
     const racing = inSession() && multi.round > 0 && multi.session.round === multi.round;
     if (racing && opts.mode === 'race') {
       await raceFinish(score);
@@ -624,8 +676,9 @@
     }
     if (racing && opts.mode === 'turns') {
       if (score > 0) submitScore(score);
+      if (multi.session.players.includes(me())) reportTurnResult(score, winner);
       const card = modal(`<h2>${esc(title || 'Game over')}</h2>${detail ? `<p class="cg-sub">${esc(detail)}</p>` : ''}` +
-        `<div class="cg-row">${isHost() ? '<button type="button" class="primary" data-cg="again">Play again</button>' : `<span class="cg-wait">Waiting for ${esc(multi.session.host)} to start again…</span>`}<button type="button" data-cg="leave">Leave</button></div>`, { sticky: true });
+        `<div class="cg-row">${multi.session.night ? nightButton() : (canStart() ? '<button type="button" class="primary" data-cg="again">Play again</button>' : `<span class="cg-wait">Waiting for ${esc(multi.session.host)} to start again…</span>`)}<button type="button" data-cg="leave">Leave</button></div>`, { sticky: true });
       card.addEventListener('click', onResultsClick);
       return;
     }
@@ -660,7 +713,18 @@
     modal(`<div class="cg-hero plain">${badge(opts.id, 52)}</div><h2>How to play</h2><div class="cg-help">${opts.help || ''}</div><div class="cg-row"><button type="button" class="primary" data-cg="close">Got it</button></div>`);
   }
 
+  // Small styles for frame pieces added after games.css was written (link buttons, trophy chips).
+  function extraStyles() {
+    if (document.getElementById('cg-core-extra')) return;
+    const st = document.createElement('style');
+    st.id = 'cg-core-extra';
+    st.textContent = 'a.cg-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}' +
+      '.cg-trophy{display:inline-flex;align-items:center;margin-left:4px;color:#f59e0b}.cg-label{display:flex;align-items:center;justify-content:center;gap:6px;color:#f59e0b;font-weight:700}';
+    document.head.appendChild(st);
+  }
+
   function frame() {
+    extraStyles();
     const root = document.getElementById('app-root') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'app-root' }));
     root.classList.add('cg-app');
     root.innerHTML = `<header class="cg-bar"><a class="cg-back" href="/games/" aria-label="All games">${icon('back', 24)}</a>` +
@@ -686,9 +750,15 @@
     const ctx = { root: stage, user: me(), seed: Math.floor(Math.random() * 2 ** 31) };
     if (opts.onReady) opts.onReady(ctx);
     sendPending();
-    const sid = new URLSearchParams(location.search).get('s');
+    api('GET', '?trophies=1').then((d) => { trophies = d.trophies || {}; if (isLobbyOpen()) renderLobby(); }).catch(() => {});
+    const params = new URLSearchParams(location.search);
+    const sid = params.get('s');
     if (sid && /^[a-f0-9]{10}$/.test(sid)) {
-      try { await joinSession(sid); openLobby(); } catch (e) { toast(e.message); }
+      try {
+        await joinSession(sid);
+        openLobby();
+        if (params.get('rematch')) toast('Rematch! Everyone has been asked to join.');
+      } catch (e) { toast(e.message); }
     }
   }
 
@@ -710,13 +780,14 @@
 
   window.ChowGames = {
     mount, on, rng, sfx, toast, modal, closeModal, modalOpen, gameOver, submitScore, showLeaderboard, openLobby,
+    leave: () => leaveSession(),
     me, colors: COLORS, icon, badge, meta: GAME_META, now, toLocal,
     uploadImage,
     countingDown: () => { const c = document.getElementById('cg-countdown'); return !!c && !c.classList.contains('go'); },
     isMulti: () => inSession() && multi.round > 0 && multi.session.round === multi.round,
     session: () => multi.session,
     muted: () => muted,
-    race: { update: raceUpdate, finish: raceFinish, others: raceOthers, standings: () => (inSession() ? raceStandings() : []) },
+    race: { update: raceUpdate, finish: raceFinish, others: raceOthers, mine: () => { const p = multi.session && multi.players[me()]; return p && p.round === multi.session.round ? p.state : null; }, standings: () => (inSession() ? raceStandings() : []) },
     turns: { shared: () => (multi.session ? multi.session.shared : null), info: () => (multi.session ? turnInfo() : null), commit }
   };
 })();

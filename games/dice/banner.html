@@ -1,0 +1,84 @@
+<!-- Dice Party banner: a standalone, self-contained snippet (inline animated SVG + CSS scoped to .bn-dice).
+     Same flat illustrated style as the scenes on /games/index.html (320 × 200 viewBox, sliced to fill). -->
+<div class="bn-dice" aria-hidden="true">
+<style>
+.bn-dice { position: relative; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; background: linear-gradient(135deg, #a5b4fc, #4338ca); isolation: isolate; }
+.bn-dice svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.bn-dice text { font-family: Outfit, system-ui, -apple-system, 'Segoe UI', sans-serif; font-weight: 800; }
+.bn-dice .tw { animation: bn-dice-tw var(--d, 2.4s) ease-in-out infinite; animation-delay: var(--dl, 0s); transform-box: fill-box; transform-origin: center; }
+.bn-dice .hop { animation: bn-dice-hop 3.6s cubic-bezier(.3,.6,.4,1) infinite; animation-delay: var(--dl, 0s); }
+.bn-dice .spin { animation: bn-dice-spin 3.6s cubic-bezier(.2,.7,.3,1) infinite; animation-delay: var(--dl, 0s); transform-box: fill-box; transform-origin: center; }
+.bn-dice .sh { animation: bn-dice-sh 3.6s cubic-bezier(.3,.6,.4,1) infinite; animation-delay: var(--dl, 0s); transform-box: fill-box; transform-origin: center; }
+.bn-dice .face-a { animation: bn-dice-fa 3.6s steps(1, end) infinite; animation-delay: var(--dl, 0s); }
+.bn-dice .face-b { animation: bn-dice-fb 3.6s steps(1, end) infinite; animation-delay: var(--dl, 0s); }
+.bn-dice .party { animation: bn-dice-party 3.6s cubic-bezier(.3,1.6,.5,1) infinite; transform-box: view-box; transform-origin: 112px 46px; }
+.bn-dice .tick { animation: bn-dice-tick 3.6s ease-out infinite; stroke-dasharray: 20; }
+.bn-dice .pencil { animation: bn-dice-pencil 3.6s ease-in-out infinite; }
+.bn-dice .fall { animation: bn-dice-fall var(--d, 3.6s) linear infinite; animation-delay: var(--dl, 0s); transform-box: fill-box; transform-origin: center; }
+@keyframes bn-dice-tw { 0%, 100% { transform: scale(.25) rotate(0deg); opacity: .15; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
+@keyframes bn-dice-hop { 0% { transform: translate(-70px, -60px); } 16% { transform: translate(-38px, 0); } 26% { transform: translate(-20px, -26px); } 36% { transform: translate(-6px, 0); } 42% { transform: translate(-2px, -6px); } 48%, 100% { transform: translate(0, 0); } }
+@keyframes bn-dice-spin { 0% { transform: rotate(-260deg); } 48%, 100% { transform: rotate(0deg); } }
+@keyframes bn-dice-sh { 0% { transform: translateX(-70px) scale(.3); opacity: .2; } 16% { transform: translateX(-38px) scale(1); opacity: 1; } 26% { transform: translateX(-20px) scale(.6); opacity: .5; } 36% { transform: translateX(-6px) scale(1); opacity: 1; } 48%, 100% { transform: translateX(0) scale(1); opacity: 1; } }
+@keyframes bn-dice-fa { 0% { opacity: 1; } 40%, 100% { opacity: 0; } }
+@keyframes bn-dice-fb { 0% { opacity: 0; } 40%, 100% { opacity: 1; } }
+@keyframes bn-dice-party { 0%, 50% { transform: scale(0) rotate(-10deg); opacity: 0; } 58% { transform: scale(1.15) rotate(3deg); opacity: 1; } 64%, 88% { transform: scale(1) rotate(0deg); opacity: 1; } 96%, 100% { transform: scale(.8); opacity: 0; } }
+@keyframes bn-dice-tick { 0%, 60% { stroke-dashoffset: 20; } 72%, 100% { stroke-dashoffset: 0; } }
+@keyframes bn-dice-pencil { 0%, 56% { transform: translate(0, 0) rotate(0deg); } 62% { transform: translate(-4px, 3px) rotate(-4deg); } 68% { transform: translate(3px, -2px) rotate(3deg); } 74%, 100% { transform: translate(0, 0) rotate(0deg); } }
+@keyframes bn-dice-fall { from { transform: translateY(-30px) rotate(0deg); } to { transform: translateY(230px) rotate(540deg); } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bn-dice svg { filter: saturate(.94) brightness(.9); } }
+:root[data-theme="dark"] .bn-dice svg { filter: saturate(.94) brightness(.9); }
+@media (prefers-reduced-motion: reduce) { .bn-dice svg * { animation: none !important; } .bn-dice .face-a { opacity: 0; } .bn-dice .party { opacity: 1; } }
+</style>
+<svg class="scene" viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" focusable="false">
+  <defs>
+    <linearGradient id="bn-dice-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0e7ff"/><stop offset="1" stop-color="#a5b4fc"/></linearGradient>
+    <radialGradient id="bn-dice-gl" cx=".15" cy="-.05" r=".85"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="bn-dice-felt" cx=".5" cy=".3" r=".8"><stop offset="0" stop-color="#7377f8"/><stop offset=".65" stop-color="#4f46e5"/><stop offset="1" stop-color="#3730a3"/></radialGradient>
+    <linearGradient id="bn-dice-face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#e4e2f3"/></linearGradient>
+    <!-- a die, 40 × 40, centred on 0,0; pips added per face -->
+    <g id="bn-dice-body"><rect x="-20" y="-17" width="40" height="40" rx="9" fill="#c7c4e0"/><rect x="-20" y="-20" width="40" height="40" rx="9" fill="url(#bn-dice-face)"/></g>
+    <g id="bn-dice-6"><use href="#bn-dice-body"/><g fill="#1e1b4b"><circle cx="-9" cy="-10" r="4"/><circle cx="-9" cy="0" r="4"/><circle cx="-9" cy="10" r="4"/><circle cx="9" cy="-10" r="4"/><circle cx="9" cy="0" r="4"/><circle cx="9" cy="10" r="4"/></g></g>
+    <g id="bn-dice-3"><use href="#bn-dice-body"/><g fill="#1e1b4b"><circle cx="-10" cy="-10" r="4"/><circle cx="0" cy="0" r="4"/><circle cx="10" cy="10" r="4"/></g></g>
+    <g id="bn-dice-1"><use href="#bn-dice-body"/><circle r="6" fill="#e11d48"/></g>
+  </defs>
+  <rect width="320" height="200" fill="url(#bn-dice-bg)"/><rect width="320" height="200" fill="url(#bn-dice-gl)"/>
+  <path class="tw" style="--d:2.2s" d="M26 34Q26 41 33 41Q26 41 26 48Q26 41 19 41Q26 41 26 34Z" fill="#fff"/>
+  <path class="tw" style="--d:2.6s;--dl:-1.2s" d="M206 20Q206 26 212 26Q206 26 206 32Q206 26 200 26Q206 26 206 20Z" fill="#fff"/>
+  <path class="tw" style="--d:3s;--dl:-.5s" d="M300 182Q300 188 306 188Q300 188 300 194Q300 188 294 188Q300 188 300 182Z" fill="#fff"/>
+  <!-- confetti -->
+  <rect class="fall" style="--d:4.2s" x="60" y="0" width="6" height="3" rx="1" fill="#f43f5e"/>
+  <rect class="fall" style="--d:3.6s;--dl:-1.4s" x="150" y="0" width="6" height="3" rx="1" fill="#facc15"/>
+  <rect class="fall" style="--d:4.6s;--dl:-2.6s" x="236" y="0" width="6" height="3" rx="1" fill="#22c55e"/>
+  <rect class="fall" style="--d:3.9s;--dl:-.7s" x="12" y="0" width="5" height="3" rx="1" fill="#38bdf8"/>
+  <!-- the dice tray -->
+  <rect x="10" y="98" width="214" height="94" rx="22" fill="#f5b83d"/>
+  <rect x="10" y="98" width="214" height="94" rx="22" fill="none" stroke="#b7791f" stroke-width="2"/>
+  <rect x="17" y="105" width="200" height="80" rx="16" fill="url(#bn-dice-felt)"/>
+  <rect x="17" y="105" width="200" height="80" rx="16" fill="none" stroke="#000" stroke-opacity=".15" stroke-width="5"/>
+  <!-- three dice tumble in: all sixes!  (each: shadow, then the hopping, spinning die) -->
+  <g transform="translate(62 160)"><ellipse class="sh" cx="0" cy="12" rx="18" ry="4" fill="#000" opacity=".25"/><g class="hop"><g class="spin"><g class="face-a"><use href="#bn-dice-3"/></g><g class="face-b"><use href="#bn-dice-6"/></g></g></g></g>
+  <g transform="translate(116 152)"><ellipse class="sh" style="--dl:-.12s" cx="0" cy="12" rx="18" ry="4" fill="#000" opacity=".25"/><g class="hop" style="--dl:-.12s"><g class="spin" style="--dl:-.12s"><g class="face-a" style="--dl:-.12s"><use href="#bn-dice-1"/></g><g class="face-b" style="--dl:-.12s"><use href="#bn-dice-6"/></g></g></g></g>
+  <g transform="translate(172 160)"><ellipse class="sh" style="--dl:-.24s" cx="0" cy="12" rx="18" ry="4" fill="#000" opacity=".25"/><g class="hop" style="--dl:-.24s"><g class="spin" style="--dl:-.24s"><g class="face-a" style="--dl:-.24s"><use href="#bn-dice-3"/></g><g class="face-b" style="--dl:-.24s"><use href="#bn-dice-6"/></g></g></g></g>
+  <!-- "Party!" -->
+  <g class="party">
+    <rect x="62" y="28" width="100" height="36" rx="18" fill="#f43f5e"/>
+    <rect x="62" y="28" width="100" height="36" rx="18" fill="none" stroke="#fff" stroke-width="3"/>
+    <text x="112" y="53" text-anchor="middle" font-size="20" fill="#fff">Party!</text>
+  </g>
+  <!-- the scorecard and a pencil -->
+  <g transform="translate(244 40) rotate(6)">
+    <rect x="2" y="4" width="66" height="130" rx="10" fill="#312e81" opacity=".25"/>
+    <rect width="66" height="130" rx="10" fill="#fff"/>
+    <rect width="66" height="20" rx="10" fill="#6366f1"/><rect y="10" width="66" height="10" fill="#6366f1"/>
+    <rect x="10" y="6" width="30" height="7" rx="3.5" fill="#fff" opacity=".85"/>
+    <g fill="#c7d2fe"><rect x="10" y="30" width="26" height="6" rx="3"/><rect x="10" y="44" width="30" height="6" rx="3"/><rect x="10" y="58" width="22" height="6" rx="3"/><rect x="10" y="72" width="28" height="6" rx="3"/><rect x="10" y="86" width="24" height="6" rx="3"/><rect x="10" y="100" width="30" height="6" rx="3"/></g>
+    <g fill="#4338ca" font-size="9"><text x="52" y="36" text-anchor="middle">3</text><text x="52" y="50" text-anchor="middle">8</text><text x="52" y="64" text-anchor="middle">25</text><text x="52" y="78" text-anchor="middle">30</text></g>
+    <path class="tick" d="M46 89l4 4 8-9" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="8" y="114" width="50" height="10" rx="5" fill="#fde68a"/><text x="33" y="122" text-anchor="middle" font-size="8" fill="#92400e">+50</text>
+  </g>
+  <g class="pencil" transform="translate(286 118) rotate(38)">
+    <rect x="-4" y="-34" width="8" height="40" rx="1.5" fill="#facc15"/><rect x="-4" y="-34" width="8" height="6" rx="1.5" fill="#f472b6"/><rect x="-4" y="-28" width="8" height="2.5" fill="#94a3b8"/>
+    <path d="M-4 6L0 15L4 6Z" fill="#fcd9b6"/><path d="M-1.4 12L0 15L1.4 12Z" fill="#1f2937"/>
+  </g>
+</svg>
+</div>

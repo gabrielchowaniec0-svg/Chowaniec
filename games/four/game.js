@@ -428,7 +428,7 @@
       const b = e.target.closest('button[data-a]');
       if (!b) return;
       G.closeModal();
-      if (b.dataset.a === 'again') newGame(); else showMenu();
+      if (b.dataset.a === 'again') newGame(); else showMenu(mode === 'solo');
     });
   }
 
@@ -574,11 +574,18 @@
   }
   function shakeStatus() { const m = $('.f4-msg', statusEl); if (m) { m.classList.remove('shake'); void m.offsetWidth; m.classList.add('shake'); } }
 
-  function showMenu() {
+  // The computer player only appears when someone picks it: "Play the computer" opens the level choice.
+  function showCpu(on) {
+    const b = $('[data-a="cpu"]', menuEl);
+    b.setAttribute('aria-expanded', on ? 'true' : 'false');
+    $('.f4-cpu', menuEl).hidden = !on;
+  }
+  function showMenu(cpu) {
     mode = 'menu';
     G.closeModal();
     resetBoard();
     menuEl.hidden = false;
+    showCpu(!!cpu);
     menuEl.querySelectorAll('[data-level]').forEach((b) => b.classList.toggle('sel', b.dataset.level === level));
     renderStatus();
   }
@@ -592,7 +599,37 @@
   }
   function startLocal() { mode = 'local'; menuEl.hidden = true; resetBoard(); renderStatus(); }
 
+  // ---------- Family first: the shared start-screen buttons (same look in every game) ----------
+  // ffButtons({ solo, soloIcon, extra }) -> HTML: a big "Play with the family" button (data-ff="family")
+  // and an optional secondary solo button (data-ff="solo"). Call ffStyle() once.
+  function ffStyle() {
+    if (document.getElementById('ff-style')) return;
+    const s = document.createElement('style');
+    s.id = 'ff-style';
+    s.textContent = '.ff-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;max-width:360px;margin:16px auto 0;}' +
+      '.ff-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;border:0;border-radius:18px;font:inherit;line-height:1.15;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .12s,filter .12s,box-shadow .12s;}' +
+      '.ff-btn:active{transform:translateY(3px) scale(.985);}' +
+      '.ff-btn:focus-visible{outline:3px solid #60a5fa;outline-offset:3px;}' +
+      '.ff-family{min-height:64px;padding:10px 20px;background:linear-gradient(180deg,#34d399,#16a34a);color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.2);box-shadow:0 5px 0 #15803d,0 12px 26px rgba(22,163,74,.35);}' +
+      '.ff-family:hover{filter:brightness(1.06);}.ff-family:active{box-shadow:0 2px 0 #15803d,0 6px 14px rgba(22,163,74,.3);}' +
+      '.ff-family .cg-ic{width:26px;height:26px;flex:none;}' +
+      '.ff-solo{min-height:50px;padding:8px 16px;background:#ffffff;color:#18181b;border:2px solid rgba(0,0,0,.12);font-size:16px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.08);}' +
+      '.ff-solo:hover{filter:brightness(.97);}.ff-solo .cg-ic{flex:none;}' +
+      '.ff-solo[aria-expanded="true"]{border-color:#16a34a;}' +
+      '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}}' +
+      ':root[data-theme="dark"] .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}';
+    document.head.appendChild(s);
+  }
+  function ffButtons({ solo, soloIcon, extra } = {}) {
+    const ic = window.ChowGames.icon;
+    return '<div class="ff-actions">' +
+      `<button type="button" class="ff-btn ff-family" data-ff="family">${ic('users', 26)}<span>Play with the family</span></button>` +
+      (solo ? `<button type="button" class="ff-btn ff-solo" data-ff="solo">${ic(soloIcon || 'play', 19)}<span>${solo}</span></button>` : '') +
+      (extra || '') + '</div>';
+  }
+
   function build(ctx) {
+    ffStyle();
     root = ctx.root;
     root.classList.add('f4-stage');
     root.innerHTML = `<div class="f4-wrap"><div class="f4-status"></div><div class="f4-box"><canvas aria-label="Four in a Row board" role="img"></canvas></div>
@@ -600,10 +637,9 @@
       <div class="f4-menu" hidden><div class="f4-menu-card">
         <div class="f4-logo" aria-hidden="true"><i style="--c:#ef4444"></i><i style="--c:#facc15"></i><i style="--c:#ef4444"></i><i style="--c:#facc15"></i></div>
         <h2>Four in a Row</h2><p>Drop discs and line up four – across, up or slanted!</p>
-        <h3>Play the computer</h3>
-        <div class="f4-levels">${Object.entries(LEVELS).map(([k, L]) => `<button type="button" data-level="${k}">${pips(k)}${L.label}</button>`).join('')}</div>
-        <h3>Play with people</h3>
-        <div class="f4-more"><button type="button" data-a="family">${G.icon('users', 20)}<span>Play with the family</span></button><button type="button" data-a="local">${G.icon('gamepad', 20)}<span>2 players on this device</span></button></div>
+        ${ffButtons({ solo: '2 players on this device', soloIcon: 'gamepad', extra: `<button type="button" class="ff-btn ff-solo" data-a="cpu" aria-expanded="false">${G.icon('cpu', 19)}<span>Play the computer</span></button>` })}
+        <div class="f4-cpu" hidden><h3>How tricky?</h3>
+        <div class="f4-levels">${Object.entries(LEVELS).map(([k, L]) => `<button type="button" data-level="${k}">${pips(k)}${L.label}</button>`).join('')}</div></div>
       </div></div>`;
     wrap = $('.f4-wrap', root); statusEl = $('.f4-status', root); boxEl = $('.f4-box', root); canvas = $('canvas', root); cx = canvas.getContext('2d');
     controlsEl = $('.f4-controls', root); menuEl = $('.f4-menu', root);
@@ -612,14 +648,15 @@
       if (!b) return;
       G.sfx('click');
       if (b.dataset.level) startSolo(b.dataset.level);
-      else if (b.dataset.a === 'local') startLocal();
-      else if (b.dataset.a === 'family') G.openLobby();
+      else if (b.dataset.ff === 'solo') startLocal();
+      else if (b.dataset.ff === 'family') { b.blur(); G.openLobby(); }
+      else if (b.dataset.a === 'cpu') showCpu(b.getAttribute('aria-expanded') !== 'true');
     });
     controlsEl.addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b) return;
       G.sfx('click');
-      if (b.dataset.a === 'menu' || b.dataset.a === 'level') showMenu();
+      if (b.dataset.a === 'menu' || b.dataset.a === 'level') showMenu(mode === 'solo');
       else if (b.dataset.a === 'restart') newGame();
     });
     // pointer: hover shows the preview; tap/release drops. Dragging a finger moves the preview.
@@ -663,7 +700,7 @@
     if (info && info.shared) applyShared(info.shared, true);
   });
   G.on('shared', (s) => { if (mode === 'multi') applyShared(s); });
-  G.on('multiEnd', () => { multi = null; showMenu(); });
+  G.on('multiEnd', () => { multi = null; showMenu(false); });
 
   G.mount({
     id: 'four', title: 'Four in a Row', mode: 'turns', minPlayers: 2, maxPlayers: 2, scoreLabel: 'wins',

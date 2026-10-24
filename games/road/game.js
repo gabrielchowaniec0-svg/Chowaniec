@@ -1306,6 +1306,35 @@
     engine(now);
   }
 
+  // ---------- Family first: the shared start-screen buttons (same look in every game) ----------
+  // ffButtons({ solo, soloIcon, extra }) -> HTML: a big "Play with the family" button (data-ff="family")
+  // and an optional secondary solo button (data-ff="solo"). Call ffStyle() once.
+  function ffStyle() {
+    if (document.getElementById('ff-style')) return;
+    const s = document.createElement('style');
+    s.id = 'ff-style';
+    s.textContent = '.ff-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;max-width:360px;margin:16px auto 0;}' +
+      '.ff-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;border:0;border-radius:18px;font:inherit;line-height:1.15;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .12s,filter .12s,box-shadow .12s;}' +
+      '.ff-btn:active{transform:translateY(3px) scale(.985);}' +
+      '.ff-btn:focus-visible{outline:3px solid #60a5fa;outline-offset:3px;}' +
+      '.ff-family{min-height:64px;padding:10px 20px;background:linear-gradient(180deg,#34d399,#16a34a);color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.2);box-shadow:0 5px 0 #15803d,0 12px 26px rgba(22,163,74,.35);}' +
+      '.ff-family:hover{filter:brightness(1.06);}.ff-family:active{box-shadow:0 2px 0 #15803d,0 6px 14px rgba(22,163,74,.3);}' +
+      '.ff-family .cg-ic{width:26px;height:26px;flex:none;}' +
+      '.ff-solo{min-height:50px;padding:8px 16px;background:#ffffff;color:#18181b;border:2px solid rgba(0,0,0,.12);font-size:16px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.08);}' +
+      '.ff-solo:hover{filter:brightness(.97);}.ff-solo .cg-ic{flex:none;}' +
+      '.ff-solo[aria-expanded="true"]{border-color:#16a34a;}' +
+      '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}}' +
+      ':root[data-theme="dark"] .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}';
+    document.head.appendChild(s);
+  }
+  function ffButtons({ solo, soloIcon, extra } = {}) {
+    const ic = window.ChowGames.icon;
+    return '<div class="ff-actions">' +
+      `<button type="button" class="ff-btn ff-family" data-ff="family">${ic('users', 26)}<span>Play with the family</span></button>` +
+      (solo ? `<button type="button" class="ff-btn ff-solo" data-ff="solo">${ic(soloIcon || 'play', 19)}<span>${solo}</span></button>` : '') +
+      (extra || '') + '</div>';
+  }
+
   // ---------- Overlays ----------
   const CSS = `
   .rr-wrap { position:absolute; inset:0; overflow:hidden; background:#79bff3; }
@@ -1325,6 +1354,8 @@
   @keyframes rrPulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
   @media (prefers-reduced-motion: reduce) { .rr-go { animation:none; } }
   .rr-pause .rr-card { max-width:300px; }
+  .rr-title { cursor:default; }
+  .rr-key { margin:10px 0 0; font-size:13px; opacity:.75; }
   .rr-pause h2 { margin:0 0 6px; font-size:28px; font-weight:800; }
   `;
   function ctlHtml() {
@@ -1338,13 +1369,25 @@
     return touch ? t : k;
   }
   function buildOverlays() {
+    ffStyle();
     const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     overlay = document.createElement('div');
     overlay.className = 'rr-over';
     overlay.innerHTML = `<div class="rr-card"><div class="rr-logo">ROAD<span>RUSH</span></div>` +
       '<p class="rr-tag">Beat the clock, grab coins, zoom past traffic! Checkpoints give you +15 seconds.</p>' +
-      `<div class="rr-ctl">${ctlHtml()}</div><div class="rr-go">${isTouch() ? 'Tap to start' : 'Click or press Space to start'}</div></div>`;
+      `<div class="rr-ctl">${ctlHtml()}</div>${ffButtons({ solo: 'Practice alone' })}${isTouch() ? '' : '<p class="rr-key">or press Space to practice</p>'}</div>`;
+    overlay.classList.add('rr-title');
     root.appendChild(overlay);
+    overlay.addEventListener('pointerdown', (e) => e.stopPropagation());
+    overlay.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-ff]');
+      if (!b || CG.modalOpen()) return;
+      b.blur();
+      ensureAudio();
+      CG.sfx('click');
+      if (b.dataset.ff === 'family') CG.openLobby();
+      else if (state === 'title') startSolo();
+    });
     pauseEl = document.createElement('div');
     pauseEl.className = 'rr-over rr-pause hide';
     pauseEl.innerHTML = `<div class="rr-card"><h2>Paused</h2><div class="rr-go">${isTouch() ? 'Tap to keep driving' : 'Click or press Space'}</div></div>`;
@@ -1369,7 +1412,7 @@
     if (map[k]) { keys[map[k]] = down; e.preventDefault(); }
     if (!down) return;
     if (k === ' ' || k === 'Enter') {
-      if (state === 'title' && !CG.isMulti()) { e.preventDefault(); startSolo(); } else if (paused) { e.preventDefault(); resume(); }
+      if (state === 'title' && !CG.isMulti()) { if (tag !== 'BUTTON') { e.preventDefault(); startSolo(); } } else if (paused) { e.preventDefault(); resume(); }
     }
     if ((k === 'p' || k === 'P' || k === 'Escape') && state === 'play' && !multi) { if (paused) resume(); else pause(); }
   }
@@ -1378,7 +1421,7 @@
     if (CG.modalOpen()) return;
     ensureAudio();
     if (paused) { resume(); return; }
-    if (state === 'title') { if (!CG.isMulti()) startSolo(); return; }
+    if (state === 'title') return; // the start card's buttons choose: family or practice
     if (state !== 'play') return;
     touches.set(e.pointerId, sideOf(e));
     try { root.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }

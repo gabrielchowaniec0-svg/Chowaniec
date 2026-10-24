@@ -5,7 +5,7 @@ and plugs into the shared frame in `/games/core.js` (`window.ChowGames`), which 
 family high scores, the game-over card and multiplayer. Server: `netlify/functions/games.mjs`, storage in
 `netlify/lib/games-store.mjs` (the `GAMES` list there must include the game id).
 
-Game ids: `dino`, `road`, `hop`, `snake`, `2048`, `four`, `memory`, `word`, `kart`, `style`, `police`, `puzzle`, `trivia`.
+Game ids: `dino`, `road`, `hop`, `snake`, `2048`, `four`, `memory`, `word`, `kart`, `style`, `police`, `puzzle`, `trivia`, `doodle`, `clash`, `dice`, `golf`, `blocks`, `typing`, `checkers`, `ludo`.
 
 ## Page template
 
@@ -55,7 +55,7 @@ ChowGames.mount({
 - Show your own start screen ("Tap to start") for solo play.
 - When a solo game ends: `ChowGames.gameOver({ score, title: 'Game over', again: restartFn })`. The core saves
   the score, shows the personal/family record, and offers Play again, Challenge the family and the leaderboard.
-- `ChowGames.sfx(name)`: `jump flap coin score point hit crash click tick drop flip match wrong win lose go whoosh`.
+- `ChowGames.sfx(name)`: `jump flap coin score point hit crash click tick drop flip match wrong win lose go whoosh roll shuffle deal`.
   It already respects the mute button.
 - `ChowGames.rng(seed)` returns a seeded `() => number in [0,1)`. **Use it for everything random in a
   multiplayer round**, so every player gets the same course.
@@ -67,7 +67,16 @@ ChowGames.mount({
 - `ChowGames.toast(text)`, `ChowGames.modal(html)`/`closeModal()`, `ChowGames.modalOpen()`: don't let
   keyboard or tap input drive the game while a modal is open.
 
-### Icons, not emojis
+### Family first (no robots unless you choose)
+
+Games are meant to be played with the family. On every start screen the **main, biggest action is
+"Play with the family"** (`ChowGames.openLobby()`). Solo practice can be offered as a secondary option.
+Computer opponents (robot karts, AI models, a computer Four in a Row player…) are **never on by default**:
+they only appear when the person explicitly picks them (e.g. a "Play the computer" button, or a
+"Computer players: 0 / 1 / 3" setting that starts at 0). Games that are naturally single-player
+(Dino Dash, Snake…) still lead with the family race and keep "Practice alone" second.
+
+## Icons, not emojis
 
 The UI uses clean line icons, never emoji, for buttons, labels, titles and HUDs. Use `ChowGames.icon(name, size)` (an inline SVG
 that takes `currentColor`) and `ChowGames.badge(gameId, size)` (the game's gradient badge). Names include: trophy volume mute
@@ -82,6 +91,11 @@ Things drawn *inside* the game world (a fruit on a card, a sticker on a dress) c
 ## More frame options
 
 - `syncMs`: how often race states are sent (default 600, minimum 250). Use 300 for live driving.
+- `minPlayers` (race games too): Start stays disabled until enough people have joined.
+- `raceBoard: false`: hide the frame's live race scoreboard (draw your own instead).
+- `ChowGames.race.mine()`: your own last synced race state (e.g. to restore after a reload).
+- Late joiners are added to the session's players, so `info.players` can differ between devices; if a game
+  needs one fixed list (turn order), send it in `roundSetup`'s shared data.
 - `roundSetup(players)` (race games, runs on the host's device when they press Start; may be async and may
   open its own picker): return plain JSON (under 20 KB) that every player receives as `info.shared` in
   `multiStart`, e.g. `{ image: id, pieces: 48 }`. Return `null` to cancel the start.
@@ -99,6 +113,8 @@ Things drawn *inside* the game world (a fruit on a card, a sticker on a dress) c
 - `ChowGames.race.others()` returns `[{ name, color, state, age }]`: the other players' latest states.
   Draw them as see-through "ghosts" (with their name) where it makes sense, e.g. other dinos and cars.
   Their state is up to 0.6 s old, so interpolate gently.
+- Rank by finishing order instead of points: put `place` (1 = best) in your race state once known (e.g. Block
+  Drop's last one standing). An optional short `detail` string ("62 WPM · 98%") shows next to the name in results.
 - When you die or finish: `ChowGames.gameOver({ score })`. In a race this reports your finish and shows
   live results. The host can start the next round, which fires `multiStart` again.
 - A once-a-day game (Daily Word) must call `ChowGames.race.finish(score)` instead of `gameOver` in a race,
@@ -113,9 +129,10 @@ Things drawn *inside* the game world (a fruit on a card, a sticker on a dress) c
 - `ChowGames.on('multiStart', info)` fires, then `ChowGames.on('shared', (shared, info) => …)` fires
   with the board, and again whenever anyone moves. `info.players`, `info.myIndex` (-1 = watching),
   `info.colors`. Store whose turn it is inside `shared` and only let that player move.
-- `await ChowGames.turns.commit(newShared, { done })` saves a move. It returns false if someone else
+- `await ChowGames.turns.commit(newShared, { done, quiet })` saves a move (`quiet: true` skips the "Someone else moved first" toast when your game retries by itself). A player who left can no longer move (the server refuses), so skip their turns from the first player still present. It returns false if someone else
   moved first; the fresh board then arrives through 'shared'. Set `done: true` on the final move.
 - When the game ends, every device calls `ChowGames.gameOver({ title: 'Amelia wins!', detail, score })`.
+  Pass `winner: 'Amelia'` too (or omit it on a draw) so the chat's results card names the right winner.
   `score` is what to add to the family leaderboard for this person (e.g. 1 for a win, else 0).
 - Store the player names inside `shared` and find yourself with `ChowGames.me()`: if someone leaves
   mid-game they drop out of `info.players`, so indexes can shift. People who open the link after the game
