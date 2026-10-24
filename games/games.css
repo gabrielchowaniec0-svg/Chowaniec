@@ -34,7 +34,7 @@ body.game-page { overflow: hidden; overscroll-behavior: none; -webkit-user-selec
 .cg-sub { color: var(--cg-muted); font-size: 14px !important; }
 .cg-hint { color: var(--cg-muted); font-size: 13px !important; }
 .cg-help { text-align: left; font-size: 15px; line-height: 1.5; }
-.cg-help ul { padding-left: 20px; margin: 8px 0; }
+.cg-help ul { padding-left: 20px; margin: 8px 0; list-style: disc; }
 .cg-score { font-size: 56px; font-weight: 800; letter-spacing: -.02em; margin: 6px 0 0; line-height: 1.05; }
 .cg-score small { display: block; font-size: 14px; font-weight: 500; color: var(--cg-muted); letter-spacing: 0; }
 .cg-best { min-height: 22px; color: var(--cg-muted); }

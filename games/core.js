@@ -120,14 +120,14 @@
   }
 
   // A centred card over the game. Returns the card element; close with closeModal().
-  function modal(html, { onClose, wide } = {}) {
+  function modal(html, { onClose, wide, sticky } = {}) {
     closeModal();
     const back = document.createElement('div');
     back.id = 'cg-modal';
     back.innerHTML = `<div class="cg-card${wide ? ' wide' : ''}" role="dialog" aria-modal="true">${html}</div>`;
     document.body.appendChild(back);
     back.addEventListener('click', (e) => {
-      if (e.target === back || e.target.closest('[data-cg="close"]')) { closeModal(); if (onClose) onClose(); }
+      if ((e.target === back && !sticky) || e.target.closest('[data-cg="close"]')) { closeModal(); if (onClose) onClose(); }
     });
     const first = back.querySelector('button.primary, button');
     if (first) setTimeout(() => first.focus(), 30);
@@ -246,6 +246,16 @@
     emit('multiEnd');
   }
 
+  // Accepts a session read from the server, unless we left meanwhile or it's older than what we already
+  // have (a poll that started before our own move finished). Returns false if we left.
+  function take(fresh) {
+    const cur = multi.session;
+    if (!cur || cur.id !== fresh.id) return false;
+    if (fresh.round < cur.round || (fresh.round === cur.round && fresh.version < cur.version)) return true;
+    multi.session = fresh;
+    return true;
+  }
+
   // One heartbeat: refresh the session, start rounds, sync race states, pick up moves.
   async function tick() {
     stopTimer();
@@ -255,12 +265,12 @@
     try {
       if (opts.mode === 'race' && s.status === 'playing' && multi.round === s.round && multi.myState) {
         const data = await api('POST', '', { action: 'sync', id: s.id, state: multi.myState, round: s.round });
-        multi.session = data.session;
+        if (!take(data.session)) return;
         multi.players = data.players || {};
         wait = RACE_SYNC_MS;
       } else {
         const data = await api('GET', `?session=${s.id}`);
-        multi.session = data.session;
+        if (!take(data.session)) return;
         multi.players = data.players || {};
         wait = opts.mode === 'turns' && data.session.status === 'playing' ? TURN_POLL_MS : (multi.round && data.session.status === 'playing' ? RACE_SYNC_MS : LOBBY_POLL_MS);
       }
@@ -279,6 +289,14 @@
     if (s.status === 'playing' && s.round !== multi.round && s.players.includes(me())) {
       beginRound(s);
       return;
+    }
+    if (opts.mode === 'turns' && s.status !== 'lobby' && s.round && s.round !== multi.round && !s.players.includes(me())) {
+      // Watching a game you couldn't join: show the board (info.myIndex is -1, so no moves).
+      multi.round = s.round;
+      multi.lastVersion = s.version;
+      closeModal();
+      emit('multiStart', Object.assign(turnInfo(), { seed: s.seed, shared: s.shared }));
+      emit('shared', s.shared, turnInfo());
     }
     if (opts.mode === 'turns' && s.round === multi.round && s.version !== multi.lastVersion) {
       multi.lastVersion = s.version;
@@ -360,7 +378,7 @@
     if (!inSession() || opts.mode !== 'race') return;
     let el = $('#cg-race');
     if (!el) { el = document.createElement('div'); el.id = 'cg-race'; el.setAttribute('aria-live', 'off'); document.body.appendChild(el); }
-    el.innerHTML = raceStandings().map((r) => `<div class="r${r.name === me() ? ' me' : ''}${r.alive ? '' : ' out'}"><i style="background:${r.color}"></i><b>${esc(r.name)}</b><span>${fmt(r.score)}</span>${r.alive ? '' : '<em>✗</em>'}</div>`).join('');
+    el.innerHTML = raceStandings().map((r) => `<div class="r${r.name === me() ? ' me' : ''}${r.alive ? '' : ' out'}"><i style="background:${r.color}"></i><b>${esc(r.name)}</b><span>${fmt(r.score)}</span>${r.alive ? '' : '<em>🏁</em>'}</div>`).join('');
   }
   function hideRaceBoard() { const el = $('#cg-race'); if (el) el.remove(); }
 
@@ -515,7 +533,7 @@
     if (inSession() && opts.mode === 'turns') {
       if (score > 0) submitScore(score);
       const card = modal(`<h2>${esc(title || 'Game over')}</h2>${detail ? `<p class="cg-sub">${esc(detail)}</p>` : ''}` +
-        `<div class="cg-row">${isHost() ? '<button type="button" class="primary" data-cg="again">Play again</button>' : `<span class="cg-wait">Waiting for ${esc(multi.session.host)} to start again…</span>`}<button type="button" data-cg="leave">Leave</button></div>`);
+        `<div class="cg-row">${isHost() ? '<button type="button" class="primary" data-cg="again">Play again</button>' : `<span class="cg-wait">Waiting for ${esc(multi.session.host)} to start again…</span>`}<button type="button" data-cg="leave">Leave</button></div>`, { sticky: true });
       card.addEventListener('click', onResultsClick);
       return;
     }

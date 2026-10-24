@@ -76,6 +76,8 @@ ChowGames.mount({
   Their state is up to 0.6 s old, so interpolate gently.
 - When you die or finish: `ChowGames.gameOver({ score })`. In a race this reports your finish and shows
   live results. The host can start the next round, which fires `multiStart` again.
+- A once-a-day game (Daily Word) must call `ChowGames.race.finish(score)` instead of `gameOver` in a race,
+  so a practice race doesn't use up the day's entry.
 - `ChowGames.on('multiEnd', fn)`: the person left the multiplayer game. Go back to your solo start screen.
 - `ChowGames.isMulti()` is true while a multiplayer round is running.
 
@@ -90,6 +92,9 @@ ChowGames.mount({
   moved first; the fresh board then arrives through 'shared'. Set `done: true` on the final move.
 - When the game ends, every device calls `ChowGames.gameOver({ title: 'Amelia wins!', detail, score })`.
   `score` is what to add to the family leaderboard for this person (e.g. 1 for a win, else 0).
+- Store the player names inside `shared` and find yourself with `ChowGames.me()`: if someone leaves
+  mid-game they drop out of `info.players`, so indexes can shift. People who open the link after the game
+  started get the board with `info.myIndex === -1` (watching).
 - Solo play against the computer is good too: run it locally without the core, then `gameOver` as usual.
 
 ## Quality bar
