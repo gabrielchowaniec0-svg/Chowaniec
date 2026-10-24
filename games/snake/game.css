@@ -1,0 +1,70 @@
+/* Snake: the stage layout (HUD, board, opponents, d-pad). The board itself is drawn on the canvas. */
+.sn {
+  --sn-frame: #578a34; --sn-pill: var(--cg-surface); --sn-ink: var(--cg-ink); --sn-green: #4caf50; --sn-pad: #ffffff; --sn-pad-ink: #3a5a20;
+  position: absolute; inset: 0; box-sizing: border-box; display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 12px 12px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  background: radial-gradient(120% 80% at 50% 0%, #eaf6d6 0%, var(--cg-bg) 70%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sn { --sn-frame: #1f3a1d; --sn-pad: #23302a; --sn-pad-ink: #b9e39a; background: radial-gradient(120% 80% at 50% 0%, #17251a 0%, var(--cg-bg) 70%); }
+}
+:root[data-theme="dark"] .sn { --sn-frame: #1f3a1d; --sn-pad: #23302a; --sn-pad-ink: #b9e39a; background: radial-gradient(120% 80% at 50% 0%, #17251a 0%, var(--cg-bg) 70%); }
+
+.sn-hud { flex: none; width: 100%; max-width: calc(var(--bw, 600px) + 10px); display: flex; align-items: center; gap: 8px; }
+.sn-pill { display: inline-flex; align-items: center; gap: 7px; height: 42px; padding: 0 16px 0 12px; border-radius: 999px; background: var(--sn-pill); color: var(--sn-ink);
+  box-shadow: 0 1px 0 var(--cg-line), 0 4px 14px rgba(0,0,0,.07); font-weight: 800; font-size: 21px; font-variant-numeric: tabular-nums; }
+.sn-pill .sn-ic { font-size: 19px; }
+.sn-pill.sn-best { font-size: 17px; color: var(--cg-muted); }
+.sn-pill.sn-best b { color: var(--sn-ink); }
+.sn-pill.pop { animation: snPop .35s cubic-bezier(.2,.9,.3,1.4); }
+.sn-pill[hidden] { display: none; }
+.sn-padbtn { margin-left: auto; width: 44px; height: 42px; border-radius: 14px; border: 1px solid var(--cg-line); background: var(--sn-pill); font-size: 20px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.sn-padbtn.on { background: #dcfce7; border-color: #22c55e; }
+body.cg-multi .sn-padbtn { margin-left: 0; }
+
+.sn-boardwrap { position: relative; flex: 1; min-height: 0; width: 100%; display: flex; align-items: flex-start; justify-content: center; }
+.sn-board { position: relative; border-radius: 12px; box-shadow: 0 0 0 6px var(--sn-frame), 0 16px 34px rgba(0,0,0,.22); }
+.sn-board canvas { display: block; border-radius: 12px; touch-action: none; }
+
+.sn-overlay { position: absolute; inset: 0; display: none; align-items: flex-start; justify-content: center; padding-top: calc(var(--cell, 24px) * 0.9); border-radius: 12px; background: rgba(255,255,255,.12); }
+.sn-overlay.mid { align-items: center; padding-top: 0; }
+.sn-padbtn:focus:not(:focus-visible), .sn-pad button:focus:not(:focus-visible) { outline: none; }
+:root[data-theme="dark"] .sn-overlay { background: rgba(0,0,0,.18); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sn-overlay { background: rgba(0,0,0,.18); } }
+.sn-overlay.show { display: flex; animation: snFade .2s ease-out; }
+.sn-card { text-align: center; padding: 14px 22px 18px; border-radius: 22px; background: var(--cg-surface); color: var(--cg-ink); box-shadow: 0 18px 40px rgba(0,0,0,.25); max-width: 80%; animation: snUp .3s cubic-bezier(.2,.9,.3,1.2); }
+.sn-card h2 { margin: 0 0 2px; font-size: 24px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.sn-card p { margin: 2px 0 12px; color: var(--cg-muted); font-size: 14px; line-height: 1.35; }
+.sn-logo { display: inline-block; font-size: 30px; line-height: 1; animation: snWiggle 1.6s ease-in-out infinite; }
+.sn-play { min-height: 48px; min-width: 150px; padding: 0 24px; border: 0; border-radius: 16px; background: linear-gradient(#5fd068, #36a843); color: #fff; font: inherit; font-size: 19px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 0 #2a8436, 0 8px 18px rgba(54,168,67,.35); }
+.sn-play:active { transform: translateY(3px); box-shadow: 0 1px 0 #2a8436; }
+
+.sn-opps { flex: none; width: 100%; max-width: calc(var(--bw, 600px) + 10px); display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.sn-opps[hidden] { display: none; }
+.sn-opps .op { flex: 1 1 130px; max-width: 220px; min-width: 0; padding: 7px 10px 8px; border-radius: 14px; background: var(--cg-surface); box-shadow: 0 1px 0 var(--cg-line), 0 3px 10px rgba(0,0,0,.06); font-size: 13px; }
+.sn-opps .op.out { opacity: .55; }
+.op-top { display: flex; align-items: center; gap: 6px; }
+.op-top i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.op-top b { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-top span { font-weight: 800; font-variant-numeric: tabular-nums; }
+.op-bar { margin-top: 5px; height: 6px; border-radius: 4px; background: var(--cg-soft); overflow: hidden; }
+.op-bar u { display: block; height: 100%; border-radius: 4px; transition: width .4s ease-out; }
+.op-len { margin-top: 3px; color: var(--cg-muted); font-size: 12px; }
+
+.sn-pad { flex: none; display: grid; grid-template-columns: repeat(3, 66px); grid-template-rows: repeat(2, 58px); gap: 8px; grid-template-areas: ". u ." "l d r"; }
+.sn-pad[hidden] { display: none; }
+.sn-pad button { border: 0; border-radius: 18px; background: var(--sn-pad); color: var(--sn-pad-ink); font-size: 24px; cursor: pointer; box-shadow: 0 4px 0 rgba(0,0,0,.12), 0 6px 14px rgba(0,0,0,.08); touch-action: none; }
+.sn-pad button.down { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
+.sn-pad .u { grid-area: u; } .sn-pad .l { grid-area: l; } .sn-pad .r { grid-area: r; } .sn-pad .d { grid-area: d; }
+
+@keyframes snPop { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes snFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes snUp { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes snWiggle { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
+@media (prefers-reduced-motion: reduce) { .sn-logo, .sn-card, .sn-overlay.show, .sn-pill.pop { animation: none; } }
+.sn-card.sn-start { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px; text-align: left; max-width: calc(100% - 20px); box-sizing: border-box; }
+.sn-start .sn-txt { min-width: 0; }
+.sn-start h2 { display: block; font-size: 20px; margin: 0; }
+.sn-start p { margin: 0; font-size: 13px; }
+.sn-start .sn-logo { font-size: 30px; }
+.sn-start .sn-play { min-width: 0; min-height: 46px; padding: 0 18px; font-size: 17px; flex: none; }

@@ -54,6 +54,15 @@ window.DIRECTORY_CONFIG = [
     description: "Shared groceries, packing and costume lists the whole family can tick off."
   },
   {
+    id: "games",
+    title: "Games",
+    path: "/games/",
+    localFallback: "./games/index.html",
+    icon: "gamepad-2",
+    status: "Active",
+    description: "Dino Dash, Road Rush, Daily Word and more. Family high scores and play-together games."
+  },
+  {
     id: "calendar",
     title: "Chowaniec Calendar",
     path: "/calendar/",
