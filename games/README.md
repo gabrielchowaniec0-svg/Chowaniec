@@ -5,7 +5,7 @@ and plugs into the shared frame in `/games/core.js` (`window.ChowGames`), which 
 family high scores, the game-over card and multiplayer. Server: `netlify/functions/games.mjs`, storage in
 `netlify/lib/games-store.mjs` (the `GAMES` list there must include the game id).
 
-Game ids: `dino`, `road`, `hop`, `snake`, `2048`, `four`, `memory`, `word`, `kart`, `style`, `police`, `puzzle`, `trivia`.
+Game ids: `dino`, `road`, `hop`, `snake`, `2048`, `four`, `memory`, `word`, `kart`, `style`, `police`, `puzzle`, `trivia`, `doodle`, `clash`, `dice`, `golf`, `blocks`, `typing`, `checkers`, `ludo`.
 
 ## Page template
 
@@ -67,7 +67,16 @@ ChowGames.mount({
 - `ChowGames.toast(text)`, `ChowGames.modal(html)`/`closeModal()`, `ChowGames.modalOpen()`: don't let
   keyboard or tap input drive the game while a modal is open.
 
-### Icons, not emojis
+### Family first (no robots unless you choose)
+
+Games are meant to be played with the family. On every start screen the **main, biggest action is
+"Play with the family"** (`ChowGames.openLobby()`). Solo practice can be offered as a secondary option.
+Computer opponents (robot karts, AI models, a computer Four in a Row player…) are **never on by default**:
+they only appear when the person explicitly picks them (e.g. a "Play the computer" button, or a
+"Computer players: 0 / 1 / 3" setting that starts at 0). Games that are naturally single-player
+(Dino Dash, Snake…) still lead with the family race and keep "Practice alone" second.
+
+## Icons, not emojis
 
 The UI uses clean line icons, never emoji, for buttons, labels, titles and HUDs. Use `ChowGames.icon(name, size)` (an inline SVG
 that takes `currentColor`) and `ChowGames.badge(gameId, size)` (the game's gradient badge). Names include: trophy volume mute

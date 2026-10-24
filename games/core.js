@@ -41,7 +41,15 @@
     style: { icon: 'shirt', from: '#f9a8d4', to: '#a855f7' },
     police: { icon: 'siren', from: '#93c5fd', to: '#1e3a8a' },
     puzzle: { icon: 'puzzle', from: '#5eead4', to: '#0e7490' },
-    trivia: { icon: 'brain', from: '#fde047', to: '#f472b6' }
+    trivia: { icon: 'brain', from: '#fde047', to: '#f472b6' },
+    doodle: { icon: 'palette', from: '#fda4af', to: '#e11d48' },
+    clash: { icon: 'layers', from: '#fca5a5', to: '#7c3aed' },
+    dice: { icon: 'dice', from: '#a5b4fc', to: '#4338ca' },
+    golf: { icon: 'flag', from: '#bef264', to: '#15803d' },
+    blocks: { icon: 'grid', from: '#67e8f9', to: '#7c3aed' },
+    typing: { icon: 'keyboard', from: '#e5e7eb', to: '#334155' },
+    checkers: { icon: 'crown', from: '#fca5a5', to: '#1f2937' },
+    ludo: { icon: 'home', from: '#fde047', to: '#16a34a' }
   };
   function badge(id, size) {
     const m = GAME_META[id] || { icon: 'gamepad', from: '#a1a1aa', to: '#52525b' };

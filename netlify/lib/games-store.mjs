@@ -21,7 +21,15 @@ export const GAMES = {
   style: { name: 'Style Star', emoji: '👗', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
   police: { name: 'Police Patrol', emoji: '🚓', kind: 'max', limit: 1e7, mode: 'race', max: 8 },
   puzzle: { name: 'Picture Puzzle', emoji: '🧩', kind: 'max', limit: 1e6, mode: 'race', max: 8 },
-  trivia: { name: 'Trivia Party', emoji: '🧠', kind: 'max', limit: 1e5, mode: 'race', max: 8 }
+  trivia: { name: 'Trivia Party', emoji: '🧠', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
+  doodle: { name: 'Doodle Guess', emoji: '🎨', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
+  clash: { name: 'Color Clash', emoji: '🃏', kind: 'add', limit: 1, mode: 'turns', max: 6 },
+  dice: { name: 'Dice Party', emoji: '🎲', kind: 'max', limit: 2000, mode: 'turns', max: 6 },
+  golf: { name: 'Mini Golf', emoji: '⛳', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
+  blocks: { name: 'Block Drop', emoji: '🧱', kind: 'max', limit: 1e7, mode: 'race', max: 8 },
+  typing: { name: 'Type Racer', emoji: '⌨️', kind: 'max', limit: 1e4, mode: 'race', max: 8 },
+  checkers: { name: 'Checkers', emoji: '⚫', kind: 'add', limit: 1, mode: 'turns', max: 2 },
+  ludo: { name: 'Race Home', emoji: '🎯', kind: 'add', limit: 1, mode: 'turns', max: 4 }
 };
 export const isGame = (id) => Object.prototype.hasOwnProperty.call(GAMES, id);
 
