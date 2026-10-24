@@ -84,3 +84,27 @@ body.game-page { overflow: hidden; overscroll-behavior: none; -webkit-user-selec
 @keyframes cgUp { from { opacity: 0; transform: translateY(16px) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes cgPop { 0% { transform: scale(.4); opacity: 0; } 40% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #cg-modal, .cg-card, #cg-countdown.pop { animation: none; } }
+
+/* Icons, game badges and rank badges (core.js icon() / badge() / medal()) */
+.cg-ic { display: inline-block; vertical-align: middle; flex: none; }
+.cg-badge { display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 28%; color: #fff; box-shadow: inset 0 -2px 0 rgba(0,0,0,.15), 0 2px 6px rgba(0,0,0,.18); }
+.cg-badge .cg-ic { filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+.cg-bar h1 { display: flex; align-items: center; gap: 10px; }
+.cg-bar h1 span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.cg-bar button .cg-ic { width: 21px; height: 21px; }
+.cg-together { color: var(--cg-ink); }
+.cg-together .cg-ic { width: 18px; height: 18px; }
+.cg-hero { width: 56px; height: 56px; margin: 0 auto 10px; border-radius: 18px; display: flex; align-items: center; justify-content: center; background: var(--cg-soft); color: var(--cg-ink); }
+.cg-hero.gold { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #78350f; }
+.cg-hero.green { background: linear-gradient(135deg, #bbf7d0, #22c55e); color: #14532d; }
+.cg-hero.plain { background: none; width: auto; height: auto; }
+.cg-rank { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; font-size: 13px; font-weight: 800; background: var(--cg-line); color: var(--cg-ink); }
+.cg-rank.r1 { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #78350f; }
+.cg-rank.r2 { background: linear-gradient(135deg, #f1f5f9, #94a3b8); color: #1e293b; }
+.cg-rank.r3 { background: linear-gradient(135deg, #fed7aa, #c2410c); color: #fff; }
+.cg-flag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--cg-soft); color: var(--cg-ink); font-weight: 700; }
+.cg-flag.gold { background: linear-gradient(135deg, #fde68a, #fbbf24); color: #78350f; }
+.cg-row button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; }
+.cg-list .m { display: flex; justify-content: center; }
+#cg-race em { display: inline-flex; font-style: normal; }

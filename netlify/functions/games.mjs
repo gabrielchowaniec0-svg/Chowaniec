@@ -11,13 +11,14 @@
 //   POST { action: 'sync', id, state, round }        -> { session, players }
 //   POST { action: 'move', id, version, shared, done? } -> { session }  (409 + session if someone moved first)
 //   POST { action: 'finish', id }                    -> { session }
-import { getUser, json } from '../lib/auth.mjs';
+//   POST { action: 'image', data (data: URL) }       -> { id }        a custom puzzle picture; GET ?image=<id> returns it
+import { getUser, json, familyNames } from '../lib/auth.mjs';
 import { resolveRoom, roomsFor, dmPartners, isDmId, roomMembers } from '../lib/rooms.mjs';
 import { postMessage, familyTimeZone } from '../lib/group-store.mjs';
 import { sendPush } from '../lib/push.mjs';
 import {
   GAMES, isGame, recordScore, leaderboard, dailyResults, familyDay, createSession, getSession, joinSession, leaveSession,
-  startRound, finishRound, makeMove, noteInvite, syncPlayer, playerStates
+  startRound, finishRound, makeMove, noteInvite, syncPlayer, playerStates, saveImage, getImage
 } from '../lib/games-store.mjs';
 
 const gamePath = (session) => `/games/${session.game}/?s=${session.id}`;
@@ -30,13 +31,13 @@ async function invite(user, session, rawRoom) {
   if (!fresh) return;
   await postMessage({
     author: 'Chowaniec', room, kind: 'system',
-    text: `${game.emoji} ${user.name} started a game of ${game.name}`,
+    text: `${user.name} started a game of ${game.name}`,
     link: { href: gamePath(session), label: 'Join game' }
   });
   const others = roomMembers(room).filter((n) => n !== user.name);
   if (others.length) {
     await sendPush(others, {
-      title: `${game.emoji} ${user.name} wants to play ${game.name}`,
+      title: `${user.name} wants to play ${game.name}`,
       body: 'Tap to join the game',
       url: gamePath(session),
       tag: `game-${session.id}`
@@ -68,7 +69,7 @@ export default async (req) => {
         if (GAMES[game].daily) {
           const day = familyDay(familyTimeZone());
           out.day = day;
-          out.today = await dailyResults(game, day);
+          out.today = await dailyResults(game, day, familyNames());
         }
         return json(200, out);
       }
@@ -77,10 +78,15 @@ export default async (req) => {
           .concat(dmPartners(user.name).filter((p) => !p.ai).map((p) => ({ id: p.id, name: p.name, dm: true })));
         return json(200, { chats });
       }
+      if (q('image')) {
+        const img = await getImage(q('image'));
+        if (!img) return json(404, { error: 'Picture not found.' });
+        return new Response(img.bytes, { headers: { 'Content-Type': img.contentType, 'Cache-Control': 'private, max-age=31536000, immutable' } });
+      }
       if (q('session')) {
         const session = await getSession(q('session'));
         if (!session) return json(404, { error: 'That game has ended. Start a new one!' });
-        return json(200, { session, players: await playerStates(session.id) });
+        return json(200, { session, players: await playerStates(session.id, session.players) });
       }
       return json(400, { error: 'Unknown request.' });
     }
@@ -112,6 +118,7 @@ export default async (req) => {
         await invite(user, session, body.room);
         return json(200, { ok: true, dm: isDmId(String(body.room || '')) });
       }
+      case 'image': return json(200, { id: await saveImage(user.name, body.data) });
       case 'join': return json(200, { session: await joinSession(id, user.name) });
       case 'leave': return json(200, { session: await leaveSession(id, user.name) });
       case 'start': return json(200, { session: await startRound(id, user.name, body.shared) });
@@ -120,7 +127,7 @@ export default async (req) => {
         const session = await getSession(id);
         if (!session) return json(404, { error: 'That game has ended.' });
         if (!session.players.includes(user.name)) return json(403, { error: 'Join the game first.' });
-        return json(200, { session, players: await syncPlayer(id, user.name, body.state, body.round) });
+        return json(200, { session, players: await syncPlayer(id, user.name, body.state, body.round, session.players) });
       }
       case 'move': {
         try {
@@ -141,5 +148,5 @@ export default async (req) => {
 
 export const config = {
   // Races sync a few times a second from every player.
-  rateLimit: { windowLimit: 1200, windowSize: 60, aggregateBy: ['ip', 'domain'] }
+  rateLimit: { windowLimit: 2400, windowSize: 60, aggregateBy: ['ip', 'domain'] }
 };
