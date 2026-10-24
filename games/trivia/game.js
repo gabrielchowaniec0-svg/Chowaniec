@@ -3,6 +3,9 @@
 // first, up to 500). Solo: pick topics and difficulty. Play together (race): everyone gets the same ten
 // questions from the round's seed, on a shared clock (question i opens at t0 + i × 19 s), and after
 // each question sees who got it right and the live scores.
+// Family Edition: the AI writes the questions about the family itself (see netlify/functions/trivia-ai.mjs).
+// In a family race the host's device fetches them and sends them to everyone in info.shared; the reveal is
+// longer (6.5 s) so there's time to read the fun fact.
 (function () {
   'use strict';
 
@@ -12,7 +15,6 @@
   const ROUND = 10;
   const Q_MS = 15000;               // time to answer
   const REV_MS = 4000;              // reveal + scores (multiplayer)
-  const SLOT = Q_MS + REV_MS;
   const LEAD_MS = 2600;             // the opening wheel spin before question 1 (multiplayer)
   const SOLO_SPIN_MS = 1500;
   const SOLO_HOLD_MS = 650;         // the wheel rests on the topic for a moment
@@ -21,6 +23,11 @@
   const END_DELAY_MS = 3800;        // multiplayer: how long the podium shows before the results card
   const SETUP_KEY = 'chowaniec_trivia_setup';
   const SEEN_KEY = 'chowaniec_trivia_seen';
+  const PLAYED_KEY = 'chowaniec_trivia_family_played';
+  const FAMILY_API = '/.netlify/functions/trivia-ai';
+  const FAMILY_REV_MS = 6500;       // multiplayer reveal when the question has a fun fact to read
+  const FAMILY_SOLO_REV_MS = 5200;
+  const MAX_SHARED = 19000;         // the core keeps info.shared under 20 KB
 
   const CAT_STYLE = {
     animals: { color: '#f97316', icon: 'cat' },
@@ -36,6 +43,17 @@
   };
   const CAT = Object.fromEntries(CATEGORIES.map((c) => [c.id, Object.assign({}, c, CAT_STYLE[c.id])]));
   const ALL_CATS = CATEGORIES.map((c) => c.id);
+  // Family Edition: the wheel shows where each question came from. Bonus = a regular question used to fill up.
+  const FAMILY_CATS = [
+    { id: 'fam-chat', name: 'Family chat', color: '#0ea5e9', icon: 'chat', tag: 'From the family chat' },
+    { id: 'fam-calendar', name: 'Calendar', color: '#f43f5e', icon: 'calendar', tag: 'From the calendar' },
+    { id: 'fam-note', name: 'Shared notes', color: '#f59e0b', icon: 'note', tag: 'From a shared note' },
+    { id: 'fam-general', name: 'Family fun', color: '#16a34a', icon: 'heart', tag: 'Family fun' },
+    { id: 'fam-bonus', name: 'Bonus question', color: '#8b5cf6', icon: 'star', tag: 'Bonus question' }
+  ];
+  FAMILY_CATS.forEach((c) => { CAT[c.id] = c; });
+  const FAM_IDS = FAMILY_CATS.map((c) => c.id);
+  const SRC_CAT = { chat: 'fam-chat', calendar: 'fam-calendar', note: 'fam-note', general: 'fam-general' };
   const DIFFS = [
     { id: 'easy', name: 'Easy', tip: 'Great for younger players' },
     { id: 'medium', name: 'Medium', tip: 'A little bit trickier' },
@@ -65,7 +83,8 @@
   const EXTRA = {
     globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
     leaf: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
-    landmark: '<path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2 20 7H4z"/>'
+    landmark: '<path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2 20 7H4z"/>',
+    note: '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8"/><path d="M8 17h5"/>'
   };
   function ic(name, size) {
     if (!EXTRA[name]) return G.icon(name, size);
@@ -119,7 +138,7 @@
   function cleanSetup(s) {
     const cats = s && Array.isArray(s.cats) ? s.cats.filter((c) => CAT[c]) : [];
     const diff = s && DIFFS.some((d) => d.id === s.diff) ? s.diff : 'mixed';
-    return { cats: cats.length ? Array.from(new Set(cats)) : ALL_CATS.slice(), diff };
+    return { cats: cats.length ? Array.from(new Set(cats)) : ALL_CATS.slice(), diff, family: !!(s && s.family) };
   }
   // Ten questions for a setup. With the same rand (seed) and setup every device gets the same list, with
   // the answers in the same order. `avoid` (solo only) holds recently seen ids, used only when possible.
@@ -151,7 +170,103 @@
     }
     return out;
   }
-  const setupLabel = (s) => `${DIFFS.find((d) => d.id === s.diff).name} · ${s.cats.length === ALL_CATS.length ? 'All topics' : s.cats.length <= 2 ? s.cats.map((c) => CAT[c].name).join(' & ') : `${s.cats.length} topics`}`;
+  const setupLabel = (s) => s.family ? `Family Edition · ${DIFFS.find((d) => d.id === s.diff).name}` : `${DIFFS.find((d) => d.id === s.diff).name} · ${s.cats.length === ALL_CATS.length ? 'All topics' : s.cats.length <= 2 ? s.cats.map((c) => CAT[c].name).join(' & ') : `${s.cats.length} topics`}`;
+
+  // ---------- Family Edition: questions the AI writes from what the players already share ----------
+  // The server (netlify/functions/trivia-ai.mjs) only reads the group chats every player is in, those chats'
+  // calendar events and notes shared with the whole family. Never direct messages or private notes.
+  const userKey = () => { const u = window.getChowaniecUser ? window.getChowaniecUser() : null; return (u && u.key) || ''; };
+  const playedBatches = () => new Set(store.get(PLAYED_KEY) || []);
+  function markPlayed(id) {
+    if (!id) return;
+    const list = (store.get(PLAYED_KEY) || []).filter((x) => x !== id);
+    list.push(id);
+    store.set(PLAYED_KEY, list.slice(-40));
+  }
+  const DIFF_IDS = ['easy', 'medium', 'hard'];
+  const validQ = (q) => !!q && typeof q.q === 'string' && !!q.q.trim() && Array.isArray(q.a) && q.a.length === 4 &&
+    q.a.every((x) => typeof x === 'string' && x.trim()) && Number.isInteger(q.c) && q.c >= 0 && q.c < 4;
+  // Tops a short list up to ten with regular questions (shown as "Bonus question").
+  function padFamily(qs, diff, rand) {
+    let out = qs.slice(0, ROUND);
+    if (out.length < ROUND) {
+      const extra = pickQuestions(rand, { cats: ALL_CATS, diff }, null).slice(out.length);
+      out = out.concat(extra.map((q) => Object.assign({}, q, { cat: 'fam-bonus', f: '' })));
+    }
+    return out;
+  }
+  async function askFamily(body, signal) {
+    let res, data = {};
+    try {
+      res = await fetch(FAMILY_API, {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store', signal,
+        headers: { 'X-Chowaniec-Key': userKey(), 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      });
+      data = await res.json().catch(() => ({}));
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw e;
+      return { error: 'Couldn’t reach the question writer.' };
+    }
+    if (!res.ok) return { error: data.error || 'The question writer had a problem.' };
+    return data;
+  }
+  // Ten questions about the family for `players`: { qs, batch, notice } or { error }.
+  async function familyQuestions(players, diff, signal) {
+    const body = { players, count: ROUND, difficulty: diff };
+    let data = await askFamily(body, signal);
+    // Already played today's batch for these chats: ask for a new one.
+    if (data.id && playedBatches().has(data.id)) data = await askFamily(Object.assign({ fresh: true }, body), signal);
+    if (data.error) return { error: data.error };
+    if (!Array.isArray(data.questions) || !data.questions.length) return { error: data.notice || 'There wasn’t enough to write about.' };
+    const qs = data.questions.map((x, k) => ({
+      id: `fam-${data.id}-${k}`, cat: SRC_CAT[x.source] || 'fam-general', d: DIFF_IDS.includes(x.difficulty) ? x.difficulty : 'medium',
+      q: String(x.q || ''), a: Array.isArray(x.answers) ? x.answers.map(String) : [], c: Number(x.correct), f: String(x.fact || '')
+    })).filter(validQ);
+    if (!qs.length) return { error: 'The questions came back empty.' };
+    return { qs: padFamily(qs, diff, Math.random), batch: data.id, notice: data.notice || '' };
+  }
+  // What the host sends to everyone (info.shared), kept under the core's 20 KB limit.
+  function packFamily(diff, fam) {
+    const qs = fam.qs.map((q) => ({ q: q.q, a: q.a, c: q.c, d: q.d, cat: q.cat, f: q.f || '' }));
+    const shared = { family: true, diff, batch: fam.batch, notice: String(fam.notice || '').slice(0, 200), qs };
+    for (let max = 200; JSON.stringify(shared).length > MAX_SHARED && max >= 0; max -= 50) qs.forEach((q) => { q.f = q.f.slice(0, max); });
+    return JSON.stringify(shared).length > MAX_SHARED ? null : shared;
+  }
+  function unpackFamily(sh, diff, rand) {
+    const qs = (Array.isArray(sh.qs) ? sh.qs : []).map((x, k) => ({
+      id: `fam-${String(sh.batch || 'x').slice(0, 20)}-${k}`, cat: FAM_IDS.includes(x && x.cat) ? x.cat : 'fam-bonus',
+      d: DIFF_IDS.includes(x && x.d) ? x.d : 'medium', q: String((x && x.q) || ''),
+      a: x && Array.isArray(x.a) ? x.a.map(String) : [], c: Number(x && x.c), f: String((x && x.f) || '')
+    })).filter(validQ);
+    return qs.length ? padFamily(qs, diff, rand) : null;
+  }
+
+  const WRITING_STEPS = ['Reading your shared chats…', 'Peeking at the family calendar…', 'Flipping through shared notes…', 'Thinking up tricky answers…', 'Adding a sprinkle of fun…'];
+  function writingHtml() {
+    return `<div class="tv-writing" role="status" aria-live="polite">
+      <div class="tv-wr-art" aria-hidden="true">
+        <span class="tv-wr-card c1"></span><span class="tv-wr-card c2"></span>
+        <span class="tv-wr-card c3"><b>?</b><i></i><i></i><i></i></span>
+        <span class="tv-wr-wand">${ic('wand', 34)}</span>
+        <span class="tv-wr-sp s1">${ic('sparkles', 20)}</span><span class="tv-wr-sp s2">${ic('sparkles', 15)}</span><span class="tv-wr-sp s3">${ic('star', 13)}</span>
+      </div>
+      <h2>Writing questions about your family…</h2>
+      <p class="tv-wr-step in">${WRITING_STEPS[0]}</p>
+      <div class="tv-wr-dots"><i></i><i></i><i></i></div>
+    </div>`;
+  }
+  // Cycles the little status line; returns a stop function.
+  function runWriting(box) {
+    const step = $('.tv-wr-step', box);
+    let k = 0;
+    const t = setInterval(() => {
+      k = (k + 1) % WRITING_STEPS.length;
+      step.classList.remove('in'); void step.offsetWidth;
+      step.textContent = WRITING_STEPS[k];
+      step.classList.add('in');
+    }, 1900);
+    return () => clearInterval(t);
+  }
 
   // ---------- Setup picker (menu, and the host's round setup) ----------
   function setupHtml(s) {
@@ -159,8 +274,13 @@
       <div class="tv-lbl"><span>Difficulty</span></div>
       <div class="tv-seg" role="radiogroup" aria-label="Difficulty">${DIFFS.map((d, i) => `<button type="button" role="radio" data-diff="${d.id}" aria-checked="${s.diff === d.id}" class="${s.diff === d.id ? 'on' : ''}"><span class="tv-pips">${d.id === 'mixed' ? ic('shuffle', 14) : '<i></i>'.repeat(i + 1)}</span>${d.name}</button>`).join('')}</div>
       <p class="tv-tip">${esc(DIFFS.find((d) => d.id === s.diff).tip)}</p>
-      <div class="tv-lbl"><span>Topics</span><button type="button" class="tv-link" data-all>${s.cats.length === ALL_CATS.length ? 'Clear' : 'Select all'}</button></div>
-      <div class="tv-cats">${CATEGORIES.map((c) => `<button type="button" class="tv-cat${s.cats.includes(c.id) ? ' on' : ''}" data-cat="${c.id}" aria-pressed="${s.cats.includes(c.id)}" style="--c:${CAT[c.id].color}">${catBadge(c.id, 30)}<span>${esc(c.name)}</span><em>${G.icon('check', 14)}</em></button>`).join('')}</div>
+      <div class="tv-lbl"><span>Topics</span><button type="button" class="tv-link" data-all>${s.family ? 'Regular topics' : s.cats.length === ALL_CATS.length ? 'Clear' : 'Select all'}</button></div>
+      <button type="button" class="tv-fam${s.family ? ' on' : ''}" data-family aria-pressed="${s.family}">
+        <span class="tv-fam-ic">${ic('sparkles', 24)}<i>${ic('users', 13)}</i></span>
+        <span class="tv-fam-tx"><b>Family Edition</b><small>Questions about your own family, from the chats, calendar and notes you share</small></span>
+        <em>${G.icon('check', 14)}</em>
+      </button>
+      <div class="tv-cats${s.family ? ' muted' : ''}">${CATEGORIES.map((c) => `<button type="button" class="tv-cat${s.cats.includes(c.id) ? ' on' : ''}" data-cat="${c.id}" aria-pressed="${s.cats.includes(c.id)}" style="--c:${CAT[c.id].color}">${catBadge(c.id, 30)}<span>${esc(c.name)}</span><em>${G.icon('check', 14)}</em></button>`).join('')}</div>
     </div>`;
   }
   // Wires up a picker inside `box`; `s` is updated in place, onChange re-renders.
@@ -169,12 +289,16 @@
       const d = e.target.closest('[data-diff]');
       const c = e.target.closest('[data-cat]');
       const all = e.target.closest('[data-all]');
+      const fam = e.target.closest('[data-family]');
       if (d) { s.diff = d.dataset.diff; }
+      else if (fam) { s.family = !s.family; }
       else if (all) {
-        if (s.cats.length === ALL_CATS.length) s.cats = [ALL_CATS[0]]; else s.cats = ALL_CATS.slice();
+        if (s.family) s.family = false;
+        else if (s.cats.length === ALL_CATS.length) s.cats = [ALL_CATS[0]]; else s.cats = ALL_CATS.slice();
       } else if (c) {
         const id = c.dataset.cat;
-        if (s.cats.includes(id)) {
+        if (s.family) { s.family = false; if (!s.cats.includes(id)) s.cats = ALL_CATS.filter((x) => x === id || s.cats.includes(x)); }
+        else if (s.cats.includes(id)) {
           if (s.cats.length === 1) { G.toast('Pick at least one topic'); G.sfx('wrong'); return; }
           s.cats = s.cats.filter((x) => x !== id);
         } else s.cats = ALL_CATS.filter((x) => x === id || s.cats.includes(x));
@@ -191,6 +315,8 @@
   let R = null;            // the round being played
   let raf = 0;
   let wheelAngle = 0;
+  let wheelIds = ALL_CATS; // the slices on the wheel (topics, or Family Edition sources)
+  let writingAbort = null; // solo Family Edition: the request being written
 
   function build(root) {
     root.innerHTML = `<div class="tv">
@@ -205,8 +331,8 @@
           <p class="tv-tag">${G.icon('timer', 15)}<span>10 questions · 15 seconds · speed bonus</span></p>
           <div class="tv-setupbox"></div>
           <div class="tv-actions">
-            <button type="button" class="tv-btn primary" data-act="play">${G.icon('play', 20)}<span>Play</span></button>
-            <button type="button" class="tv-btn" data-act="family">${G.icon('users', 19)}<span>Family game</span></button>
+            <button type="button" class="tv-btn primary" data-act="family">${G.icon('users', 22)}<span>Play with the family</span></button>
+            <button type="button" class="tv-btn" data-act="play">${G.icon('play', 18)}<span>Practice alone</span></button>
           </div>
         </div>
       </section>
@@ -227,6 +353,7 @@
           <div class="tv-ring" aria-hidden="true"><svg viewBox="0 0 64 64"><circle class="tr-bg" cx="32" cy="32" r="27"/><circle class="tr-fg" cx="32" cy="32" r="27"/></svg><b>15</b></div>
           <div class="tv-diff"></div>
           <div class="tv-qtext" aria-live="polite"></div>
+          <div class="tv-fact" hidden></div>
         </div>
         <div class="tv-mid"><div class="tv-status" aria-live="polite"></div><div class="tv-banner" aria-live="assertive"></div></div>
         <div class="tv-answers">${ANS.map((a, k) => `<button type="button" class="tv-ans" data-k="${k}" style="--a:${a.color}" aria-label="${a.name}">${shape(k, 30)}<span class="tx"></span><kbd>${k + 1}</kbd><span class="who"></span><span class="mark"></span></button>`).join('')}</div>
@@ -235,9 +362,11 @@
           <p class="tv-wh-top"></p>
           <div class="tv-wheel"><div class="tv-pointer"></div><svg class="tv-wheel-svg" viewBox="-100 -100 200 200" aria-hidden="true"></svg><div class="tv-hub">${G.icon('sparkles', 26)}</div></div>
           <p class="tv-wh-label"></p>
+          <p class="tv-wh-note" hidden></p>
         </div>
       </section>
       <section class="tv-end" hidden></section>
+      <div class="tv-wrwrap" hidden><div class="tv-wrwrap-in">${writingHtml()}<button type="button" class="tv-btn" data-act="cancel-writing">${G.icon('close', 18)}<span>Cancel</span></button></div></div>
       <div class="tv-pause" hidden><div class="tv-pause-card">${G.icon('pause', 30)}<h3>Paused</h3><button type="button" class="tv-btn primary" data-act="resume">${G.icon('play', 18)}<span>Keep playing</span></button></div></div>
       <canvas class="tv-fx" aria-hidden="true"></canvas>
     </div>`;
@@ -248,9 +377,9 @@
       progress: $$('.tv-progress i', root), card: $('.tv-card', root), ring: $('.tv-ring', root), ringFg: $('.tr-fg', root), ringNum: $('.tv-ring b', root),
       diff: $('.tv-diff', root), qtext: $('.tv-qtext', root), status: $('.tv-status', root), answers: $('.tv-answers', root), btns: $$('.tv-ans', root),
       banner: $('.tv-banner', root), sheet: $('.tv-sheet', root), wheelwrap: $('.tv-wheelwrap', root), wheel: $('.tv-wheel-svg', root),
-      whTop: $('.tv-wh-top', root), whLabel: $('.tv-wh-label', root), pause: $('.tv-pause', root), fx: $('.tv-fx', root), quit: $('.tv-quit', root)
+      whTop: $('.tv-wh-top', root), whLabel: $('.tv-wh-label', root), whNote: $('.tv-wh-note', root), fact: $('.tv-fact', root), writing: $('.tv-wrwrap', root), pause: $('.tv-pause', root), fx: $('.tv-fx', root), quit: $('.tv-quit', root)
     };
-    el.wheel.innerHTML = wheelSvg();
+    setWheel(ALL_CATS);
     renderSetup();
 
     el.menu.addEventListener('click', (e) => {
@@ -265,6 +394,7 @@
     });
     el.quit.addEventListener('click', () => { G.sfx('click'); showMenu(); });
     el.pause.addEventListener('click', (e) => { if (e.target.closest('[data-act="resume"]')) resume(); });
+    el.writing.addEventListener('click', (e) => { if (e.target.closest('[data-act="cancel-writing"]') && writingAbort) { G.sfx('click'); writingAbort.abort(); } });
     el.end.addEventListener('click', (e) => {
       const b = e.target.closest('[data-act]');
       if (!b) return;
@@ -284,7 +414,7 @@
   const GREETINGS = [
     (n) => `Hi ${n}! I’m Quizzy, your host. Pick your topics and let’s play!`,
     (n) => `Welcome back to Trivia Party, ${n}! Ready to test that big brain?`,
-    (n) => `${n}, the spotlight is on you! Choose a difficulty and press Play.`,
+    (n) => `${n}, the spotlight is on you! Try Family Edition: questions about your own family!`,
     (n) => `Ooh, a challenger! Hello ${n}. Ten questions are waiting for you.`
   ];
   let sayTimer = 0;
@@ -327,8 +457,13 @@
       multi: false, qs: [], setup, i: -1, phase: '', phaseAt: 0, qOpenAt: 0, renderedQ: -1,
       ans: {}, pts: {}, results: Array(ROUND).fill(undefined), answer: null,
       score: 0, shownScore: 0, streak: 0, bestStreak: 0, correct: 0,
-      spin: null, awarded: {}, paused: false, lastTick: 0, lastSheet: 0, lastBoard: 0
+      spin: null, awarded: {}, paused: false, lastTick: 0, lastSheet: 0, lastBoard: 0,
+      family: false, batch: null, notice: '', revMs: REV_MS, soloRevMs: SOLO_REV_MS
     }, o);
+    R.slot = Q_MS + R.revMs;
+    setWheel(R.family ? FAM_IDS : ALL_CATS);
+    R.wheelOn = R.family ? FAM_IDS.filter((id) => R.qs.some((q) => q.cat === id)) : R.setup.cats;
+    if (R.family) markPlayed(R.batch);
     el.menu.hidden = true;
     el.end.hidden = true;
     el.play.hidden = false;
@@ -346,21 +481,57 @@
   function startSolo() {
     G.closeModal();
     store.set(SETUP_KEY, setup);
+    if (setup.family) startFamilySolo();
+    else playRegularSolo(setup);
+  }
+  function playRegularSolo(s) {
     const seen = new Set(store.get(SEEN_KEY) || []);
-    const qs = pickQuestions(Math.random, setup, seen);
+    const qs = pickQuestions(Math.random, s, seen);
     store.set(SEEN_KEY, Array.from(seen).concat(qs.map((q) => q.id)).slice(-360));
     G.sfx('go');
-    newRound({ qs, setup });
+    newRound({ qs, setup: s });
     goTo(0, 'spin');
+  }
+  // Solo Family Edition: questions from what you share with the whole family (your own group chats).
+  async function startFamilySolo() {
+    if (writingAbort) return;
+    const ac = new AbortController();
+    writingAbort = ac;
+    el.writing.hidden = false;
+    G.sfx('whoosh');
+    const stop = runWriting(el.writing);
+    let fam;
+    try { fam = await familyQuestions([user], setup.diff, ac.signal); } catch (e) { fam = { aborted: true }; }
+    stop();
+    if (writingAbort === ac) writingAbort = null;
+    el.writing.hidden = true;
+    if (fam.aborted || ac.signal.aborted) return;
+    const s = Object.assign({}, setup);
+    if (fam.qs) {
+      G.sfx('go');
+      newRound({ qs: fam.qs, setup: s, family: true, batch: fam.batch, notice: fam.notice, soloRevMs: FAMILY_SOLO_REV_MS });
+      goTo(0, 'spin');
+      return;
+    }
+    G.toast(`${fam.error} Playing regular questions instead.`);
+    playRegularSolo(Object.assign(s, { family: false }));
   }
 
   function startMulti(info) {
     G.closeModal();
-    const s = cleanSetup(info.shared);
+    if (writingAbort) { writingAbort.abort(); writingAbort = null; el.writing.hidden = true; }
+    const sh = info.shared || {};
+    const s = cleanSetup(sh);
+    const rand = G.rng(info.seed);
+    // Family Edition: everyone plays the exact questions the host's device fetched.
+    const famQs = s.family ? unpackFamily(sh, s.diff, rand) : null;
+    if (!famQs) s.family = false;
     const session = G.session();
     const startAt = info.startAt || (session && session.startAt ? Date.parse(session.startAt) : Date.now());
     newRound({
-      multi: true, setup: s, qs: pickQuestions(G.rng(info.seed), s, null),
+      multi: true, setup: s, qs: famQs || pickQuestions(rand, s, null),
+      family: !!famQs, batch: famQs ? String(sh.batch || '') : null, notice: famQs ? String(sh.notice || '').slice(0, 200) : '',
+      revMs: famQs ? FAMILY_REV_MS : REV_MS,
       players: info.players.slice(), colors: info.colors.slice(), me: info.me, t0: startAt + LEAD_MS
     });
     measureBoard();
@@ -372,9 +543,9 @@
   function multiPhase(now) {
     const rel = now - R.t0;
     if (rel < 0) return { i: 0, phase: 'spin' };
-    const i = Math.floor(rel / SLOT);
+    const i = Math.floor(rel / R.slot);
     if (i >= ROUND) return { i: ROUND, phase: 'end' };
-    return { i, phase: rel - i * SLOT < Q_MS ? 'q' : 'rev' };
+    return { i, phase: rel - i * R.slot < Q_MS ? 'q' : 'rev' };
   }
 
   function loop() {
@@ -389,7 +560,7 @@
       }
     } else if (R.phase === 'spin' && now - R.phaseAt >= SOLO_SPIN_MS + SOLO_HOLD_MS) goTo(R.i, 'q');
     else if (R.phase === 'q' && ((R.answer && now - R.answer.at >= LOCK_MS) || now - R.qOpenAt >= Q_MS)) goTo(R.i, 'rev');
-    else if (R.phase === 'rev' && now - R.phaseAt >= SOLO_REV_MS) goTo(R.i + 1, R.i + 1 >= ROUND ? 'end' : 'spin');
+    else if (R.phase === 'rev' && now - R.phaseAt >= (R.qs[R.i] && R.qs[R.i].f ? R.soloRevMs : SOLO_REV_MS)) goTo(R.i + 1, R.i + 1 >= ROUND ? 'end' : 'spin');
     if (!R) return;
     if (R.spin) spinFrame(now);
     if (R.phase === 'q') timerFrame(now);
@@ -419,23 +590,32 @@
   }
 
   // ----- the wheel -----
-  function wheelSvg() {
-    const n = CATEGORIES.length, r = 96, step = 360 / n;
+  function wheelSvg(ids) {
+    const n = ids.length, r = 96, step = 360 / n;
     const pt = (a, rad) => [Math.cos(a * Math.PI / 180) * rad, Math.sin(a * Math.PI / 180) * rad];
+    const big = n <= 6;
     let out = `<circle r="99" fill="#fff" opacity=".9"/>`;
-    CATEGORIES.forEach((c, k) => {
+    ids.forEach((id, k) => {
       const a0 = k * step - 90, a1 = a0 + step, am = a0 + step / 2;
-      const [x0, y0] = pt(a0, r), [x1, y1] = pt(a1, r), [ix, iy] = pt(am, 63);
-      out += `<path class="sl" data-cat="${c.id}" d="M0 0L${x0.toFixed(2)} ${y0.toFixed(2)}A${r} ${r} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}Z" fill="${CAT[c.id].color}" stroke="#fff" stroke-width="2"/>`;
-      out += `<g transform="rotate(${(am + 90).toFixed(1)} ${ix.toFixed(2)} ${iy.toFixed(2)})" color="#fff">${ic(CAT[c.id].icon, 24).replace('<svg ', `<svg x="${(ix - 12).toFixed(2)}" y="${(iy - 12).toFixed(2)}" `)}</g>`;
+      const [x0, y0] = pt(a0, r), [x1, y1] = pt(a1, r), [ix, iy] = pt(am, big ? 60 : 63);
+      const sz = big ? 30 : 24;
+      out += `<path class="sl" data-cat="${id}" d="M0 0L${x0.toFixed(2)} ${y0.toFixed(2)}A${r} ${r} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}Z" fill="${CAT[id].color}" stroke="#fff" stroke-width="2"/>`;
+      out += `<g transform="rotate(${(am + 90).toFixed(1)} ${ix.toFixed(2)} ${iy.toFixed(2)})" color="#fff">${ic(CAT[id].icon, sz).replace('<svg ', `<svg x="${(ix - sz / 2).toFixed(2)}" y="${(iy - sz / 2).toFixed(2)}" `)}</g>`;
     });
     for (let k = 0; k < n; k++) { const [x, y] = pt(k * step - 90, 90); out += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="2.6" fill="#fff"/>`; }
     return out;
   }
+  function setWheel(ids) {
+    const key = ids.join(',');
+    wheelIds = ids;
+    if (el.wheel.dataset.ids === key) return;
+    el.wheel.dataset.ids = key;
+    el.wheel.innerHTML = wheelSvg(ids);
+  }
   function enterSpin(i, now) {
     const q = R.qs[i];
-    const k = ALL_CATS.indexOf(q.cat);
-    const step = 360 / ALL_CATS.length;
+    const k = Math.max(0, wheelIds.indexOf(q.cat));
+    const step = 360 / wheelIds.length;
     let dur = SOLO_SPIN_MS;
     if (R.multi) dur = clamp(R.t0 - now - 600, 0, 2000);
     const from = wheelAngle % 360;
@@ -451,7 +631,9 @@
       : `Question ${i + 1} of ${ROUND}`;
     el.whLabel.textContent = 'Spinning…';
     el.whLabel.style.removeProperty('--c');
-    $$('.sl', el.wheel).forEach((p) => p.classList.toggle('off', !R.setup.cats.includes(p.dataset.cat)));
+    el.whNote.hidden = !(i === 0 && R.notice);
+    el.whNote.textContent = i === 0 ? R.notice : '';
+    $$('.sl', el.wheel).forEach((p) => p.classList.toggle('off', !R.wheelOn.includes(p.dataset.cat)));
     if (dur <= 0) spinFrame(now + 1);
     else G.sfx('whoosh');
   }
@@ -462,7 +644,7 @@
     const a = s.from + (s.to - s.from) * easeOut(p);
     wheelAngle = a;
     el.wheel.style.transform = `rotate(${a.toFixed(2)}deg)`;
-    const slice = Math.floor(a / 36);
+    const slice = Math.floor(a / (360 / wheelIds.length));
     if (s.last !== null && slice !== s.last && p < 1 && now - (s.tickAt || 0) > 70) { s.tickAt = now; G.sfx('tick'); }
     s.last = slice;
     if (p >= 1 && !s.landed) {
@@ -486,6 +668,8 @@
     el.card.style.setProperty('--c', c.color);
     el.diff.innerHTML = `<span class="tv-pips">${'<i></i>'.repeat(q.d === 'easy' ? 1 : q.d === 'medium' ? 2 : 3)}</span>${q.d === 'easy' ? 'Easy' : q.d === 'medium' ? 'Medium' : 'Hard'}`;
     el.qtext.textContent = q.q;
+    el.fact.hidden = true;
+    el.fact.innerHTML = '';
     el.qtext.className = 'tv-qtext' + (q.q.length > 80 ? ' long' : q.q.length > 55 ? ' mid' : '');
     el.btns.forEach((b, k) => {
       b.className = 'tv-ans';
@@ -518,7 +702,7 @@
     el.wheelwrap.hidden = true;
     el.sheet.classList.remove('show');
     el.banner.className = 'tv-banner';
-    R.qOpenAt = R.multi ? R.t0 + i * SLOT : now;
+    R.qOpenAt = R.multi ? R.t0 + i * R.slot : now;
     R.answer = null;
     R.lastTick = 0;
     renderQuestion(i);
@@ -599,6 +783,13 @@
       else b.classList.add('fade');
       if (a && k === a.k) b.classList.add('mine');
     });
+    // Family Edition: where the question came from, and the fun fact.
+    if (R.family && FAM_IDS.includes(q.cat)) {
+      const c = CAT[q.cat];
+      el.fact.innerHTML = `<span class="tv-src" style="--c:${c.color}">${ic(c.icon, 13)}${esc(c.tag)}</span>${q.f ? `<span class="tv-fact-tx">${esc(q.f)}</span>` : ''}`;
+      el.fact.hidden = false;
+      fitAnswers();
+    }
     el.ringNum.innerHTML = `<span class="ri ${right ? 'ok' : 'no'}">${G.icon(right ? 'check' : a ? 'close' : 'timer', 26)}</span>`;
     el.ring.dataset.level = right ? 'ok' : 'low';
     el.ringFg.style.strokeDashoffset = '0';
@@ -796,7 +987,7 @@
     const k = e.key.toLowerCase();
     if (R && R.paused) { if (k === 'enter' || k === ' ') { e.preventDefault(); resume(); } return; }
     if (R && R.phase === 'q' && KEYS[k] !== undefined) { e.preventDefault(); choose(KEYS[k]); return; }
-    if (!R && !el.menu.hidden && k === 'enter' && (document.activeElement === document.body || !document.activeElement)) { e.preventDefault(); startSolo(); }
+    if (!R && !el.menu.hidden && el.writing.hidden && k === 'enter' && (document.activeElement === document.body || !document.activeElement)) { e.preventDefault(); G.openLobby(); }
   }
 
   // ---------- Effects: confetti on a canvas over the stage ----------
@@ -865,10 +1056,12 @@
       '<li>A right answer scores <b>500</b>, plus up to <b>500 more</b> for answering quickly.</li>' +
       '<li>Get answers right in a row for a <b>streak bonus</b>: +100, +200… up to +500 a question.</li>' +
       '<li>Choose your topics and a difficulty. <b>Easy</b> is great for younger players; <b>Mixed</b> starts easy and gets harder.</li>' +
+      '<li><b>Family Edition</b>: the AI writes questions about your own family from things you already share with each other: the group chats everyone playing is in, their calendar events and notes shared with the whole family. Never private messages or private notes.</li>' +
       '<li><b>Play together</b>: everyone gets the same questions at the same time. After each one you’ll see who got it right and the scores.</li>' +
       '</ul>',
-    roundSetup() {
-      // The host picks the topics and difficulty for everyone.
+    roundSetup(players) {
+      // The host picks the topics and difficulty for everyone. Family Edition: the host's device fetches the
+      // questions (from chats ALL the players share) and sends them to everyone in info.shared.
       return new Promise((resolve) => {
         const s = cleanSetup(setup);
         let done = false;
@@ -880,10 +1073,26 @@
         const paint = () => { box.innerHTML = setupHtml(s); };
         paint();
         bindSetup(box, s, paint);
-        $('[data-tv="go"]', card).addEventListener('click', () => {
+        $('[data-tv="go"]', card).addEventListener('click', async () => {
           Object.assign(setup, cleanSetup(s));
           store.set(SETUP_KEY, setup);
+          if (!setup.family) { G.closeModal(); finish({ cats: setup.cats, diff: setup.diff }); return; }
+          const ac = new AbortController();
+          const wcard = G.modal(`${writingHtml()}<div class="cg-row"><button type="button" data-cg="close">Cancel</button></div>`,
+            { sticky: true, onClose: () => { ac.abort(); finish(null); } });
+          wcard.classList.add('tv-writingcard');
+          const stop = runWriting(wcard);
+          let fam;
+          try { fam = await familyQuestions((players || []).slice(), setup.diff, ac.signal); } catch (e) { fam = { aborted: true }; }
+          stop();
+          if (done || fam.aborted) return;
           G.closeModal();
+          if (fam.qs) {
+            const packed = packFamily(setup.diff, fam);
+            if (packed) { finish(packed); return; }
+            fam = { error: 'Those questions were too long to share.' };
+          }
+          G.toast(`${fam.error} Playing regular questions instead.`);
           finish({ cats: setup.cats, diff: setup.diff });
         });
       });
@@ -905,6 +1114,6 @@
     bank: () => ({ CATEGORIES, QUESTIONS }),
     pick: (seed, s) => pickQuestions(G.rng(seed), cleanSetup(s), null),
     fit: () => fitAnswers(),
-    round: () => (R ? { multi: R.multi, i: R.i, phase: R.phase, score: R.score, correct: R.correct, t0: R.t0, qOpenAt: R.qOpenAt, setup: R.setup, qs: R.qs.map((q) => ({ id: q.id, c: q.c, a: q.a })), ans: Object.assign({}, R.ans), pts: Object.assign({}, R.pts) } : null)
+    round: () => (R ? { multi: R.multi, family: R.family, batch: R.batch, notice: R.notice, slot: R.slot, i: R.i, phase: R.phase, score: R.score, correct: R.correct, t0: R.t0, qOpenAt: R.qOpenAt, setup: R.setup, qs: R.qs.map((q) => ({ id: q.id, c: q.c, a: q.a, q: q.q, cat: q.cat, f: q.f || '' })), ans: Object.assign({}, R.ans), pts: Object.assign({}, R.pts) } : null)
   };
 })();
