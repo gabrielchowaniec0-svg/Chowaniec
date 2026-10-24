@@ -1,7 +1,11 @@
 // Style Star: a dress-up runway game (in the spirit of "Dress To Impress") for Chowaniec Games.
 // A theme is announced, everyone dresses a layered-SVG paper doll, walks the runway, rates the other
-// looks 1-5 stars and the best average wins. Solo: against 3 computer models. Multiplayer (race mode):
-// every phase is timed from the round's start, outfits and votes travel in ChowGames.race.update().
+// looks 1-5 stars and the best average wins. Judge Whiskers, the AI fashion judge (netlify/functions/
+// style-judge.mjs), reviews every look and its stars count as one extra vote.
+// Family first: the menu leads with "Play with the family". Multiplayer (race mode): every phase is timed
+// from the round's start, outfits and votes travel in ChowGames.race.update(); only the host asks the judge
+// (once per round) and shares the reviews in its race state. Practice: dress up alone for the judge;
+// computer models only join if the player adds them (0 / 1 / 3, default 0).
 // Free style: dress up with no timer and save looks to a wardrobe on this device.
 (function () {
   'use strict';
@@ -930,10 +934,125 @@
   const AI_NAMES = [['Ruby', 'dress'], ['Leo', 'pants'], ['Maya', 'any'], ['Kai', 'pants'], ['Zoe', 'dress'], ['Finn', 'pants'], ['Luna', 'dress'], ['Max', 'pants'], ['Ava', 'any'], ['Sam', 'any'], ['Mia', 'dress'], ['Noah', 'pants'], ['Ella', 'any'], ['Theo', 'pants']];
 
   // ===================================================================================================
+  // Judge Whiskers: the AI fashion judge (netlify/functions/style-judge.mjs). Reviews are
+  // { name, stars (1-5 in halves), comment, best, src: 'ai' | 'local' }. If the AI is off or unreachable,
+  // a built-in judge writes kind reviews from the item catalogue instead, so a round never waits forever.
+  // ===================================================================================================
+  const JUDGE = 'Judge Whiskers';
+  const JUDGE_URL = '/.netlify/functions/style-judge';
+  const PAT_WORD = { so: '', st: 'striped', dt: 'polka-dot', sp: 'sparkly', pl: 'plaid', fl: 'flowery', ht: 'heart-print', sr: 'star-print' };
+  const halfStar = (n) => clamp(Math.round((Number(n) || 0) * 2) / 2, 1, 5);
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const itemWords = (w) => [PAT_WORD[w.pat] || '', COL[w.col] ? COL[w.col].name.toLowerCase() : '', w.item.name.toLowerCase()].filter(Boolean).join(' ');
+  function strHash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  const BEST_ORDER = ['hat', 'back', 'held', 'dress', 'jacket', 'shoes', 'neck', 'glasses', 'bag', 'top', 'bottom'];
+  function localReview(m, theme) {
+    const worn = wornList(m.look);
+    const fit = worn.filter((w) => w.item.tags.some((t) => theme.tags.includes(t)));
+    const ranked = (fit.length ? fit : worn).slice().sort((a, b) => BEST_ORDER.indexOf(a.slot) - BEST_ORDER.indexOf(b.slot));
+    const a = ranked[0] && 'the ' + itemWords(ranked[0]), b = ranked[1] && 'the ' + itemWords(ranked[1]);
+    const r = CG.rng(strHash(m.name + '|' + theme.id + '|' + JSON.stringify(m.look.it)));
+    const t = theme.name;
+    let comment;
+    if (!a) comment = pickR([`A fresh, simple start! Next time, add a few ${t} pieces and let them shine.`, `Clean and calm! I would love to see a ${t} accessory or two next time.`], r);
+    else if (fit.length) comment = pickR([b ? `${cap(a)} with ${b}? That is ${t} perfection!` : `${cap(a)} is just right for ${t}!`, `Oh, ${a}! Now that is how you do ${t}.`, b ? `I spy ${a} and ${b}. Very ${t}, very you!` : `${cap(a)} steals the show. Bravo!`], r);
+    else comment = pickR([`${cap(a)}! Not the usual ${t} pick, but I love the confidence.`, `A bold twist on ${t} with ${a}. Fashion is all about surprises!`], r);
+    return { name: m.name, stars: halfStar(1.5 + 3.5 * lookScore(m.look, theme)), comment, best: a || 'a fresh start', src: 'local' };
+  }
+  function cleanReview(x, src) {
+    if (!x || typeof x.name !== 'string' || typeof x.comment !== 'string' || !x.comment.trim()) return null;
+    return { name: x.name.slice(0, 40), stars: halfStar(x.stars), comment: x.comment.trim().slice(0, 180), best: String(x.best || '').trim().slice(0, 60) || 'the whole look', src: src || x.src || 'ai' };
+  }
+  // Asks the AI judge about these looks (at most 8). Always resolves, falling back to the built-in judge.
+  async function askJudge(theme, models) {
+    const list = models.filter((m) => m.look).slice(0, 8);
+    const local = () => list.map((m) => localReview(m, theme));
+    if (!list.length) return [];
+    const u = window.getChowaniecUser ? window.getChowaniecUser() : null;
+    const ctl = window.AbortController ? new AbortController() : null;
+    const timer = setTimeout(() => { if (ctl) ctl.abort(); }, 20000);
+    try {
+      const res = await fetch(JUDGE_URL, {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: ctl ? ctl.signal : undefined,
+        headers: { 'Content-Type': 'application/json', 'X-Chowaniec-Key': (u && u.key) || '' },
+        body: JSON.stringify({ theme: theme.id, outfits: list.map((m) => ({ name: m.name, outfit: m.look })) })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !Array.isArray(data.reviews)) throw new Error(data.error || 'The judge is away');
+      return list.map((m) => cleanReview(data.reviews.find((x) => x && x.name === m.name), 'ai') || localReview(m, theme));
+    } catch (e) {
+      return local();
+    } finally { clearTimeout(timer); }
+  }
+  // Compact form for the host's race state: { s: 'ai'|'local', r: [[name, stars, comment, best], ...] }.
+  function packJudge(list, max) {
+    const m = max || 180;
+    return { s: list.length && list[0].src === 'local' ? 'local' : 'ai', r: list.map((x) => [x.name, x.stars, x.comment.length > m ? x.comment.slice(0, m - 1).replace(/\s+\S*$/, '') + '…' : x.comment, max && max < 100 ? '' : x.best]) };
+  }
+  function unpackJudge(p) {
+    if (!p || !Array.isArray(p.r)) return null;
+    const src = p.s === 'local' ? 'local' : 'ai';
+    const out = p.r.map((a) => (Array.isArray(a) ? cleanReview({ name: a[0], stars: a[1], comment: a[2], best: a[3] }, src) : null)).filter(Boolean);
+    return out.length ? out : null;
+  }
+  const judgeFor = (name) => (R && R.judge ? R.judge.find((x) => x.name === name) || null : null);
+
+  // Stars with halves (judge scores).
+  function halfStars(s, size) {
+    return [1, 2, 3, 4, 5].map((k) => {
+      const kind = k <= s ? ' on' : k - 0.5 === s ? ' half' : '';
+      return `<span class="ss-hs${kind}">${I('star', size || 14)}${kind === ' half' ? `<span class="ss-hs-f">${I('star', size || 14)}</span>` : ''}</span>`;
+    }).join('');
+  }
+  const fmtStars = (s) => (s % 1 ? s.toFixed(1) : String(s));
+
+  // The judge: a chic white cat in cat-eye sunglasses, a pink beret and a gold bow tie. card = stars on a paddle.
+  function judgeSvg(card) {
+    const id = 'jw' + (++UID);
+    const o = '#3b2840', fur = '#fffaf3', fur2 = '#f1e6da', pink = '#f9a8d0';
+    const paddle = card != null ? `<g class="ss-j-paddle"><path d="M 96 104 L 104 62" stroke="${o}" stroke-width="5" stroke-linecap="round"/><path d="M 96 104 L 104 62" stroke="#c98b4b" stroke-width="3" stroke-linecap="round"/>
+      <rect x="86" y="34" width="38" height="30" rx="7" fill="#fff" stroke="${o}" stroke-width="2.2"/><rect x="89" y="37" width="32" height="24" rx="5" fill="#fdf2f8"/>
+      <text x="105" y="55.5" text-anchor="middle" font-family="Outfit, system-ui, sans-serif" font-size="${card % 1 ? 14 : 17}" font-weight="800" fill="#be185d">${fmtStars(card)}</text>
+      <ellipse cx="97" cy="99" rx="7" ry="6" fill="${fur}" stroke="${o}" stroke-width="2"/></g>` : '';
+    return `<svg class="ss-j" viewBox="0 0 128 132" aria-hidden="true"><defs>
+      <linearGradient id="${id}l" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a3a5c"/><stop offset=".55" stop-color="#1c1426"/><stop offset="1" stop-color="#2b1f38"/></linearGradient></defs>
+      <g class="ss-j-tail"><path d="M 84 120 C 112 118 118 92 104 80 C 98 75 92 80 96 86" fill="none" stroke="${o}" stroke-width="12" stroke-linecap="round"/><path d="M 84 120 C 112 118 118 92 104 80 C 98 75 92 80 96 86" fill="none" stroke="${fur}" stroke-width="8" stroke-linecap="round"/><path d="M 101 79 C 98 77 94 80 96 86" fill="none" stroke="${pink}" stroke-width="8" stroke-linecap="round"/></g>
+      <path d="M 32 128 C 26 100 38 80 60 80 C 82 80 94 100 88 128 Z" fill="${fur}" stroke="${o}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M 48 128 C 46 108 52 96 60 96 C 68 96 74 108 72 128 Z" fill="${fur2}"/>
+      <ellipse cx="48" cy="126" rx="9" ry="6" fill="${fur}" stroke="${o}" stroke-width="2.4"/><ellipse cx="72" cy="126" rx="9" ry="6" fill="${fur}" stroke="${o}" stroke-width="2.4"/>
+      <path d="M 45 125 L 45 129 M 49 125 L 49 129 M 69 125 L 69 129 M 73 125 L 73 129" stroke="${o}" stroke-width="1.2" stroke-linecap="round" opacity=".5"/>
+      <g class="ss-j-head">
+        <path d="M 30 44 L 26 10 L 54 28 Z" fill="${fur}" stroke="${o}" stroke-width="2.6" stroke-linejoin="round"/><path d="M 33 36 L 31 18 L 46 28 Z" fill="${pink}"/>
+        <path d="M 90 44 L 94 10 L 66 28 Z" fill="${fur}" stroke="${o}" stroke-width="2.6" stroke-linejoin="round"/><path d="M 87 36 L 89 18 L 74 28 Z" fill="${pink}"/>
+        <ellipse cx="60" cy="54" rx="34" ry="29" fill="${fur}" stroke="${o}" stroke-width="2.6"/>
+        <path d="M 30 22 C 40 6 70 4 80 18 C 72 26 46 30 30 22 Z" fill="#ec4899" stroke="${o}" stroke-width="2.4" stroke-linejoin="round"/><path d="M 56 9 L 58 2" stroke="${o}" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 36 21 C 46 13 66 12 76 18" fill="none" stroke="#f9a8d0" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>
+        <ellipse cx="38" cy="68" rx="7" ry="4" fill="#ff8fb3" opacity=".45"/><ellipse cx="82" cy="68" rx="7" ry="4" fill="#ff8fb3" opacity=".45"/>
+        <path d="M 25 48 C 30 42 44 41 56 47 L 64 47 C 76 41 90 42 95 48 C 96 60 86 64 76 62 C 68 60 64 56 62 53 L 58 53 C 56 56 52 60 44 62 C 34 64 24 60 25 48 Z" fill="url(#${id}l)" stroke="${o}" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M 22 45 L 27 49 M 98 45 L 93 49" stroke="${o}" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M 33 50 L 41 47 M 70 50 L 78 47" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/><circle cx="46" cy="49" r="1.3" fill="#fff" opacity=".8"/><circle cx="83" cy="49" r="1.3" fill="#fff" opacity=".8"/>
+        <path d="M 56 66 L 64 66 L 60 70.5 Z" fill="#f472b6" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
+        <path d="M 52 73 Q 56 77 60 72 Q 64 77 68 73" fill="none" stroke="${o}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 40 70 L 18 66 M 40 73 L 18 75 M 80 70 L 102 66 M 80 73 L 102 75" stroke="${o}" stroke-width="1.3" stroke-linecap="round" opacity=".7"/>
+      </g>
+      <path d="M 60 86 L 46 79 Q 43 87 46 94 Z" fill="#f2bf3d" stroke="#a87612" stroke-width="2" stroke-linejoin="round"/><path d="M 60 86 L 74 79 Q 77 87 74 94 Z" fill="#f2bf3d" stroke="#a87612" stroke-width="2" stroke-linejoin="round"/><circle cx="60" cy="86.5" r="4" fill="#d9a21d" stroke="#a87612" stroke-width="1.8"/>
+      ${paddle}</svg>`;
+  }
+  // The judge with a speech bubble. rev = a review, or null while the judge is still looking.
+  function judgeBox(rev, opt) {
+    opt = opt || {};
+    const say = rev ? `<p>${esc(rev.comment)}</p>${opt.stars === false ? '' : `<span class="ss-jb-stars" aria-label="${fmtStars(rev.stars)} stars">${halfStars(rev.stars, opt.size || 15)}<b>${fmtStars(rev.stars)}</b></span>`}${opt.best && rev.best ? `<span class="ss-jb-best">${I('sparkles', 13)}<span>Best detail: <b>${esc(rev.best)}</b></span></span>` : ''}`
+      : `<p class="ss-jb-think">${esc(opt.wait || 'Hmm, let me take a good look')}<i></i><i></i><i></i></p>`;
+    return `<div class="ss-judge${opt.cls ? ' ' + opt.cls : ''}${rev ? '' : ' thinking'}"><div class="ss-judge-cat">${judgeSvg(rev && opt.card ? rev.stars : null)}</div>
+      <div class="ss-jb"><small>${esc(JUDGE)}${rev && rev.src === 'local' ? '' : ` <em>AI</em>`}</small>${say}</div></div>`;
+  }
+
+  // ===================================================================================================
   // Game
   // ===================================================================================================
   const DRESS_S = 90, EXTEND_S = 30, MAX_EXTENDS = 2, WALK_MS = 4600, INTRO_MS = 2600, VOTE_S = 30, TALLY_MS = 3500, PODIUM_MS = 7000;
-  const KEY_ME = 'chow_style_me', KEY_WARD = 'chow_style_wardrobe', KEY_RECENT = 'chow_style_recent';
+  const KEY_ME = 'chow_style_me', KEY_WARD = 'chow_style_wardrobe', KEY_RECENT = 'chow_style_recent', KEY_JUDGE = 'chow_style_judge';
+  const JUDGE_SETTLE_MS = 1200;   // multiplayer: the host asks the judge this long after dressing ends (last outfits arrive)
   const store = {
     get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
@@ -951,6 +1070,7 @@
   let history = [];
   let tab = 'top';
   let R = null;               // the current round
+  let cpuCount = 0;           // computer models in a practice round: only when the player adds them (0 / 1 / 3)
   let loopTimer = null;
   const thumbCache = new Map();
 
@@ -976,15 +1096,18 @@
     R = null;
     const n = store.get(KEY_WARD, []).length;
     setScreen('menu', `<div class="ss-menu">
-      <div class="ss-menu-doll">${render(look, { bg: true, cls: 'ss-doll' })}</div>
+      <div class="ss-menu-doll"><div class="ss-menu-frame">${render(look, { bg: true, cls: 'ss-doll' })}<div class="ss-menu-judge">${judgeSvg()}</div></div></div>
       <div class="ss-menu-card">
         <div class="ss-menu-badge">${CG.badge('style', 58)}</div>
         <h2>Style Star</h2>
         <p class="ss-sub">A theme is announced. Dress up, walk the runway and collect the most stars!</p>
-        <button type="button" class="ss-btn primary big" data-a="solo">${I('play', 20)}<span>Theme challenge</span></button>
-        <button type="button" class="ss-btn big" data-a="free">${I('palette', 20)}<span>Free style</span></button>
-        <button type="button" class="ss-btn big" data-a="gallery">${I('layers', 20)}<span>My wardrobe</span>${n ? `<em>${n}</em>` : ''}</button>
-        <p class="ss-hint">${I('users', 16)}<span>Tap <b>Play together</b> to dress up against the family.</span></p>
+        <button type="button" class="ss-btn primary big" data-a="family">${I('users', 20)}<span>Play with the family</span></button>
+        <button type="button" class="ss-btn big" data-a="solo">${I('star', 20)}<span>Practice with the AI judge</span></button>
+        <div class="ss-cpu" role="group" aria-label="Computer models"><span>${I('cpu', 16)} Computer models</span>${[0, 1, 3].map((k) => `<button type="button" class="ss-seg${cpuCount === k ? ' on' : ''}" data-a="cpu" data-v="${k}" aria-pressed="${cpuCount === k ? 'true' : 'false'}">${k}</button>`).join('')}</div>
+        <div class="ss-menu-row">
+          <button type="button" class="ss-btn big" data-a="free">${I('palette', 20)}<span>Free style</span></button>
+          <button type="button" class="ss-btn big" data-a="gallery">${I('layers', 20)}<span>Wardrobe</span>${n ? `<em>${n}</em>` : ''}</button>
+        </div>
       </div>
     </div>`);
   }
@@ -1200,11 +1323,12 @@
     mode = 'solo';
     const rand = Math.random;
     const theme = pickTheme(rand);
-    const names = shuffle(AI_NAMES.slice(), rand).slice(0, 3);
-    const skills = shuffle([0.92, 0.68, 0.42], rand);
+    // Computer models only when the player added them on the menu (default: none, just you and the judge).
+    const names = shuffle(AI_NAMES.slice(), rand).slice(0, cpuCount);
+    const skills = shuffle([0.92, 0.68, 0.42], rand).slice(0, cpuCount);
     look = freshLook();
     history = [];
-    R = { theme, extends: 0, paused: null, dressEnd: now() + DRESS_S * 1000 + 2400, myVotes: {},
+    R = { theme, extends: 0, paused: null, dressEnd: now() + DRESS_S * 1000 + 2400, myVotes: {}, votes: {}, judgeOn: true, judge: null, cpu: names.length,
       models: [{ name: CG.me() || 'You', me: true, look: null }].concat(names.map(([n, persona], i) => ({ name: n, ai: true, skill: skills[i], look: makeLook(theme, skills[i], rand, persona) }))) };
     tab = 'top';
     showDress();
@@ -1216,6 +1340,8 @@
       R.models[0].look = clone(look);
       saveMe();
       CG.sfx('match');
+      const round = R;
+      R.judgeP = askJudge(R.theme, R.models).then((list) => { if (R === round) { R.judge = list; onJudge(); } });
       soloRunway();
     } else if (mode === 'multi') {
       R.ready = true;
@@ -1242,6 +1368,7 @@
       <div class="ss-rw-top"><span class="ss-chip">${I('sparkles', 15)}<span>${esc(R.theme.name)}</span></span><span class="ss-chip ss-rw-count"></span></div>
       <div class="ss-rw-flash"></div>
       <div class="ss-rw-name"><b></b><small></small></div>
+      ${R.judgeOn ? '<div class="ss-rw-judge"></div>' : ''}
       ${mode === 'solo' ? `<button type="button" class="ss-btn ss-rw-skip" data-a="skip">${I('chevronRight', 18)}<span>Next</span></button>` : ''}
     </div>`;
   }
@@ -1262,6 +1389,9 @@
     nm.querySelector('b').textContent = m.me ? `${m.name} (you)` : m.name;
     nm.querySelector('small').textContent = m.look ? R.theme.name : 'No look this time';
     const model = main.querySelector('.ss-rw-model');
+    R.rwModel = m;
+    const jw = main.querySelector('.ss-rw-judge');
+    if (jw) { jw.classList.remove('say'); renderRunwayJudge(); }
     CG.sfx('whoosh');
     if (!reduceMotion && model.animate) {
       const frames = [];
@@ -1284,7 +1414,22 @@
       CG.sfx('coin');
       f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
       sparkles(main.querySelector('.ss-rw-model'));
+      const j = main.querySelector('.ss-rw-judge');
+      if (j && m.look) { j.classList.add('say'); if (judgeFor(m.name)) CG.sfx('point'); }
     }, WALK_MS * 0.52);
+  }
+  // The judge's corner on the runway: the comment for the model on stage (or "thinking" until it arrives).
+  function renderRunwayJudge() {
+    const el = main.querySelector('.ss-rw-judge');
+    const m = R && R.rwModel;
+    if (!el || !m) return;
+    el.hidden = !m.look;
+    el.innerHTML = judgeBox(judgeFor(m.name), { cls: 'rw', size: 13, wait: 'Ooh, let me see' });
+  }
+  // A judge result arrived (solo: from the AI call; multiplayer: from the host's state).
+  function onJudge() {
+    if (screen === 'runway') renderRunwayJudge();
+    else if (screen === 'vote') renderVote();
   }
   function sparkles(el) {
     if (!el || reduceMotion) return;
@@ -1312,7 +1457,7 @@
     if (mode !== 'solo' || screen !== 'runway') return;
     clearTimeout(R.walkT);
     R.runIdx++;
-    if (R.runIdx >= R.order.length) { soloVote(); return; }
+    if (R.runIdx >= R.order.length) { if (R.cpu) soloVote(); else soloResults(); return; }
     walk(R.order[R.runIdx], R.runIdx, R.order.length);
     R.walkT = setTimeout(nextWalk, WALK_MS);
   }
@@ -1354,6 +1499,7 @@
     const allDone = list.every((t) => R.myVotes[t.name]);
     card.innerHTML = `<div class="ss-vote-doll">${render(m.look, { bg: true, cls: 'ss-doll' })}</div>
       <div class="ss-vote-who"><b>${esc(m.name)}</b><span>${I('star', 14)} How well does it fit “${esc(R.theme.name)}”?</span></div>
+      ${R.judgeOn ? judgeBox(judgeFor(m.name), { cls: 'inline', size: 12, wait: 'Still writing my notes' }) : ''}
       <div class="ss-stars" role="group" aria-label="Stars for ${esc(m.name)}">${[1, 2, 3, 4, 5].map((k) => `<button type="button" class="ss-star${k <= mine ? ' on' : ''}" data-k="vote" data-v="${k}" aria-label="${k} star${k > 1 ? 's' : ''}">${I('star', 34)}</button>`).join('')}</div>`;
     main.querySelector('.ss-vote-nav').innerHTML = `<button type="button" class="ss-btn icon" data-a="vprev" aria-label="Previous look"${R.voteIdx ? '' : ' disabled'}>${I('arrowLeft', 20)}</button>
       <div class="ss-dots">${list.map((t, i) => `<i class="${R.myVotes[t.name] ? 'done' : ''}${i === R.voteIdx ? ' cur' : ''}"></i>`).join('')}${mode === 'multi' ? `<span class="ss-timer">${I('timer', 16)}<b></b></span>` : ''}</div>
@@ -1392,7 +1538,8 @@
 
   // Results -------------------------------------------------------------------------------------
   // models: [{ name, look }], votes: { voter: { target: stars } }. Self-votes and junk are ignored.
-  function tally(models, votes) {
+  // judge: the judge's reviews (or null); its stars (halves allowed) count as one extra vote for every look.
+  function tally(models, votes, judge) {
     const names = models.map((m) => m.name);
     const rows = models.map((m) => {
       const got = [];
@@ -1402,22 +1549,35 @@
         const n = Math.round(Number(s));
         if (n >= 1 && n <= 5) got.push(n);
       });
-      const avg = got.length ? got.reduce((a, b) => a + b, 0) / got.length : 0;
-      return { m, name: m.name, got, avg: Math.round(avg * 100) / 100 };
+      const jr = judge ? judge.find((x) => x.name === m.name) || null : null;
+      const js = jr ? halfStar(jr.stars) : null;
+      const all = js != null ? got.concat([js]) : got;
+      const avg = all.length ? all.reduce((a, b) => a + b, 0) / all.length : 0;
+      return { m, name: m.name, got, judge: jr, js, n: all.length, avg: Math.round(avg * 100) / 100 };
     });
-    rows.sort((a, b) => b.avg - a.avg || b.got.length - a.got.length || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    rows.sort((a, b) => b.avg - a.avg || b.n - a.n || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     let place = 0;
     rows.forEach((r, i) => { if (i === 0 || r.avg !== rows[i - 1].avg) place = i; r.place = place; });
     return rows;
   }
   const PLACE = ['1st place!', '2nd place!', '3rd place!', '4th place', '5th place', '6th place', '7th place', '8th place'];
   function soloResults() {
+    if (mode !== 'solo' || !R || R.shown) return;
+    if (!R.judge) {
+      // The judge is still writing: wait (askJudge always resolves, with the built-in judge if needed).
+      if (screen !== 'results') setScreen('results', `<div class="ss-tally">${judgeBox(null, { cls: 'big', wait: 'Writing my notes' })}</div>`);
+      const round = R;
+      R.judgeP.then(() => { if (R === round) soloResults(); });
+      return;
+    }
+    R.shown = true;
+    clearTimeout(R.advT);
     R.votes[R.models[0].name] = Object.assign({}, R.myVotes);
-    const rows = tally(R.models, R.votes);
+    const rows = tally(R.models, R.votes, R.judge);
     const me = rows.find((r) => r.m.me);
     R.myScore = Math.round(me.avg * 100);
     R.place = me.place;
-    showResults(rows, me);
+    if (R.cpu) showResults(rows, me); else showVerdict(me);
     clearTimeout(R.overT);
     R.overT = setTimeout(soloGameOver, PODIUM_MS + 2500);
   }
@@ -1425,7 +1585,25 @@
     if (mode !== 'solo' || !R || R.overShown) return;
     R.overShown = true;
     clearTimeout(R.overT);
-    CG.gameOver({ score: R.myScore, title: PLACE[R.place] || 'Well done!', again: startSolo });
+    CG.gameOver({ score: R.myScore, title: R.cpu ? PLACE[R.place] || 'Well done!' : `${fmtStars(R.myScore / 100)} stars from the judge!`, again: startSolo });
+  }
+  // Practice with just the judge: the verdict on your look. Score = the judge's stars × 100.
+  function showVerdict(me) {
+    setScreen('results', `<div class="ss-res ss-verdict">
+      <canvas class="ss-confetti"></canvas>
+      <div class="ss-res-head">${I('sparkles', 24)}<h2>The judge’s verdict</h2><p class="ss-sub">${esc(R.theme.name)}</p></div>
+      <div class="ss-verdict-main">
+        <div class="ss-verdict-doll">${render(me.m.look, { bg: true, cls: 'ss-doll' })}</div>
+        ${judgeBox(me.judge, { cls: 'big', best: true, card: true, size: 20 })}
+      </div>
+      <div class="ss-mine"><span>Your score</span><b>${fmtStars(me.avg)} stars → ${R.myScore} points</b></div>
+      <div class="ss-res-actions">
+        <button type="button" class="ss-btn" data-a="savelook">${I('save', 18)}<span>Save my look</span></button>
+        <button type="button" class="ss-btn primary" data-a="continue">${I('chevronRight', 18)}<span>Continue</span></button>
+      </div>
+    </div>`);
+    CG.sfx(me.avg >= 4 ? 'win' : 'score');
+    confetti(main.querySelector('.ss-confetti'), me.avg >= 4 ? 140 : 60);
   }
   function showResults(rows, me) {
     const top = rows.slice(0, 3);
@@ -1445,7 +1623,8 @@
       <div class="ss-res-head">${I(iWon ? 'crown' : 'trophy', 26)}<h2>${headline}</h2><p class="ss-sub">${esc(R.theme.name)}</p></div>
       <div class="ss-podium">${order.map(pod).join('')}</div>
       ${rest.length ? `<ol class="ss-rest">${rest.map((r) => `<li class="${r === me ? 'me' : ''}"><span class="cg-rank">${r.place + 1}</span><b>${esc(r.name)}</b><span class="ss-rs">${I('star', 14)} ${r.avg.toFixed(1)}</span></li>`).join('')}</ol>` : ''}
-      ${me ? `<div class="ss-mine"><span>Your stars</span><span class="ss-mine-row">${me.got.length ? me.got.map((n) => `<em>${starsRow(n, 12)}</em>`).join('') : 'No votes this time'}</span><b>${me.avg.toFixed(1)} → ${Math.round(me.avg * 100)} points</b></div>` : ''}
+      ${R.judgeOn && (me || winner).judge ? judgeBox((me || winner).judge, { cls: 'res', best: true, card: true, size: 14 }) : ''}
+      ${me ? `<div class="ss-mine"><span>Your stars</span><span class="ss-mine-row">${me.got.map((n) => `<em>${starsRow(n, 12)}</em>`).join('')}${me.js != null ? `<em class="ss-mine-j" title="${esc(JUDGE)}">${I('cat', 13)}${halfStars(me.js, 12)}</em>` : ''}${me.n ? '' : 'No votes this time'}</span><b>${me.avg.toFixed(1)} → ${Math.round(me.avg * 100)} points</b></div>` : ''}
       <div class="ss-res-actions">
         <button type="button" class="ss-btn" data-a="savelook">${I('save', 18)}<span>Save my look</span></button>
         ${mode === 'solo' ? `<button type="button" class="ss-btn primary" data-a="continue">${I('chevronRight', 18)}<span>Continue</span></button>` : `<span class="ss-wait">${I('clock', 16)} Final standings coming up…</span>`}
@@ -1512,7 +1691,13 @@
   // ---------------------------------------------------------------------------------------------
   function broadcast() {
     if (mode !== 'multi' || !R || R.over) return;
-    CG.race.update({ score: R.myScore || 0, alive: true, phase: R.ready && R.phase === 'dress' ? 'ready' : R.phase, outfit: look, votes: R.myVotes });
+    const st = { score: R.myScore || 0, alive: true, phase: R.ready && R.phase === 'dress' ? 'ready' : R.phase, outfit: look, votes: R.myVotes };
+    // The host carries the judge's reviews so every device shows the same comments and counts the same stars.
+    // A race state must stay under 4000 characters: shorten the comments if a big family makes it too long.
+    if (R.isHost && R.judge) {
+      for (const max of [180, 120, 80, 50]) { st.judge = packJudge(R.judge, max); if (JSON.stringify(st).length < 3900) break; }
+    }
+    CG.race.update(st);
   }
   function startMulti(info) {
     CG.closeModal();
@@ -1523,7 +1708,9 @@
     const t0 = info.startAt || (s && s.startAt ? Date.parse(s.startAt) : now());
     look = freshLook();
     history = [];
-    R = { theme, multi: true, T0: isFinite(t0) ? t0 : now(), seed: info.seed, phase: 'dress', ready: false, myVotes: {}, cache: {}, roster: null, myScore: 0, over: false };
+    const host = info.host || (s && s.host) || '';
+    R = { theme, multi: true, T0: isFinite(t0) ? t0 : now(), seed: info.seed, phase: 'dress', ready: false, myVotes: {}, cache: {}, roster: null, myScore: 0, over: false,
+      judgeOn: !(info.shared && info.shared.judge === false), judge: null, host, isHost: host === CG.me() };
     tab = 'top';
     showDress();
     splash('Today’s theme', theme.name, theme.hint);
@@ -1532,8 +1719,34 @@
   function pullOthers() {
     CG.race.others().forEach((o) => {
       const st = o.state || {};
-      if (st.outfit) R.cache[o.name] = { look: normalize(st.outfit), votes: st.votes && typeof st.votes === 'object' ? st.votes : {}, phase: st.phase };
+      if (st.outfit) R.cache[o.name] = { look: normalize(st.outfit), votes: st.votes && typeof st.votes === 'object' ? st.votes : {}, phase: st.phase, judge: st.judge };
     });
+    if (R.judgeOn && !R.isHost && !R.judge && R.cache[R.host] && R.cache[R.host].judge) {
+      R.judge = unpackJudge(R.cache[R.host].judge);
+      if (R.judge) onJudge();
+    }
+  }
+  // Host only: once per round, a moment after dressing ends, ask the judge about every look. The answer must
+  // be shared before voting starts; if the AI is slow the built-in judge fills in, so all devices agree.
+  function hostJudge() {
+    if (!R.isHost || !R.judgeOn || !R.roster || R.judge) return;
+    const t = now();
+    if (!R.judgeAsked && t >= R.T0 + DRESS_S * 1000 + JUDGE_SETTLE_MS) {
+      R.judgeAsked = true;
+      const round = R, models = multiModels().filter((m) => m.look);
+      R.judgeModels = models;
+      askJudge(R.theme, models).then((list) => {
+        if (R !== round || R.judge || !list.length) return;
+        R.judge = list;
+        broadcast();
+        onJudge();
+      });
+    }
+    if (R.judgeAsked && t >= R.voteStart - 2500 && R.judgeModels.length) {
+      R.judge = R.judgeModels.map((m) => localReview(m, R.theme));
+      broadcast();
+      onJudge();
+    }
   }
   function multiModels() {
     return R.roster.map((name) => (name === CG.me() ? { name, me: true, look: clone(look) } : { name, look: R.cache[name] ? R.cache[name].look : null }));
@@ -1553,6 +1766,7 @@
     }
     let phase = 'dress';
     if (R.roster) phase = now() < R.voteStart ? 'runway' : now() < R.voteEnd ? 'vote' : now() < R.tallyAt ? 'tally' : 'results';
+    hostJudge();
     if (phase !== R.phase) enterPhase(phase);
     if (phase === 'dress') updateTimer();
     if (phase === 'runway') {
@@ -1598,7 +1812,7 @@
     const models = multiModels().filter((m) => m.look);
     const votes = {};
     models.forEach((m) => { votes[m.name] = m.me ? R.myVotes : (R.cache[m.name] ? R.cache[m.name].votes : {}); });
-    const rows = tally(models, votes);
+    const rows = tally(models, votes, R.judgeOn ? R.judge : null);
     const me = rows.find((r) => r.m.me);
     R.myScore = me ? Math.round(me.avg * 100) : 0;
     R.rows = rows;
@@ -1638,6 +1852,8 @@
     const a = t.dataset.a;
     switch (a) {
       case 'solo': startSolo(); break;
+      case 'family': CG.sfx('click'); CG.openLobby(); break;
+      case 'cpu': cpuCount = clamp(+v || +t.dataset.v || 0, 0, 3); CG.sfx('click'); main.querySelectorAll('[data-a="cpu"]').forEach((b) => { const on = +b.dataset.v === cpuCount; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }); break;
       case 'free': startFree(); break;
       case 'gallery': CG.sfx('click'); showGallery(); break;
       case 'menu': CG.sfx('click'); if (mode === 'multi') return; showMenu(); break;
@@ -1697,12 +1913,43 @@
     }
   }
 
+  // The host's round setup (before each multiplayer round): AI judge on or off. On by default, since the
+  // judge is not an opponent: it reviews every look and its stars count as one extra vote.
+  function roundSetup() {
+    return new Promise((resolve) => {
+      let on = store.get(KEY_JUDGE, true) !== false;
+      const ov = document.createElement('div');
+      ov.className = 'ss-setup-ov';
+      const draw = () => {
+        ov.innerHTML = `<div class="cg-card ss-setup" role="dialog" aria-modal="true" aria-label="Round setup">
+          <div class="ss-setup-judge">${judgeSvg()}</div>
+          <h2>Round setup</h2>
+          <p class="cg-sub">${esc(JUDGE)} can review every look on the runway. Their stars count as one extra vote.</p>
+          <div class="ss-cpu" role="group" aria-label="AI judge"><span>${I('cat', 16)} AI judge</span>
+            <button type="button" class="ss-seg${on ? ' on' : ''}" data-a="jon" aria-pressed="${on}">On</button><button type="button" class="ss-seg${on ? '' : ' on'}" data-a="joff" aria-pressed="${!on}">Off</button></div>
+          <div class="cg-row"><button type="button" data-a="cancel">Cancel</button><button type="button" class="primary" data-a="go">${I('play', 18)} Start</button></div></div>`;
+      };
+      draw();
+      document.body.appendChild(ov);
+      ov.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-a]');
+        if (!b) return;
+        const a = b.dataset.a;
+        if (a === 'jon' || a === 'joff') { on = a === 'jon'; CG.sfx('click'); draw(); return; }
+        ov.remove();
+        if (a === 'cancel') { resolve(null); if (!CG.modalOpen()) CG.openLobby(); return; }
+        store.set(KEY_JUDGE, on);
+        resolve({ judge: on });
+      });
+    });
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Boot
   // ---------------------------------------------------------------------------------------------
   CG.mount({
-    id: 'style', title: 'Style Star', mode: 'race', scoreLabel: 'stars', syncMs: 500,
-    help: '<ul><li>A <b>theme</b> is announced, like Beach Day or Royal Ball.</li><li>Dress your model before the clock runs out: tap a tab (tops, dresses, shoes, hats, wings…), pick an item, then choose its colour and pattern.</li><li><b>Undo</b> takes back a change, <b>Surprise me</b> picks a random outfit. In a solo game you can add 30 seconds twice.</li><li>Everyone walks the <b>runway</b>, then you rate each look from 1 to 5 stars. The best average wins. Your score is your stars × 100.</li><li>Solo: you compete with 3 computer models. Together: everyone gets the same theme and rates each other.</li><li><b>Free style</b>: no timer, save your favourite looks to your wardrobe.</li><li>Keys: Z undo, R surprise, Enter done, 1–5 to vote.</li></ul>',
+    id: 'style', title: 'Style Star', mode: 'race', scoreLabel: 'stars', syncMs: 500, roundSetup,
+    help: '<ul><li>A <b>theme</b> is announced, like Beach Day or Royal Ball.</li><li>Dress your model before the clock runs out: tap a tab (tops, dresses, shoes, hats, wings…), pick an item, then choose its colour and pattern.</li><li><b>Undo</b> takes back a change, <b>Surprise me</b> picks a random outfit. When practising you can add 30 seconds twice.</li><li>Everyone walks the <b>runway</b>, then you rate each look from 1 to 5 stars. The best average wins. Your score is your average stars × 100.</li><li><b>Judge Whiskers</b>, the AI fashion judge, reviews every look and gives 1 to 5 stars (halves too). Its stars count as one extra vote. The host can switch the judge off before a round.</li><li><b>Play with the family</b>: everyone gets the same theme and rates each other. <b>Practice with the AI judge</b>: dress up alone and get the judge’s review (add computer models on the menu if you like).</li><li><b>Free style</b>: no timer, save your favourite looks to your wardrobe.</li><li>Keys: Z undo, R surprise, Enter done, 1–5 to vote.</li></ul>',
     onReady(ctx) {
       root = ctx.root;
       root.classList.add('ss-root');
@@ -1720,5 +1967,5 @@
   CG.on('pause', onPause);
   CG.on('multiStart', (info) => { if (root) startMulti(info); });
   CG.on('multiEnd', () => { if (root) { R = null; showMenu(); } });
-  window.__SS = { render, normalize, lookScore, tally, makeLook, THEMES, SLOTS, HAIR, state: () => ({ mode, screen, look, R }) };
+  window.__SS = { render, normalize, lookScore, tally, makeLook, localReview, packJudge, unpackJudge, THEMES, SLOTS, HAIR, state: () => ({ mode, screen, look, R, cpuCount }) };
 })();
