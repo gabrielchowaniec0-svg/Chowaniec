@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#000000"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><script src="/pwa.js" defer></script>
+    <title>Games · Chowaniec</title>
+    <link rel="stylesheet" href="/theme.css">
+    <script src="/theme.js"></script>
+    <!-- Tailwind is only used by the shared passcode box -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/passwords.js"></script>
+    <script src="/auth-gate.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+    <link rel="stylesheet" href="/games/games.css">
+    <style>
+        body { background: var(--cg-bg); }
+        .hub { max-width: 960px; margin: 0 auto; padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px calc(env(safe-area-inset-bottom, 0px) + 40px); }
+        .hub-top { display: flex; align-items: center; gap: 10px; }
+        .hub-top a { width: 40px; height: 40px; border-radius: 999px; display: flex; align-items: center; justify-content: center; text-decoration: none; color: var(--cg-ink); background: var(--cg-surface); border: 1px solid var(--cg-line); font-size: 24px; line-height: 1; padding-bottom: 3px; box-sizing: border-box; }
+        .hub h1 { font-family: 'Playfair Display', Georgia, serif; font-weight: 400; font-size: 34px; margin: 18px 0 4px; }
+        .hub h1 em { color: var(--cg-muted); }
+        .hub .lead { color: var(--cg-muted); margin: 0 0 20px; font-size: 15px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+        @media (max-width: 520px) { .grid { grid-template-columns: 1fr 1fr; gap: 10px; } }
+        .game { position: relative; display: flex; flex-direction: column; border-radius: 22px; overflow: hidden; text-decoration: none; color: var(--cg-ink); background: var(--cg-surface); border: 1px solid var(--cg-line); box-shadow: 0 2px 10px rgba(0,0,0,.05); transition: transform .15s, box-shadow .15s; }
+        .game:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0,0,0,.12); }
+        .game:active { transform: scale(.98); }
+        .art { position: relative; aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center; font-size: 56px; overflow: hidden; }
+        .art .em { position: relative; z-index: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); transition: transform .25s; }
+        .game:hover .art .em { transform: scale(1.12) rotate(-4deg); }
+        .art .tag { position: absolute; z-index: 1; top: 10px; left: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.88); color: #111; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+        .info { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+        .info b { font-size: 17px; font-weight: 700; }
+        .info .desc { font-size: 13px; color: var(--cg-muted); line-height: 1.35; }
+        .scores { margin-top: auto; padding-top: 8px; font-size: 12.5px; color: var(--cg-muted); display: flex; flex-direction: column; gap: 2px; }
+        .scores .lead1 { color: var(--cg-ink); font-weight: 600; }
+        @media (max-width: 520px) { .art { font-size: 44px; } .info { padding: 10px 11px 12px; } .info b { font-size: 15px; } .info .desc { font-size: 12px; } }
+        /* Card backgrounds: little scenes in CSS */
+        .a-dino { background: linear-gradient(#fde68a, #fbbf24 70%, #d97706 70%); }
+        .a-road { background: linear-gradient(#7dd3fc 0 45%, #4ade80 45% 100%); }
+        .a-road::before { content: ''; position: absolute; bottom: 0; left: 50%; width: 70%; height: 55%; transform: translateX(-50%); background: #475569; clip-path: polygon(42% 0, 58% 0, 100% 100%, 0 100%); }
+        .a-hop { background: linear-gradient(#bae6fd, #e0f2fe); }
+        .a-hop::before, .a-hop::after { content: ''; position: absolute; width: 18%; background: #86efac; border-radius: 10px; }
+        .a-hop::before { left: 14%; top: -10%; height: 40%; } .a-hop::after { right: 14%; bottom: -10%; height: 42%; }
+        .a-snake { background: repeating-conic-gradient(#a3e635 0 25%, #84cc16 0 50%) 0 0 / 28px 28px; }
+        .a-2048 { background: linear-gradient(135deg, #fed7aa, #fb923c); }
+        .a-four { background: radial-gradient(circle at 20% 30%, #ef4444 0 9%, transparent 10%), radial-gradient(circle at 80% 70%, #facc15 0 9%, transparent 10%), linear-gradient(#2563eb, #1d4ed8); }
+        .a-memory { background: linear-gradient(135deg, #c4b5fd, #f0abfc); }
+        .a-word { background: linear-gradient(135deg, #86efac, #22c55e); }
+        .note { margin-top: 26px; font-size: 13px; color: var(--cg-muted); text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="app-root">
+        <div class="hub">
+            <div class="hub-top"><a href="/" aria-label="Back to the hub">‹</a></div>
+            <h1>Chowaniec <em>Games</em></h1>
+            <p class="lead">Beat the family high scores, or tap 👥 in any game to play together and send the invite to a chat.</p>
+            <div class="grid" id="grid"></div>
+            <p class="note">High scores are shared with the whole family.</p>
+        </div>
+    </div>
+    <script>
+    (function () {
+        'use strict';
+        const GAMES = [
+            { id: 'dino', name: 'Dino Dash', emoji: '🦖', desc: 'Jump the cacti, duck the birds, run forever.', tag: 'Race' },
+            { id: 'road', name: 'Road Rush', emoji: '🏎️', desc: 'Weave through traffic and beat the clock.', tag: 'Race' },
+            { id: 'hop', name: 'Sky Hop', emoji: '🐤', desc: 'Flap a little chick through the clouds.', tag: 'Race' },
+            { id: 'snake', name: 'Snake', emoji: '🐍', desc: 'Eat apples, grow longer, don’t bump yourself.', tag: 'Race' },
+            { id: '2048', name: '2048', emoji: '🔢', desc: 'Slide and merge tiles to reach 2048.', tag: 'Race' },
+            { id: 'four', name: 'Four in a Row', emoji: '🔴', desc: 'Line up four before your opponent does.', tag: '2 players' },
+            { id: 'memory', name: 'Memory Match', emoji: '🃏', desc: 'Flip the cards and find all the pairs.', tag: '1–4 players' },
+            { id: 'word', name: 'Daily Word', emoji: '🔤', desc: 'Guess the family’s word of the day in six tries.', tag: 'Daily' }
+        ];
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+
+        function draw(boards) {
+            document.getElementById('grid').innerHTML = GAMES.map((g) => {
+                const b = boards && boards[g.id];
+                const unit = g.id === 'four' ? ' wins' : g.id === 'word' ? ' pts' : '';
+                let scores = '';
+                if (b && b.top && b.top.length) {
+                    scores = `<span class="lead1">🏆 ${esc(b.top[0].name)} · ${fmt(b.top[0].score)}${unit}</span>` +
+                        (b.mine ? `<span>You: ${fmt(b.mine.score)}${unit}</span>` : '<span>You haven’t played yet</span>');
+                } else if (boards) scores = '<span>No scores yet. Be the first!</span>';
+                return `<a class="game" href="/games/${g.id}/"><div class="art a-${g.id}"><span class="tag">${esc(g.tag)}</span><span class="em" aria-hidden="true">${g.emoji}</span></div>` +
+                    `<div class="info"><b>${esc(g.name)}</b><span class="desc">${esc(g.desc)}</span><div class="scores">${scores}</div></div></a>`;
+            }).join('');
+        }
+
+        async function load() {
+            const u = window.getChowaniecUser ? window.getChowaniecUser() : null;
+            try {
+                const res = await fetch('/.netlify/functions/games?boards=1', { headers: { 'X-Chowaniec-Key': (u && u.key) || '' }, cache: 'no-store' });
+                if (res.ok) draw((await res.json()).games);
+            } catch (e) { /* the cards still work without scores */ }
+        }
+
+        draw(null);
+        window.initializeProtectedContent = load;
+        window.addEventListener('DOMContentLoaded', () => { if (window.isAppAuthorized && window.isAppAuthorized()) load(); });
+    })();
+    </script>
+</body>
+</html>

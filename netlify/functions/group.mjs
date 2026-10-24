@@ -25,6 +25,13 @@
 //   POST { action: 'listened', id } -> { ok }   (you played a voice message)
 //   GET ?stars=1 -> { stars }   POST { action: 'star', id } -> { starred }   (your saved messages)
 //   DELETE ?id=<id>                          -> { ok }        (author or host)
+//   GET ?gifs=1&q=&offset=                   -> { enabled, gifs }   GIPHY search (trending when q is empty)
+//   POST { action: 'gif', id, text?, replyTo? }  -> { message }
+//   GET ?videolimits=1                       -> { seconds, bytes }  how long/large your videos can be
+//   POST { action: 'video-start', size, type, duration, width, height } -> { id, partBytes, parts }
+//   PUT ?upload=<id>&part=<n>  (raw bytes)   -> { ok }        each part is partBytes long (the last one less)
+//   POST { action: 'video-finish', upload, poster (JPEG data URL), text?, replyTo? } -> { message }
+//   GET ?video=<id>  (Range: bytes=..)       -> 206 video bytes, at most one part per response
 // Every message GET also returns { presence, pinned } and marks the caller online.
 import { getUser, json } from '../lib/auth.mjs';
 import {
@@ -32,7 +39,7 @@ import {
   toggleReaction, touchPresence, setTyping, clearTyping, setRead, listPresence,
   getPinned, pinMessage, unpin, saveAudio, MAX_VOICE_SECONDS, buildPoll, votePoll, closePoll,
   scheduleMessage, listScheduled, cancelScheduled, nextScheduledAt, deliverDue,
-  STICKERS, stickerById, threadRoot, listThread, searchMessages, getStarRefs, toggleStar, markListened
+  STICKERS, stickerById, threadRoot, listThread, searchMessages, getStarRefs, toggleStar, markListened, saveImage
 } from '../lib/group-store.mjs';
 import { publishMessage } from '../lib/group-post.mjs';
 import { catchUpSummary } from '../lib/catch-up.mjs';
@@ -42,6 +49,8 @@ import { getMutes, setMute } from '../lib/user-settings.mjs';
 import { isDmId } from '../lib/rooms.mjs';
 import { createEvent, describeWhen } from '../lib/calendar-store.mjs';
 import { resolveRoom, roomsFor, canAccessRoom } from '../lib/rooms.mjs';
+import { searchGifs, gifById } from '../lib/gifs.mjs';
+import { videoLimits, startUpload, putPart, finishUpload, videoMeta, videoRange } from '../lib/video-store.mjs';
 
 const EMOJI = ['❤️', '👍', '😂', '😮', '😢', '🎉'];
 
@@ -62,6 +71,12 @@ export default async (req, context) => {
       return json(200, { stars: found.filter(Boolean) });
     }
     if (req.method === 'GET' && url.searchParams.get('dms')) return json(200, { dms: await listDms(user) });
+    if (req.method === 'GET' && url.searchParams.get('gifs')) return json(200, await searchGifs(url.searchParams.get('q'), url.searchParams.get('offset')));
+    if (req.method === 'GET' && url.searchParams.get('videolimits')) return json(200, videoLimits(user.name));
+    if (req.method === 'PUT' && url.searchParams.get('upload')) {
+      await putPart(user.name, url.searchParams.get('upload'), url.searchParams.get('part'), new Uint8Array(await req.arrayBuffer()));
+      return json(200, { ok: true });
+    }
     let body = null;
     if (req.method === 'POST') {
       try {
@@ -92,6 +107,13 @@ export default async (req, context) => {
           });
         }
         return new Response(image.bytes, { headers });
+      }
+      const videoId = url.searchParams.get('video');
+      if (videoId) {
+        const meta = await videoMeta(videoId);
+        if (!meta || !canAccessRoom(user.name, meta.room)) return json(404, { error: 'Video not found.' });
+        const part = await videoRange(meta, videoId, req.headers.get('range'));
+        return new Response(part.body, { status: part.status, headers: part.headers });
       }
       if (url.searchParams.get('stickers')) return json(200, { stickers: STICKERS });
       if (url.searchParams.get('dminfo')) return json(200, { dm: dmInfo(user, room) });
@@ -207,6 +229,30 @@ export default async (req, context) => {
         voice: { id: mediaId, duration, ...(String(body.transcript || '').trim() ? { transcript: String(body.transcript).trim().slice(0, 1000) } : {}) },
         replyTo: isMessageId(body.replyTo) ? body.replyTo : null
       });
+      context.waitUntil(publishMessage(message));
+      return json(200, { message });
+    }
+    if (body.action === 'gif') {
+      const gif = await gifById(String(body.id || ''));
+      const message = await postMessage({
+        author: user.name, room, text: String(body.text || ''), gif,
+        replyTo: isMessageId(body.replyTo) ? body.replyTo : null
+      });
+      await clearTyping(user.name, room);
+      context.waitUntil(publishMessage(message));
+      return json(200, { message });
+    }
+    if (body.action === 'video-start') {
+      return json(200, await startUpload(user.name, room, body));
+    }
+    if (body.action === 'video-finish') {
+      const video = await finishUpload(user.name, String(body.upload || ''), room);
+      const poster = typeof body.poster === 'string' && body.poster.startsWith('data:image/') ? await saveImage(body.poster, room).catch(() => null) : null;
+      const message = await postMessage({
+        author: user.name, room, text: String(body.text || ''), video: { ...video, ...(poster ? { poster } : {}) },
+        replyTo: isMessageId(body.replyTo) ? body.replyTo : null
+      });
+      await clearTyping(user.name, room);
       context.waitUntil(publishMessage(message));
       return json(200, { message });
     }

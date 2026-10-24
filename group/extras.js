@@ -1060,9 +1060,10 @@
             if (m && m.sheet) return sheetHtml(m);
             if (m && m.sticker && stickerOf(m.sticker)) return stickerHtml(m);
             if (m && m.voice && m.voice.id) return voiceHtml(m);
+            if (m && (m.video || m.gif) && window.GroupMedia) return window.GroupMedia.richHtml(m);
             return '';
         },
-        richClass(m) { return m.poll ? 'rich-poll' : m.sheet ? 'rich-poll' : m.sticker ? 'rich-sticker' : 'rich-voice'; },
+        richClass(m) { return m.video || m.gif ? 'rich-media' : m.poll ? 'rich-poll' : m.sheet ? 'rich-poll' : m.sticker ? 'rich-sticker' : 'rich-voice'; },
         sig: sheetSig,
         menuItems(m) {
             let out = '';

@@ -102,6 +102,8 @@
                     <div id="plus-popup" role="menu" aria-label="Add to message" class="pop hidden">
                         <button id="btn-photo" type="button" role="menuitem" class="mi"><i data-lucide="image-plus"></i>Photo</button>
                         <button id="btn-camera" type="button" role="menuitem" class="mi"><i data-lucide="camera"></i>Take a photo</button>
+                        <button id="btn-video" type="button" role="menuitem" class="mi"><i data-lucide="clapperboard"></i>Video</button>
+                        <button id="btn-gif" type="button" role="menuitem" class="mi"><i data-lucide="sticky-note"></i>GIF</button>
                         <button id="btn-poll" type="button" role="menuitem" class="mi"><i data-lucide="chart-no-axes-column"></i>Poll</button>
                         <button id="btn-share" type="button" role="menuitem" class="mi"><i data-lucide="link"></i>Share a note, event or meeting</button>
                         <button id="btn-sheet" type="button" role="menuitem" class="mi"><i data-lucide="clipboard-check"></i>Sign-up sheet</button>
@@ -119,6 +121,7 @@
                     <form id="composer" class="composer" autocomplete="off">
                         <input id="file-input" type="file" accept="image/*" class="sr-only" tabindex="-1" aria-hidden="true">
                         <input id="camera-input" type="file" accept="image/*" capture="environment" class="sr-only" tabindex="-1" aria-hidden="true">
+                        <input id="video-input" type="file" accept="video/*" class="sr-only" tabindex="-1" aria-hidden="true">
                         <button id="btn-plus" type="button" title="Add a photo, poll and more" aria-label="Add a photo, poll and more" aria-haspopup="menu" aria-expanded="false" class="cbtn">
                             <i data-lucide="plus"></i>
                         </button>
@@ -264,6 +267,7 @@
     <script src="/robot.js"></script>
     <script src="group.js"></script>
     <script src="extras.js"></script>
+    <script src="media.js"></script>
     <script src="polish.js"></script>
     <script src="suggest.js"></script>
 </body>

@@ -10,6 +10,7 @@
     { title: 'Notes', url: '/notes/', words: 'notebook write' },
     { title: 'Calendar', url: '/calendar/', words: 'events plans birthdays' },
     { title: 'Lists', url: '/lists/', words: 'groceries packing costumes shared list' },
+    { title: 'Games', url: '/games/', words: 'play dino driving racing snake 2048 word puzzle arcade high score' },
     { title: 'Search everything', url: '/search/', words: 'find' },
     { title: 'Settings', url: '/settings/', words: 'preferences colour theme text size notifications' },
     { title: 'Home', url: '/', words: 'start directory' }

@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { familyNames, resolveName, isHostName } from './auth.mjs';
 import { sendPush } from './push.mjs';
 import { DEFAULT_ROOM, prefixOf, roomMembers, isDmId, isAiDm } from './rooms.mjs';
+import { deleteVideo } from './video-store.mjs';
 
 export const MAX_TEXT = 4000;
 export const AI_NAME = 'Chowaniec AI';
@@ -121,7 +122,7 @@ export function parseMentions(text) {
 
 export const hasImportant = (text) => /(^|[^\w])@important\b/i.test(String(text || ''));
 
-async function saveImage(dataUrl, room = DEFAULT_ROOM) {
+export async function saveImage(dataUrl, room = DEFAULT_ROOM) {
   const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || '');
   if (!match || !IMAGE_TYPES.includes(match[1])) throw Object.assign(new Error('Photos must be JPEG, PNG or WebP.'), { status: 400 });
   const bytes = Buffer.from(match[2], 'base64');
@@ -152,18 +153,18 @@ export async function getImage(id) {
 }
 
 // Stores a message and returns it. `author` is a family name or AI_NAME.
-export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, link, onBehalfOf, sticker, thread, sheet, important, room = DEFAULT_ROOM }) {
+export async function postMessage({ author, text, image, replyTo, kind = 'user', poll, voice, video, gif, link, onBehalfOf, sticker, thread, sheet, important, room = DEFAULT_ROOM }) {
   const clean = String(text || '').trim().slice(0, MAX_TEXT);
   const wantsImportant = kind !== 'system' && !!(important || hasImportant(clean));
   if (wantsImportant && !isHostName(onBehalfOf || author)) {
     throw Object.assign(new Error('Only Victoria, Gabriel or Nicole can send an @important ping.'), { status: 403 });
   }
-  if (!clean && !image && !poll && !voice && !sticker && !sheet) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
+  if (!clean && !image && !poll && !voice && !video && !gif && !sticker && !sheet) throw Object.assign(new Error('Write a message or add a photo.'), { status: 400 });
 
   let reply = null;
   if (replyTo) {
     const found = await getMessage(replyTo, room);
-    if (found) reply = { id: found.message.id, user: found.message.user, text: found.message.text.slice(0, 200) };
+    if (found) reply = { id: found.message.id, user: found.message.user, text: (found.message.text || (found.message.video ? '🎬 Video' : found.message.gif ? 'GIF' : '')).slice(0, 200) };
   }
 
   const message = {
@@ -179,6 +180,8 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user',
     reactions: {},
     ...(poll ? { poll } : {}),
     ...(voice ? { voice } : {}),
+    ...(video ? { video } : {}),
+    ...(gif ? { gif } : {}),
     ...(link ? { link } : {}),
     ...(onBehalfOf ? { onBehalfOf } : {}),
     ...(sticker ? { sticker } : {}),
@@ -260,6 +263,10 @@ export async function deleteMessage(id, room = DEFAULT_ROOM) {
   await messages().delete(keyOf(id, room));
   if (found.message.image) await media().delete(found.message.image);
   if (found.message.voice) await media().delete(found.message.voice.id);
+  if (found.message.video) {
+    await deleteVideo(found.message.video.id);
+    if (found.message.video.poster) await media().delete(found.message.video.poster);
+  }
 }
 
 // Toggles `user`'s reaction, retrying if someone else reacted at the same moment.
@@ -298,8 +305,9 @@ export async function markListened(id, user, room = DEFAULT_ROOM) {
 // Push notifications for a new message: mentioned people get "X mentioned you",
 // everyone else a normal message notification. The author is never notified.
 export async function notifyMessage(message) {
-  const preview = message.text ? message.text.slice(0, 140) : message.sticker ? 'Sent a sticker' : 'Sent a photo';
-  const body = message.image && message.text ? `📷 ${preview}` : preview;
+  const preview = message.text ? message.text.slice(0, 140)
+    : message.sticker ? 'Sent a sticker' : message.video ? 'Sent a video' : message.gif ? 'Sent a GIF' : 'Sent a photo';
+  const body = message.image && message.text ? `📷 ${preview}` : message.video ? `🎬 ${preview}` : message.gif && message.text ? `🎞️ ${preview}` : preview;
   let everyone = roomMembers(message.room || DEFAULT_ROOM);
   let threadTitle = '';
   if (message.thread) {
@@ -350,7 +358,7 @@ export function transcriptOf(list) {
     const when = new Date(m.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: familyTimeZone() });
     const reply = m.replyTo ? ` (replying to ${m.replyTo.user}: "${m.replyTo.text.slice(0, 80)}")` : '';
     const poll = m.poll ? ` [poll options: ${m.poll.options.map((o) => `${o.text} (${o.votes.length})`).join(', ')}${m.poll.closed ? '; closed' : ''}]` : '';
-    return `[${when}] ${m.user}${reply}: ${m.text || ''}${m.image ? ' [photo]' : ''}${m.voice ? ` [voice message${m.voice.transcript ? `: "${m.voice.transcript.slice(0, 300)}"` : ''}]` : ''}${m.sticker ? ' [sticker]' : ''}${poll}`;
+    return `[${when}] ${m.user}${reply}: ${m.text || ''}${m.image ? ' [photo]' : ''}${m.voice ? ` [voice message${m.voice.transcript ? `: "${m.voice.transcript.slice(0, 300)}"` : ''}]` : ''}${m.sticker ? ' [sticker]' : ''}${m.video ? ' [video]' : ''}${m.gif ? ` [GIF: ${m.gif.title}]` : ''}${poll}`;
   }).join('\n');
 }
 
