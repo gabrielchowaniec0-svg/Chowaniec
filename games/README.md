@@ -59,6 +59,9 @@ ChowGames.mount({
   It already respects the mute button.
 - `ChowGames.rng(seed)` returns a seeded `() => number in [0,1)`. **Use it for everything random in a
   multiplayer round**, so every player gets the same course.
+- Timed rounds: `info.startAt` (in `multiStart`) is when the round started, already converted to this device's
+  clock, so `Date.now() - info.startAt` is the same on every phone even if a phone's clock is wrong.
+  `ChowGames.toLocal(serverTime)` converts other server times the same way.
 - `ChowGames.countingDown()` is true during the 3-2-1 before a multiplayer round: ignore input then.
 - `ChowGames.on('pause', fn)` fires when the page is hidden. Pause solo games.
 - `ChowGames.toast(text)`, `ChowGames.modal(html)`/`closeModal()`, `ChowGames.modalOpen()`: don't let

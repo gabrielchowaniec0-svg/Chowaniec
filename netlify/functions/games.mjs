@@ -46,7 +46,14 @@ async function invite(user, session, rawRoom) {
   }
 }
 
+// Every response carries the server clock, so devices with a wrong clock still start rounds together.
 export default async (req) => {
+  const res = await handle(req);
+  try { res.headers.set('X-Server-Time', String(Date.now())); } catch (e) { /* immutable headers: skip */ }
+  return res;
+};
+
+async function handle(req) {
   const user = getUser(req);
   if (!user) return json(401, { error: 'Please sign in again.' });
   const url = new URL(req.url);
@@ -145,7 +152,7 @@ export default async (req) => {
     console.error('Games error:', err);
     return json(500, { error: 'Something went wrong. Please try again.' });
   }
-};
+}
 
 export const config = {
   // Races sync a few times a second from every player.

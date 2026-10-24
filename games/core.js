@@ -58,6 +58,7 @@
   // ---------- API ----------
   async function api(method, query, body) {
     const u = window.getChowaniecUser ? window.getChowaniecUser() : null;
+    const sent = Date.now();
     const res = await fetch(API + (query || ''), {
       method,
       credentials: 'same-origin',
@@ -65,10 +66,28 @@
       headers: Object.assign({ 'X-Chowaniec-Key': (u && u.key) || '' }, body ? { 'Content-Type': 'application/json' } : {}),
       body: body ? JSON.stringify(body) : undefined
     });
+    learnClock(res.headers.get('X-Server-Time'), sent, Date.now());
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw Object.assign(new Error(data.error || 'Something went wrong. Please try again.'), { status: res.status, data });
     return data;
   }
+
+  // ---------- Server clock ----------
+  // now() is the server's time: rounds start at a server time (session.startAt), so a phone whose clock is
+  // a few seconds off still counts down with everyone. Uses the quickest round trip seen so far.
+  let clockOffset = 0;
+  let bestRtt = Infinity;
+  function learnClock(header, sent, got) {
+    const server = Number(header);
+    if (!server) return;
+    const rtt = got - sent;
+    if (rtt > bestRtt) return;
+    bestRtt = rtt;
+    clockOffset = server - (sent + got) / 2;
+  }
+  const now = () => Date.now() + clockOffset;
+  // A server time (ISO string or ms) as this device's Date.now() value.
+  const toLocal = (t) => (typeof t === 'number' ? t : Date.parse(t)) - clockOffset;
 
   // ---------- Seeded random numbers (same seed = same course for everyone) ----------
   function rng(seed) {
@@ -388,13 +407,13 @@
     multi.players = {};
     multi.lastVersion = s.version;
     closeModal();
-    const late = Date.parse(s.startAt) - Date.now() < -2000;
+    const late = Date.parse(s.startAt) - now() < -2000;
     if (!late) {
       const cd = document.createElement('div');
       cd.id = 'cg-countdown';
       document.body.appendChild(cd);
       for (;;) {
-        const left = Math.ceil((Date.parse(s.startAt) - Date.now()) / 1000);
+        const left = Math.ceil((Date.parse(s.startAt) - now()) / 1000);
         if (left <= 0) break;
         if (cd.textContent !== String(left)) { cd.textContent = String(left); cd.classList.remove('pop'); void cd.offsetWidth; cd.classList.add('pop'); sfx('tick'); }
         await sleep(100);
@@ -406,7 +425,7 @@
       sfx('go');
       setTimeout(() => cd.remove(), 650);
     }
-    const info = Object.assign(turnInfo(), { seed: s.seed, shared: s.shared });
+    const info = Object.assign(turnInfo(), { seed: s.seed, shared: s.shared, startAt: toLocal(s.startAt) });
     if (opts.mode === 'race') {
       multi.myState = { score: 0, alive: true };
       renderRaceBoard();
@@ -427,7 +446,7 @@
     const round = multi.session.round;
     return Object.entries(multi.players)
       .filter(([name, p]) => name !== me() && p && p.round === round && p.state)
-      .map(([name, p]) => ({ name, color: colorOf(name), state: p.state, age: Date.now() - p.at }));
+      .map(([name, p]) => ({ name, color: colorOf(name), state: p.state, age: now() - p.at }));
   }
 
   function raceStandings() {
@@ -464,7 +483,7 @@
     const s = multi.session;
     const rows = raceStandings();
     // Someone whose first update hasn't arrived is still playing, unless 15 s have passed (they never started).
-    const grace = Date.now() - Date.parse(s.startAt) > 15000;
+    const grace = now() - Date.parse(s.startAt) > 15000;
     const allDone = rows.every((r) => (r.started && !r.alive) || (!r.started && grace)) && rows.some((r) => r.started);
     const html = (allDone ? `<div class="cg-hero gold">${icon('crown', 26)}</div>` : `<div class="cg-hero">${icon('timer', 26)}</div>`) +
       `<h2>${allDone ? (rows[0].name === me() ? 'You win!' : `${esc(rows[0].name)} wins!`) : 'Waiting for the others…'}</h2>` +
@@ -600,7 +619,7 @@
     const racing = inSession() && multi.round > 0 && multi.session.round === multi.round;
     if (racing && opts.mode === 'race') {
       await raceFinish(score);
-      submitScore(score);
+      if (score > 0) submitScore(score);
       return;
     }
     if (racing && opts.mode === 'turns') {
@@ -691,7 +710,7 @@
 
   window.ChowGames = {
     mount, on, rng, sfx, toast, modal, closeModal, modalOpen, gameOver, submitScore, showLeaderboard, openLobby,
-    me, colors: COLORS, icon, badge, meta: GAME_META,
+    me, colors: COLORS, icon, badge, meta: GAME_META, now, toLocal,
     uploadImage,
     countingDown: () => { const c = document.getElementById('cg-countdown'); return !!c && !c.classList.contains('go'); },
     isMulti: () => inSession() && multi.round > 0 && multi.session.round === multi.round,

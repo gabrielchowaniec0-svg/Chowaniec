@@ -1520,7 +1520,7 @@
     const rand = CG.rng(info.seed);
     const theme = THEMES[Math.floor(rand() * THEMES.length)];
     const s = CG.session();
-    const t0 = s && s.startAt ? Date.parse(s.startAt) : now();
+    const t0 = info.startAt || (s && s.startAt ? Date.parse(s.startAt) : now());
     look = freshLook();
     history = [];
     R = { theme, multi: true, T0: isFinite(t0) ? t0 : now(), seed: info.seed, phase: 'dress', ready: false, myVotes: {}, cache: {}, roster: null, myScore: 0, over: false };
