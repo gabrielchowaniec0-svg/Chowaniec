@@ -5,7 +5,7 @@ and plugs into the shared frame in `/games/core.js` (`window.ChowGames`), which 
 family high scores, the game-over card and multiplayer. Server: `netlify/functions/games.mjs`, storage in
 `netlify/lib/games-store.mjs` (the `GAMES` list there must include the game id).
 
-Game ids: `dino`, `road`, `hop`, `snake`, `2048`, `four`, `memory`, `word`.
+Game ids: `dino`, `road`, `hop`, `snake`, `2048`, `four`, `memory`, `word`, `kart`, `style`, `police`, `puzzle`, `trivia`.
 
 ## Page template
 
@@ -39,7 +39,7 @@ Never use `placeholder` attributes (house rule: no placeholder text anywhere).
 
 ```js
 ChowGames.mount({
-  id: 'dino', title: 'Dino Dash', emoji: '🦖',
+  id: 'dino', title: 'Dino Dash',
   mode: 'race',                 // 'race' (everyone plays at once, same seed) or 'turns' (shared board)
   minPlayers: 2, maxPlayers: 2, // turns only
   scoreLabel: 'points',         // shown under the score on the game-over card
@@ -59,12 +59,36 @@ ChowGames.mount({
   It already respects the mute button.
 - `ChowGames.rng(seed)` returns a seeded `() => number in [0,1)`. **Use it for everything random in a
   multiplayer round**, so every player gets the same course.
+- Timed rounds: `info.startAt` (in `multiStart`) is when the round started, already converted to this device's
+  clock, so `Date.now() - info.startAt` is the same on every phone even if a phone's clock is wrong.
+  `ChowGames.toLocal(serverTime)` converts other server times the same way.
 - `ChowGames.countingDown()` is true during the 3-2-1 before a multiplayer round: ignore input then.
 - `ChowGames.on('pause', fn)` fires when the page is hidden. Pause solo games.
 - `ChowGames.toast(text)`, `ChowGames.modal(html)`/`closeModal()`, `ChowGames.modalOpen()`: don't let
   keyboard or tap input drive the game while a modal is open.
 
-### Race games (mode 'race')
+### Icons, not emojis
+
+The UI uses clean line icons, never emoji, for buttons, labels, titles and HUDs. Use `ChowGames.icon(name, size)` (an inline SVG
+that takes `currentColor`) and `ChowGames.badge(gameId, size)` (the game's gradient badge). Names include: trophy volume mute
+users help back close play again crown flag star clock timer heart settings share copy chat group gamepad image upload
+check lock award zap car shield shirt puzzle brain sparkles undo pause home link send video phone bell medal target flame
+gift cpu user plus minus arrowUp arrowDown arrowLeft arrowRight siren palette camera grid shuffle eye calendar info
+chevronRight sun moon keyboard party thumbsUp mapPin gauge circleDot apple hash type layers dice ghost footprints bird egg
+worm grid2 circle spade word carFront rocket crosshair route swords lightbulb mic wand scissors gem hat shoe music map fuel
+badge handshake cat dog refresh maximize trash save externalLink reply logIn (see ICONS in core.js).
+Things drawn *inside* the game world (a fruit on a card, a sticker on a dress) can be any art you like.
+
+## More frame options
+
+- `syncMs`: how often race states are sent (default 600, minimum 250). Use 300 for live driving.
+- `roundSetup(players)` (race games, runs on the host's device when they press Start; may be async and may
+  open its own picker): return plain JSON (under 20 KB) that every player receives as `info.shared` in
+  `multiStart`, e.g. `{ image: id, pieces: 48 }`. Return `null` to cancel the start.
+- `await ChowGames.uploadImage(dataUrl)` → `{ id, url }`: shares a picture (JPEG/PNG/WebP, max 2 MB; shrink
+  it in a canvas first) so other players can load it from `url` (same origin, safe to draw on a canvas).
+
+## Race games (mode 'race')
 
 - `ChowGames.on('multiStart', info => …)`: fires after the shared 3-2-1 countdown. `info.seed` is the
   round's seed, `info.players` the names, `info.colors` their colours (same order) and `info.me` my name.

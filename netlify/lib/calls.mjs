@@ -8,12 +8,14 @@ import { getStore } from '@netlify/blobs';
 import crypto from 'node:crypto';
 import common from './common.js';
 import { sendPush } from './push.mjs';
+import { markSeen, isOnline } from './presence.mjs';
+
+export { markSeen };
 import { postMessage } from './group-store.mjs';
 import { roomMembers, roomsFor, dmParts } from './rooms.mjs';
 
 const { dailyRequest } = common;
 export const RING_MS = 45 * 1000;                 // how long a call rings before it counts as missed
-const ONLINE_MS = 15 * 1000;                     // the popup check runs every 4 seconds while a page is visible
 const CALL_ROOM_SECONDS = 3 * 60 * 60;           // the call's room stays open for late joiners
 const ID_PATTERN = /^[a-f0-9]{16}$/;
 
@@ -50,14 +52,6 @@ function stateOf(call) {
   return call.declined.length === call.people.length ? 'declined' : 'missed';
 }
 
-export async function markSeen(user) {
-  await store().setJSON(key('seen', user), { at: Date.now() });
-}
-
-async function isOnline(user) {
-  const seen = await store().get(key('seen', user), { type: 'json' });
-  return !!seen && Date.now() - seen.at < ONLINE_MS;
-}
 
 export async function getCall(id) {
   if (!isCallId(id)) return null;

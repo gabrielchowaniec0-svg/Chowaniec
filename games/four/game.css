@@ -24,7 +24,7 @@
 .f4-box canvas.bump { animation: f4Bump .22s ease-out; }
 .f4-controls { flex: none; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .f4-controls[hidden] { display: none; }
-.f4-btn { min-height: 48px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--cg-line); background: var(--f4-chip); color: var(--cg-ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.f4-btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 48px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--cg-line); background: var(--f4-chip); color: var(--cg-ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
 .f4-btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
 .f4-btn:active { transform: scale(.96); }
 
@@ -38,12 +38,20 @@
 .f4-logo i { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.8), var(--c) 45%, color-mix(in srgb, var(--c) 70%, #000)); animation: f4Drop .7s cubic-bezier(.3,1.4,.5,1) both; }
 .f4-logo i:nth-child(2) { animation-delay: .1s; } .f4-logo i:nth-child(3) { animation-delay: .2s; } .f4-logo i:nth-child(4) { animation-delay: .3s; }
 .f4-levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.f4-levels button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 78px; border-radius: 16px; border: 2px solid var(--cg-line); background: var(--cg-soft); color: var(--cg-ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
-.f4-levels button span { font-size: 30px; line-height: 1.1; }
+.f4-levels button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 78px; border-radius: 16px; border: 2px solid var(--cg-line); background: var(--cg-soft); color: var(--cg-ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.f4-pips { display: inline-flex; align-items: flex-end; gap: 3px; height: 16px; flex: none; }
+.f4-pips i { width: 5px; border-radius: 2px; background: color-mix(in srgb, currentColor 22%, transparent); }
+.f4-pips i:nth-child(1) { height: 45%; } .f4-pips i:nth-child(2) { height: 72%; } .f4-pips i:nth-child(3) { height: 100%; }
+.f4-pips.l1 i:nth-child(-n+1) { background: #22c55e; }
+.f4-pips.l2 i:nth-child(-n+2) { background: #f59e0b; }
+.f4-pips.l3 i:nth-child(-n+3) { background: #ef4444; }
+.f4-levels .f4-pips { height: 26px; gap: 4px; }
+.f4-levels .f4-pips i { width: 8px; border-radius: 3px; }
+.f4-disc { display: block; width: 52px; height: 52px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.75), var(--c) 45%, color-mix(in srgb, var(--c) 70%, #000) 100%); box-shadow: inset 0 0 0 4px rgba(0,0,0,.12), 0 6px 14px rgba(0,0,0,.18); }
 .f4-levels button.sel { border-color: #2563eb; }
 .f4-levels button:active, .f4-more button:active { transform: scale(.96); }
 .f4-more { display: flex; flex-direction: column; gap: 8px; }
-.f4-more button { min-height: 50px; border-radius: 14px; border: 1px solid var(--cg-line); background: transparent; color: var(--cg-ink); font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
+.f4-more button { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 50px; border-radius: 14px; border: 1px solid var(--cg-line); background: transparent; color: var(--cg-ink); font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
 .f4-more button:first-child { background: #22c55e; border-color: #22c55e; color: #fff; }
 
 @keyframes f4Pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 45%, transparent); } 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--c) 0%, transparent); } }
@@ -63,3 +71,4 @@
   .f4-msg { font-size: 17px; justify-content: center; }
   .f4-controls { flex-direction: column; justify-content: center; flex-wrap: nowrap; }
 }
+.f4-btn[data-a="menu"] .cg-ic { margin: 0 -2px 0 -5px; }

@@ -9,11 +9,13 @@
     { name: 'Yellow', main: '#facc15', light: '#fff6a8', dark: '#d19a06', rim: '#a16207' }
   ];
   const LEVELS = {
-    easy: { label: 'Easy', emoji: '🐣', depth: 2, mistake: 0.45, ms: 0 },
-    medium: { label: 'Medium', emoji: '🦊', depth: 4, mistake: 0.08, ms: 0 },
-    hard: { label: 'Hard', emoji: '🦉', depth: 10, mistake: 0, ms: 650 }
+    easy: { label: 'Easy', n: 1, depth: 2, mistake: 0.45, ms: 0 },
+    medium: { label: 'Medium', n: 2, depth: 4, mistake: 0.08, ms: 0 },
+    hard: { label: 'Hard', n: 3, depth: 10, mistake: 0, ms: 650 }
   };
   const G = window.ChowGames;
+  // A little 'signal strength' meter: 1, 2 or 3 bars lit for Easy, Medium, Hard.
+  const pips = (k) => `<span class="f4-pips l${LEVELS[k].n}" aria-hidden="true"><i></i><i></i><i></i></span>`;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -400,27 +402,28 @@
     if (mode === 'multi' && multi) {
       const names = multi.players;
       const title = winner === 'draw' ? 'It’s a draw!' : `${names[winner] || DISC[winner].name} wins!`;
-      const detail = `🔴 ${names[0]} vs 🟡 ${names[1]}`;
+      const detail = `${names[0]} (red) vs ${names[1]} (yellow)`;
       G.gameOver({ title, detail, score: winner === multi.myIdx ? 1 : 0 });
       return;
     }
     if (mode === 'solo') {
-      if (winner === 0 && level !== 'easy') { G.gameOver({ title: 'You win! 🎉', score: 1, again: newGame }); return; }
+      if (winner === 0 && level !== 'easy') { G.gameOver({ title: 'You win!', score: 1, again: newGame }); return; }
       if (winner === 0) {
-        resultCard('🎉 You win!', 'You beat the 🐣 Easy computer! Beat 🦊 Medium or 🦉 Hard to earn a win on the family leaderboard.');
+        resultCard('You win!', 'You beat the Easy computer! Beat Medium or Hard to earn a win on the family leaderboard.', `<div class="cg-hero gold">${G.icon('trophy', 28)}</div>`);
         return;
       }
-      if (winner === 'draw') { resultCard('🤝 It’s a draw!', 'So close! The board is full.'); return; }
-      G.gameOver({ title: `${LEVELS[level].emoji} The computer wins`, score: 0, again: newGame });
+      if (winner === 'draw') { resultCard('It’s a draw!', 'So close! The board is full.', `<div class="cg-hero">${G.icon('handshake', 28)}</div>`); return; }
+      G.gameOver({ title: 'The computer wins', score: 0, again: newGame });
       return;
     }
     if (mode === 'local') {
-      resultCard(winner === 'draw' ? '🤝 It’s a draw!' : `${winner === 0 ? '🔴' : '🟡'} ${DISC[winner].name} wins!`, 'Pass the phone and play again.');
+      resultCard(winner === 'draw' ? 'It’s a draw!' : `${DISC[winner].name} wins!`, 'Pass the phone and play again.',
+        winner === 'draw' ? `<div class="cg-hero">${G.icon('handshake', 28)}</div>` : `<div class="cg-hero plain"><i class="f4-disc" style="--c:${DISC[winner].main}"></i></div>`);
     }
   }
 
-  function resultCard(title, text) {
-    const card = G.modal(`<h2>${esc(title)}</h2><p>${esc(text)}</p><div class="cg-row col"><button type="button" class="primary" data-a="again">Play again</button><button type="button" data-a="menu">Change game</button></div>`, { onClose: () => {} });
+  function resultCard(title, text, hero) {
+    const card = G.modal(`${hero || ''}<h2>${esc(title)}</h2><p>${esc(text)}</p><div class="cg-row col"><button type="button" class="primary" data-a="again">Play again</button><button type="button" data-a="menu">Change game</button></div>`, { onClose: () => {} });
     card.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-a]');
       if (!b) return;
@@ -545,16 +548,16 @@
   function renderStatus() {
     if (!statusEl) return;
     let names, msg, cls = '';
-    if (mode === 'solo') names = ['You', `${LEVELS[level].emoji} Computer`];
+    if (mode === 'solo') names = ['You', 'Computer'];
     else if (mode === 'local') names = ['Red', 'Yellow'];
     else if (mode === 'multi' && multi) names = multi.players.map((n, i) => (i === multi.myIdx ? `${n} (you)` : n));
     else names = ['Red', 'Yellow'];
     if (winner === 'draw') { msg = 'It’s a draw!'; cls = 'end'; }
     else if (winner != null) {
       cls = 'end';
-      if (mode === 'solo') msg = winner === 0 ? 'You win! 🎉' : 'The computer wins';
-      else if (mode === 'multi') msg = winner === multi.myIdx ? 'You win! 🎉' : `${multi.players[winner]} wins!`;
-      else msg = `${DISC[winner].name} wins! 🎉`;
+      if (mode === 'solo') msg = winner === 0 ? 'You win!' : 'The computer wins';
+      else if (mode === 'multi') msg = winner === multi.myIdx ? 'You win!' : `${multi.players[winner]} wins!`;
+      else msg = `${DISC[winner].name} wins!`;
     } else if (mode === 'solo') { msg = turn === 0 ? 'Your turn' : 'Computer is thinking…'; cls = turn === 0 ? 'mine' : ''; }
     else if (mode === 'local') { msg = `${DISC[turn].name}’s turn`; cls = 'mine'; }
     else if (mode === 'multi' && multi) {
@@ -567,7 +570,7 @@
       `<div class="f4-msg ${cls}" style="--c:${DISC[winner != null && winner !== 'draw' ? winner : turn].main}" aria-live="polite"><i></i><span>${esc(msg || '')}</span></div>`;
     controlsEl.hidden = mode === 'multi' || mode === 'menu';
     const lv = $('[data-a="level"]', controlsEl);
-    if (lv) lv.textContent = mode === 'solo' ? `${LEVELS[level].emoji} ${LEVELS[level].label}` : '👫 2 players';
+    if (lv) lv.innerHTML = mode === 'solo' ? `${pips(level)}<span>${LEVELS[level].label}</span>` : `${G.icon('users', 18)}<span>2 players</span>`;
   }
   function shakeStatus() { const m = $('.f4-msg', statusEl); if (m) { m.classList.remove('shake'); void m.offsetWidth; m.classList.add('shake'); } }
 
@@ -593,14 +596,14 @@
     root = ctx.root;
     root.classList.add('f4-stage');
     root.innerHTML = `<div class="f4-wrap"><div class="f4-status"></div><div class="f4-box"><canvas aria-label="Four in a Row board" role="img"></canvas></div>
-      <div class="f4-controls"><button type="button" class="f4-btn" data-a="menu">‹ Menu</button><button type="button" class="f4-btn ghost" data-a="level"></button><button type="button" class="f4-btn primary" data-a="restart">↻ New game</button></div></div>
+      <div class="f4-controls"><button type="button" class="f4-btn" data-a="menu">${G.icon('back', 17)}<span>Menu</span></button><button type="button" class="f4-btn ghost" data-a="level"></button><button type="button" class="f4-btn primary" data-a="restart">${G.icon('again', 17)}<span>New game</span></button></div></div>
       <div class="f4-menu" hidden><div class="f4-menu-card">
         <div class="f4-logo" aria-hidden="true"><i style="--c:#ef4444"></i><i style="--c:#facc15"></i><i style="--c:#ef4444"></i><i style="--c:#facc15"></i></div>
         <h2>Four in a Row</h2><p>Drop discs and line up four – across, up or slanted!</p>
         <h3>Play the computer</h3>
-        <div class="f4-levels">${Object.entries(LEVELS).map(([k, L]) => `<button type="button" data-level="${k}"><span>${L.emoji}</span>${L.label}</button>`).join('')}</div>
+        <div class="f4-levels">${Object.entries(LEVELS).map(([k, L]) => `<button type="button" data-level="${k}">${pips(k)}${L.label}</button>`).join('')}</div>
         <h3>Play with people</h3>
-        <div class="f4-more"><button type="button" data-a="family">👥 Play with the family</button><button type="button" data-a="local">👫 2 players on this device</button></div>
+        <div class="f4-more"><button type="button" data-a="family">${G.icon('users', 20)}<span>Play with the family</span></button><button type="button" data-a="local">${G.icon('gamepad', 20)}<span>2 players on this device</span></button></div>
       </div></div>`;
     wrap = $('.f4-wrap', root); statusEl = $('.f4-status', root); boxEl = $('.f4-box', root); canvas = $('canvas', root); cx = canvas.getContext('2d');
     controlsEl = $('.f4-controls', root); menuEl = $('.f4-menu', root);
@@ -663,11 +666,11 @@
   G.on('multiEnd', () => { multi = null; showMenu(); });
 
   G.mount({
-    id: 'four', title: 'Four in a Row', emoji: '🔴', mode: 'turns', minPlayers: 2, maxPlayers: 2, scoreLabel: 'wins',
+    id: 'four', title: 'Four in a Row', mode: 'turns', minPlayers: 2, maxPlayers: 2, scoreLabel: 'wins',
     help: '<ul><li>Take turns dropping a disc into a column.</li><li>Get <b>four in a row</b> – across, up and down, or slanted – to win!</li>' +
       '<li>Tap a column (or click it). On a keyboard use ← → and Enter, or the keys 1–7.</li>' +
-      '<li>Against the computer, 🐣 Easy is gentle, 🦊 Medium thinks ahead and 🦉 Hard is very tricky. Wins against Medium and Hard count on the family leaderboard.</li>' +
-      '<li>👥 Play together: Red goes first. Every win counts on the leaderboard.</li></ul>',
+      '<li>Against the computer, <b>Easy</b> is gentle, <b>Medium</b> thinks ahead and <b>Hard</b> is very tricky. Wins against Medium and Hard count on the family leaderboard.</li>' +
+      `<li>${G.icon('users', 17)} <b>Play together</b>: Red goes first. Every win counts on the leaderboard.</li></ul>`,
     initialShared,
     onReady: build
   });

@@ -1,11 +1,13 @@
 // Calls from a chat (see ../lib/calls.mjs).
-//   GET  ?incoming=1                 -> { call | null }  the call ringing for you; also marks you as "online"
+//   GET  ?incoming=1&since=<id>      -> { call | null, inbox: { items, cursor } }  the call ringing for you and new
+//                                       in-app notifications (see ../lib/inbox.mjs); also marks you as "online"
 //   GET  ?id=<callId>                -> { call }          how a call you're in is going (the caller's screen)
 //   POST { action: 'start', room }   -> { call }          rings everyone else in that chat
 //   POST { action: 'answer' | 'decline' | 'cancel', id } -> { call }
 import { getUser, json } from '../lib/auth.mjs';
 import { resolveRoom } from '../lib/rooms.mjs';
 import { startCall, incomingFor, respond, sendMissed, markSeen, publicCall } from '../lib/calls.mjs';
+import { readInbox } from '../lib/inbox.mjs';
 
 const MIN_GAP_MS = 10 * 1000;   // one call at a time per person (guards against double taps)
 const lastStart = new Map();
@@ -18,8 +20,8 @@ export default async (req, context) => {
   try {
     if (req.method === 'GET') {
       if (url.searchParams.get('incoming')) {
-        const [call] = await Promise.all([incomingFor(user.name), markSeen(user.name)]);
-        return json(200, { call });
+        const [call, inbox] = await Promise.all([incomingFor(user.name), readInbox(user.name, url.searchParams.get('since') || ''), markSeen(user.name)]);
+        return json(200, { call, inbox });
       }
       const result = await respond(user.name, url.searchParams.get('id') || '', 'check');
       if (!result) return json(404, { error: 'Call not found.' });

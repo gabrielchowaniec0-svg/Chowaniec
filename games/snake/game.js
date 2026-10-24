@@ -57,12 +57,13 @@
   }
 
   function build() {
+    const ic = CG.icon;
     root.innerHTML = `
       <div class="sn">
         <div class="sn-hud">
-          <div class="sn-pill" title="Score"><span class="sn-ic" aria-hidden="true">🍎</span><b id="sn-score">0</b></div>
-          <div class="sn-pill sn-best" title="Your best"><span class="sn-ic" aria-hidden="true">🏆</span><b id="sn-best">0</b></div>
-          <button type="button" class="sn-padbtn" id="sn-padbtn" aria-pressed="false" aria-label="Show arrow buttons">🕹️</button>
+          <div class="sn-pill" title="Score"><span class="sn-ic apple" aria-hidden="true">${ic('apple', 20)}</span><b id="sn-score">0</b></div>
+          <div class="sn-pill sn-best" title="Your best"><span class="sn-ic gold" aria-hidden="true">${ic('trophy', 18)}</span><b id="sn-best">0</b></div>
+          <button type="button" class="sn-padbtn" id="sn-padbtn" aria-pressed="false" aria-label="Show arrow buttons">${ic('gamepad', 22)}</button>
         </div>
         <div class="sn-boardwrap" id="sn-boardwrap">
           <div class="sn-board" id="sn-board">
@@ -72,10 +73,10 @@
         </div>
         <div class="sn-opps" id="sn-opps" hidden></div>
         <div class="sn-pad" id="sn-pad" hidden>
-          <button type="button" data-dir="up" class="u" aria-label="Up">▲</button>
-          <button type="button" data-dir="left" class="l" aria-label="Left">◀</button>
-          <button type="button" data-dir="right" class="r" aria-label="Right">▶</button>
-          <button type="button" data-dir="down" class="d" aria-label="Down">▼</button>
+          <button type="button" data-dir="up" class="u" aria-label="Up">${ic('arrowUp', 26)}</button>
+          <button type="button" data-dir="left" class="l" aria-label="Left">${ic('arrowLeft', 26)}</button>
+          <button type="button" data-dir="right" class="r" aria-label="Right">${ic('arrowRight', 26)}</button>
+          <button type="button" data-dir="down" class="d" aria-label="Down">${ic('arrowDown', 26)}</button>
         </div>
       </div>`;
     el = {
@@ -261,7 +262,7 @@
       CG.gameOver({ score: S.score });
       return;
     }
-    const title = S.cause === 'won' ? '🏆 You filled the board!' : S.cause === 'self' ? 'Oops! You bit your tail' : 'Bonk! You hit the wall';
+    const title = S.cause === 'won' ? 'You filled the board!' : S.cause === 'self' ? 'Oops! You bit your tail' : 'Bonk! You hit the wall';
     CG.gameOver({ score: S.score, title, again: toReady });
   }
 
@@ -312,15 +313,16 @@
     if (bump) { el.score.parentNode.classList.remove('pop'); void el.score.offsetWidth; el.score.parentNode.classList.add('pop'); }
   }
 
+  const PLAY_IC = CG.icon('play', 18).replace('fill="none"', 'fill="currentColor"');
   function renderOverlay() {
     const o = el.overlay;
     if (phase === 'ready') {
-      o.innerHTML = `<div class="sn-card sn-start"><span class="sn-logo" aria-hidden="true">🐍</span><div class="sn-txt"><h2>Snake</h2>
+      o.innerHTML = `<div class="sn-card sn-start"><span class="sn-logo" aria-hidden="true">${CG.badge('snake', 40)}</span><div class="sn-txt"><h2>Snake</h2>
         <p>${matchMedia('(pointer: coarse)').matches ? 'Swipe to steer' : 'Arrow keys to steer'}, eat the apples!</p></div>
-        <button type="button" class="sn-play" data-act="play">▶ Play</button></div>`;
+        <button type="button" class="sn-play" data-act="play">${PLAY_IC}Play</button></div>`;
       o.className = 'sn-overlay show';
     } else if (phase === 'paused') {
-      o.innerHTML = '<div class="sn-card"><h2>Paused</h2><p>Take a break!</p><button type="button" class="sn-play" data-act="resume">▶ Keep going</button></div>';
+      o.innerHTML = '<div class="sn-card"><h2>Paused</h2><p>Take a break!</p><button type="button" class="sn-play" data-act="resume">' + PLAY_IC + 'Keep going</button></div>';
       o.className = 'sn-overlay show mid';
     } else {
       o.innerHTML = '';
@@ -337,9 +339,9 @@
     const top = Math.max(10, S ? S.score : 0, ...others.map((o) => Number(o.state.score) || 0));
     el.opps.innerHTML = others.map((o) => {
       const sc = Number(o.state.score) || 0, alive = o.state.alive !== false;
-      return `<div class="op${alive ? '' : ' out'}"><div class="op-top"><i style="background:${esc(o.color)}"></i><b>${esc(o.name)}</b><span>${sc}${alive ? '' : ' 🏁'}</span></div>` +
+      return `<div class="op${alive ? '' : ' out'}"><div class="op-top"><i style="background:${esc(o.color)}"></i><b>${esc(o.name)}</b><span>${sc}${alive ? '' : CG.icon('flag', 13)}</span></div>` +
         `<div class="op-bar"><u style="width:${Math.round(100 * sc / top)}%;background:${esc(o.color)}"></u></div>` +
-        `<div class="op-len">🐍 ${Number(o.state.len) || START_LEN}</div></div>`;
+        `<div class="op-len">${CG.icon('worm', 13)} ${Number(o.state.len) || START_LEN}</div></div>`;
     }).join('');
     if (wasHidden) layout();
   }
@@ -611,13 +613,13 @@
 
   // ---------- Boot ----------
   CG.mount({
-    id: 'snake', title: 'Snake', emoji: '🐍', mode: 'race', scoreLabel: 'points',
+    id: 'snake', title: 'Snake', mode: 'race', scoreLabel: 'points',
     help: '<ul><li>Steer with the <b>arrow keys</b> or <b>WASD</b>. On a phone, <b>swipe</b> anywhere (keep your finger down to make quick turns).</li>' +
-      '<li>Tap 🕹️ for big arrow buttons.</li>' +
-      '<li>Eat 🍎 apples for <b>10</b> points. Golden apples are worth <b>30</b>!</li>' +
+      `<li>Tap ${CG.icon('gamepad', 18)} for big arrow buttons.</li>` +
+      '<li>Eat apples for <b>10</b> points. Golden apples are worth <b>30</b>!</li>' +
       '<li>Every apple makes you longer and a little faster.</li>' +
       '<li>Don’t bump into the walls or your own tail.</li>' +
-      '<li>Space pauses. In <b>👥 Play together</b> everyone gets the same apples. Most points wins!</li></ul>',
+      `<li>Space pauses. In <b>${CG.icon('users', 17)} Play together</b> everyone gets the same apples. Most points wins!</li></ul>`,
     onReady(ctx) {
       root = ctx.root; user = ctx.user || '';
       build();

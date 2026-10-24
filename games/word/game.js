@@ -87,14 +87,14 @@
     root.innerHTML = `<div class="wd">
       <div class="wd-top">
         <div class="wd-tabs" role="tablist">
-          <button type="button" role="tab" data-mode="daily">📅 Today</button>
-          <button type="button" role="tab" data-mode="practice">🎲 Practice</button>
+          <button type="button" role="tab" data-mode="daily">${G.icon('calendar', 17)}<span>Today</span></button>
+          <button type="button" role="tab" data-mode="practice">${G.icon('dice', 17)}<span>Practice</span></button>
         </div>
-        <button type="button" class="wd-icon" data-act="results" aria-label="Today’s family results">👪</button>
-        <button type="button" class="wd-icon" data-act="settings" aria-label="Settings">⚙️</button>
+        <button type="button" class="wd-icon" data-act="results" aria-label="Today’s family results">${G.icon('users', 22)}</button>
+        <button type="button" class="wd-icon" data-act="settings" aria-label="Settings">${G.icon('settings', 22)}</button>
       </div>
       <p class="wd-info"></p>
-      <div class="wd-race"><h2>🏁 Word race!</h2><p>Same word for everyone. Fewest tries wins.</p><div class="wd-ghosts"></div></div>
+      <div class="wd-race"><h2>${G.icon('flag', 18)}<span>Word race!</span></h2><p>Same word for everyone. Fewest tries wins.</p><div class="wd-ghosts"></div></div>
       <div class="wd-boardwrap"><div class="wd-board" aria-label="Guesses"></div></div>
       <div class="wd-bottom">
         <div class="wd-kb" aria-label="Keyboard"></div>
@@ -110,7 +110,7 @@
     const rows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
     el.kb.innerHTML = rows.map((r, i) => `<div class="kr">${i === 1 ? '<span class="wd-key spacer"></span>' : ''}${i === 2 ? '<button type="button" class="wd-key wide" data-k="enter">Enter</button>' : ''}` +
       r.split('').map((c) => `<button type="button" class="wd-key" data-k="${c}" aria-label="${c.toUpperCase()}">${c}</button>`).join('') +
-      `${i === 2 ? '<button type="button" class="wd-key wide back" data-k="back" aria-label="Delete">⌫</button>' : ''}${i === 1 ? '<span class="wd-key spacer"></span>' : ''}</div>`).join('');
+      `${i === 2 ? '<button type="button" class="wd-key wide back" data-k="back" aria-label="Delete"><svg class="cg-ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5a2 2 0 0 0-1.344.519l-6.328 5.74a1 1 0 0 0 0 1.481l6.328 5.741A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path d="m12 9 6 6"/><path d="m18 9-6 6"/></svg></button>' : ''}${i === 1 ? '<span class="wd-key spacer"></span>' : ''}</div>`).join('');
     el.keys = {};
     el.kb.querySelectorAll('[data-k]').forEach((b) => { el.keys[b.dataset.k] = b; });
 
@@ -331,16 +331,16 @@
     el.wrap.classList.toggle('remote', S.mode === 'daily' && S.remote != null);
     if (S.mode === 'daily' && S.remote != null) {
       html = `<h2>You’ve played today’s word</h2><p>${S.remote ? `Solved in ${7 - S.remote}/6 · ${S.remote} point${S.remote === 1 ? '' : 's'}` : 'Not this time (X/6)'} on another device.</p>` +
-        '<div class="wd-btns"><button type="button" class="primary" data-act="results">👪 Family results</button><button type="button" data-act="practice">🎲 Practice</button></div>';
+        `<div class="wd-btns"><button type="button" class="primary" data-act="results">${G.icon('users', 19)}<span>Family results</span></button><button type="button" data-act="practice">${G.icon('dice', 19)}<span>Practice</span></button></div>`;
     } else if (S.mode === 'daily') {
       const pts = pointsFor(S.won, n);
-      html = `<h2>${S.won ? `🎉 Solved in ${n}/6!` : 'So close!'}</h2><p>${S.won ? `+${pts} point${pts === 1 ? '' : 's'} for the family leaderboard` : `The word was <span class="ans">${S.answer.toUpperCase()}</span>`}</p>` +
-        '<div class="wd-btns three"><button type="button" class="primary" data-act="results">👪 Results</button><button type="button" data-act="share">📋 Share</button><button type="button" data-act="practice">🎲 Practice</button></div>';
+      html = `<h2>${S.won ? `Solved in ${n}/6!` : 'So close!'}</h2><p>${S.won ? `+${pts} point${pts === 1 ? '' : 's'} for the family leaderboard` : `The word was <span class="ans">${S.answer.toUpperCase()}</span>`}</p>` +
+        `<div class="wd-btns three"><button type="button" class="primary" data-act="results">${G.icon('users', 18)}<span>Results</span></button><button type="button" data-act="share">${G.icon('share', 18)}<span>Share</span></button><button type="button" data-act="practice">${G.icon('dice', 18)}<span>Practice</span></button></div>`;
     } else if (S.mode === 'practice') {
-      html = `<h2>${S.won ? `⭐ Got it in ${n}!` : 'Nice try!'}</h2><p>The word was <span class="ans">${S.answer.toUpperCase()}</span></p>` +
-        '<div class="wd-btns"><button type="button" class="primary" data-act="again">🎲 New word</button><button type="button" data-act="daily">📅 Today’s word</button></div>';
+      html = `<h2>${S.won ? `Got it in ${n}!` : 'Nice try!'}</h2><p>The word was <span class="ans">${S.answer.toUpperCase()}</span></p>` +
+        `<div class="wd-btns"><button type="button" class="primary" data-act="again">${G.icon('dice', 19)}<span>New word</span></button><button type="button" data-act="daily">${G.icon('calendar', 19)}<span>Today’s word</span></button></div>`;
     } else {
-      html = `<h2>${S.won ? `🏁 Solved in ${n}!` : 'Out of tries!'}</h2><p>The word was <span class="ans">${S.answer.toUpperCase()}</span> · ${pointsFor(S.won, n)} point${pointsFor(S.won, n) === 1 ? '' : 's'}</p>` +
+      html = `<h2>${S.won ? `Solved in ${n}!` : 'Out of tries!'}</h2><p>The word was <span class="ans">${S.answer.toUpperCase()}</span> · ${pointsFor(S.won, n)} point${pointsFor(S.won, n) === 1 ? '' : 's'}</p>` +
         '<p class="wd-next">Race points don’t count towards today’s puzzle.</p>';
     }
     if (S.mode === 'daily') html += `<p class="wd-next">Next word in <b class="wd-countdown">${clock(msToNextDay())}</b></p>`;
@@ -383,7 +383,7 @@
         ta.remove();
       } catch (e2) { ok = false; }
     }
-    G.toast(ok ? '📋 Copied! Paste it in a family chat.' : 'Couldn’t copy. Try again.');
+    G.toast(ok ? 'Copied! Paste it in a family chat.' : 'Couldn’t copy. Try again.');
   }
 
   // ---------- Family results ----------
@@ -407,12 +407,12 @@
     const mine = S.mode === 'daily' && S.done;
     const n = S.guesses.length;
     let head;
-    if (mine) head = `<h2>${S.won ? `🎉 Solved in ${n}/6!` : `The word was ${esc(S.answer.toUpperCase())}`}</h2><p class="cg-sub">Daily Word #${puzzleNo(day)}</p>${gridHtml()}<p class="wd-pts">${S.won ? `+${pointsFor(true, n)} point${pointsFor(true, n) === 1 ? '' : 's'}` : 'No points this time. Try again tomorrow!'}</p>`;
+    if (mine) head = `<h2>${S.won ? `Solved in ${n}/6!` : `The word was ${esc(S.answer.toUpperCase())}`}</h2><p class="cg-sub">Daily Word #${puzzleNo(day)}</p>${gridHtml()}<p class="wd-pts">${S.won ? `+${pointsFor(true, n)} point${pointsFor(true, n) === 1 ? '' : 's'}` : 'No points this time. Try again tomorrow!'}</p>`;
     else if (S.remote != null) head = `<h2>Today’s word</h2><p class="cg-sub">Daily Word #${puzzleNo(day)}</p>`;
-    else head = `<h2>👪 Today’s word</h2><p class="cg-sub">Daily Word #${puzzleNo(day)} · finish it to see how you compare</p>`;
+    else head = `<h2>Today’s word</h2><p class="cg-sub">Daily Word #${puzzleNo(day)} · finish it to see how you compare</p>`;
     const card = G.modal(`<div class="wd-card">${head}<h3>Today in the family</h3><div class="wd-fam"><p class="cg-empty">Loading…</p></div>` +
       `<p class="cg-sub">Next word in <b class="wd-countdown">${clock(msToNextDay())}</b></p>` +
-      `<div class="cg-row">${mine ? '<button type="button" class="primary" data-x="share">📋 Share to chat</button>' : ''}<button type="button" data-x="practice">🎲 Practice</button><button type="button"${mine ? '' : ' class="primary"'} data-cg="close">Close</button></div></div>`, { wide: true });
+      `<div class="cg-row">${mine ? `<button type="button" class="primary" data-x="share">${G.icon('share', 18)} Share to chat</button>` : ''}<button type="button" data-x="practice">${G.icon('dice', 18)} Practice</button><button type="button"${mine ? '' : ' class="primary"'} data-cg="close">Close</button></div></div>`, { wide: true });
     card.addEventListener('click', (e) => {
       const b = e.target.closest('[data-x]');
       if (!b) return;
@@ -425,7 +425,7 @@
     if (!data) { box.innerHTML = '<p class="cg-empty">Couldn’t load the family’s results. Check your connection.</p>'; return; }
     const rows = data.today.slice().sort((a, b) => b.score - a.score || (a.at < b.at ? -1 : 1));
     box.innerHTML = rows.length
-      ? '<ol class="cg-list">' + rows.map((r, i) => `<li class="${r.name === user ? 'mine' : ''}"><span class="m">${r.score ? ['🥇', '🥈', '🥉'][i] || '⭐' : '🌱'}</span><span class="n">${esc(r.name)}${r.name === user ? ' (you)' : ''}</span><span class="s">${r.score ? `${7 - r.score}/6` : 'X/6'}<small>${r.score} pt${r.score === 1 ? '' : 's'}</small></span></li>`).join('') + '</ol>'
+      ? '<ol class="cg-list">' + rows.map((r, i) => `<li class="${r.name === user ? 'mine' : ''}"><span class="m">${r.score ? `<span class="cg-rank${i < 3 ? ` r${i + 1}` : ''}">${i + 1}</span>` : `<span class="cg-rank wd-x">${G.icon('close', 13)}</span>`}</span><span class="n">${esc(r.name)}${r.name === user ? ' (you)' : ''}</span><span class="s">${r.score ? `${7 - r.score}/6` : 'X/6'}<small>${r.score} pt${r.score === 1 ? '' : 's'}</small></span></li>`).join('') + '</ol>'
       : '<p class="cg-empty">Nobody has played today yet. Be the first!</p>';
   }
 
@@ -437,7 +437,7 @@
   function openSettings() {
     G.sfx('click');
     const on = document.body.classList.contains('wd-cb');
-    const card = G.modal('<h2>⚙️ Settings</h2>' +
+    const card = G.modal(`<div class="cg-hero">${G.icon('settings', 26)}</div><h2>Settings</h2>` +
       `<label class="wd-switch"><span>Colour-blind colours<small>Orange for the right spot, blue for the wrong spot <span class="wd-swatch"><i style="background:#f0782f"></i><i style="background:#4f9fe8"></i></span></small></span><input type="checkbox" id="wd-cb"${on ? ' checked' : ''}></label>` +
       '<div class="cg-row"><button type="button" class="primary" data-cg="close">Done</button></div>');
     card.querySelector('#wd-cb').addEventListener('change', (e) => setCb(e.target.checked));
@@ -516,7 +516,7 @@
       const st = o.state || {};
       const used = Math.min(ROWS, Number(st.row) || 0);
       const dots = Array.from({ length: ROWS }, (_, i) => `<i class="${i < used ? (st.solved && i === used - 1 ? 'w' : 'u') : ''}"></i>`).join('');
-      return `<div class="wd-ghost"><i style="width:9px;height:9px;border-radius:50%;background:${esc(o.color)};flex:none"></i><span class="nm">${esc(o.name)}</span><span class="dots">${dots}</span>${st.solved ? '✅' : (st.alive === false ? '🏁' : '')}</div>`;
+      return `<div class="wd-ghost"><i style="width:9px;height:9px;border-radius:50%;background:${esc(o.color)};flex:none"></i><span class="nm">${esc(o.name)}</span><span class="dots">${dots}</span>${st.solved ? `<span class="ok">${G.icon('check', 15)}</span>` : (st.alive === false ? G.icon('flag', 14) : '')}</div>`;
     }).join('');
   }
   G.on('multiStart', (info) => {
@@ -549,7 +549,7 @@
 
   // ---------- Mount ----------
   G.mount({
-    id: 'word', title: 'Daily Word', emoji: '🔤', mode: 'race', scoreLabel: 'points',
+    id: 'word', title: 'Daily Word', mode: 'race', scoreLabel: 'points',
     help: '<p>Guess the secret <b>5-letter word</b> in 6 tries. Everyone in the family gets the <b>same word</b> each day.</p>' +
       '<p>Type a word and press <b>Enter</b>. The tiles change colour to help you:</p>' +
       '<div class="wd-ex"><div class="wd-tile" data-s="hit">c</div><div class="wd-tile">l</div><div class="wd-tile">o</div><div class="wd-tile">u</div><div class="wd-tile">d</div></div>' +
@@ -561,7 +561,7 @@
       '<ul><li>Points for the family leaderboard: 6 for a first-try solve, down to 1 on the last try.</li>' +
       '<li>You get one go at the daily word. <b>Practice</b> has endless words (no points).</li>' +
       '<li><b>Play together</b> races everyone on the same word.</li>' +
-      '<li>Colour-blind colours are in ⚙️ Settings.</li></ul>',
+      `<li>Colour-blind colours are in ${G.icon('settings', 17)} <b>Settings</b>.</li></ul>`,
     onReady(ctx) {
       user = ctx.user;
       if (store.get(CB_KEY)) document.body.classList.add('wd-cb');

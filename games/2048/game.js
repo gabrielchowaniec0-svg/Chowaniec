@@ -178,7 +178,7 @@
     const made2048 = !G.won && res.merges.some((m) => m.tile.v >= 2048);
     if (made2048) {
       G.won = true;
-      if (multi) { CG.toast('🎉 You made 2048!'); confetti(); CG.sfx('win'); }
+      if (multi) { CG.toast('You made 2048!'); confetti(); CG.sfx('win'); }
       else { phase = 'win'; setTimeout(showWin, SLIDE_MS + 220); }
     }
     if (!canMove()) {
@@ -218,7 +218,7 @@
       CG.gameOver({ score: G.score });
       return;
     }
-    const title = why === 'done' ? '🏆 Well played!' : G.won ? '🎉 What a game!' : 'No more moves!';
+    const title = why === 'done' ? 'Well played!' : G.won ? 'What a game!' : 'No more moves!';
     CG.gameOver({ score: G.score, title, again: () => startSolo(true, true) });
   }
 
@@ -233,7 +233,7 @@
           <div class="tw-box tw-timer" id="tw-timer" hidden><small>Time</small><b id="tw-time">3:00</b></div>
         </div>
         <div class="tw-actions" id="tw-actions">
-          <button type="button" class="tw-btn" id="tw-undo">↶ Undo</button>
+          <button type="button" class="tw-btn" id="tw-undo">${CG.icon('undo', 18)}<span>Undo</span></button>
           <button type="button" class="tw-btn primary" id="tw-new">New game</button>
         </div>
         <div class="tw-wrap" id="tw-wrap">
@@ -392,9 +392,10 @@
     el.best.textContent = fmt(Math.max(Number(store.get(BEST_KEY + user)) || 0, G.score));
     const canUndo = !multi && !G.undoUsed && !!G.snap && phase === 'play' && !G.over;
     el.undo.disabled = !canUndo;
-    el.undo.textContent = G.undoUsed ? '↶ Undo used' : '↶ Undo';
+    el.undo.innerHTML = CG.icon('undo', 18) + (G.undoUsed ? '<span>Undo used</span>' : '<span>Undo</span>');
   }
 
+  const PLAY_IC = CG.icon('play', 18).replace('fill="none"', 'fill="currentColor"');
   function renderOverlay() {
     const o = el.overlay;
     if (phase === 'start') {
@@ -402,11 +403,11 @@
       const resume = saved && saved.score > 0;
       o.innerHTML = `<div class="tw-card"><div class="tw-card-logo" aria-hidden="true"><span class="v2">2</span><span class="v0">0</span><span class="v4">4</span><span class="v8">8</span></div>` +
         `<p>${matchMedia('(pointer: coarse)').matches ? 'Swipe' : 'Use the arrow keys'} to slide the tiles.<br>Join matching numbers to reach <b>2048</b>!</p>` +
-        (resume ? `<button type="button" class="tw-big" data-act="play">▶ Continue <small>${fmt(saved.score)}</small></button><button type="button" class="tw-link" data-act="fresh">Start a new game</button>`
-          : '<button type="button" class="tw-big" data-act="play">▶ Play</button>') + '</div>';
+        (resume ? `<button type="button" class="tw-big" data-act="play">${PLAY_IC}Continue <small>${fmt(saved.score)}</small></button><button type="button" class="tw-link" data-act="fresh">Start a new game</button>`
+          : `<button type="button" class="tw-big" data-act="play">${PLAY_IC}Play</button>`) + '</div>';
       o.className = 'tw-overlay show';
     } else if (phase === 'win') {
-      o.innerHTML = '<div class="tw-card win"><div class="tw-trophy" aria-hidden="true">🏆</div><h2>You made 2048!</h2><p>Amazing! Keep going for an even bigger tile?</p>' +
+      o.innerHTML = '<div class="tw-card win"><div class="tw-trophy" aria-hidden="true">' + CG.icon('trophy', 40) + '</div><h2>You made 2048!</h2><p>Amazing! Keep going for an even bigger tile?</p>' +
         '<button type="button" class="tw-big" data-act="keep">Keep going</button><button type="button" class="tw-link" data-act="finish">Finish and save my score</button></div>';
       o.className = 'tw-overlay show win';
     } else {
@@ -480,7 +481,7 @@
     el.opps.innerHTML = others.map((o) => {
       const best = Number(o.state.best) || 2, alive = o.state.alive !== false;
       return `<div class="op${alive ? '' : ' out'}"><span class="mini v${best > 16384 ? 'big' : best} d${Math.min(String(best).length, 5)}">${best}</span>` +
-        `<div class="op-t"><b><i style="background:${esc(o.color)}"></i>${esc(o.name)}</b><span>${fmt(o.state.score)}${alive ? '' : ' 🏁'}</span></div></div>`;
+        `<div class="op-t"><b><i style="background:${esc(o.color)}"></i>${esc(o.name)}</b><span>${fmt(o.state.score)}${alive ? '' : CG.icon('flag', 14)}</span></div></div>`;
     }).join('');
     if (was) layout();
   }
@@ -559,13 +560,13 @@
 
   // ---------- Boot ----------
   CG.mount({
-    id: '2048', title: '2048', emoji: '🔢', mode: 'race', scoreLabel: 'points',
+    id: '2048', title: '2048', mode: 'race', scoreLabel: 'points',
     help: '<ul><li><b>Swipe</b> (or use the <b>arrow keys</b> / <b>WASD</b>) to slide every tile.</li>' +
       '<li>Two tiles with the same number join into one: 2+2 → 4, 4+4 → 8…</li>' +
       '<li>Each join adds the new number to your score. Reach <b>2048</b> to win, then keep going if you like!</li>' +
       '<li>A new tile appears after every move. The game ends when the board is full and nothing can join.</li>' +
-      '<li>Made a mistake? <b>↶ Undo</b> works once per game.</li>' +
-      '<li>In <b>👥 Play together</b> everyone gets the same new tiles and has <b>3 minutes</b>. Highest score wins!</li></ul>',
+      `<li>Made a mistake? <b>${CG.icon('undo', 17)} Undo</b> works once per game.</li>` +
+      `<li>In <b>${CG.icon('users', 17)} Play together</b> everyone gets the same new tiles and has <b>3 minutes</b>. Highest score wins!</li></ul>`,
     onReady(ctx) {
       root = ctx.root; user = ctx.user || '';
       build();
