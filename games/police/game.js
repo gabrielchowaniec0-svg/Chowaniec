@@ -2393,6 +2393,35 @@
     g.restore();
   }
 
+  // ---------- Family first: the shared start-screen buttons (same look in every game) ----------
+  // ffButtons({ solo, soloIcon, extra }) -> HTML: a big "Play with the family" button (data-ff="family")
+  // and an optional secondary solo button (data-ff="solo"). Call ffStyle() once.
+  function ffStyle() {
+    if (document.getElementById('ff-style')) return;
+    const s = document.createElement('style');
+    s.id = 'ff-style';
+    s.textContent = '.ff-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;max-width:360px;margin:16px auto 0;}' +
+      '.ff-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;border:0;border-radius:18px;font:inherit;line-height:1.15;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .12s,filter .12s,box-shadow .12s;}' +
+      '.ff-btn:active{transform:translateY(3px) scale(.985);}' +
+      '.ff-btn:focus-visible{outline:3px solid #60a5fa;outline-offset:3px;}' +
+      '.ff-family{min-height:64px;padding:10px 20px;background:linear-gradient(180deg,#34d399,#16a34a);color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.2);box-shadow:0 5px 0 #15803d,0 12px 26px rgba(22,163,74,.35);}' +
+      '.ff-family:hover{filter:brightness(1.06);}.ff-family:active{box-shadow:0 2px 0 #15803d,0 6px 14px rgba(22,163,74,.3);}' +
+      '.ff-family .cg-ic{width:26px;height:26px;flex:none;}' +
+      '.ff-solo{min-height:50px;padding:8px 16px;background:#ffffff;color:#18181b;border:2px solid rgba(0,0,0,.12);font-size:16px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.08);}' +
+      '.ff-solo:hover{filter:brightness(.97);}.ff-solo .cg-ic{flex:none;}' +
+      '.ff-solo[aria-expanded="true"]{border-color:#16a34a;}' +
+      '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}}' +
+      ':root[data-theme="dark"] .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}';
+    document.head.appendChild(s);
+  }
+  function ffButtons({ solo, soloIcon, extra } = {}) {
+    const ic = window.ChowGames.icon;
+    return '<div class="ff-actions">' +
+      `<button type="button" class="ff-btn ff-family" data-ff="family">${ic('users', 26)}<span>Play with the family</span></button>` +
+      (solo ? `<button type="button" class="ff-btn ff-solo" data-ff="solo">${ic(soloIcon || 'play', 19)}<span>${solo}</span></button>` : '') +
+      (extra || '') + '</div>';
+  }
+
   // ---------- Flow ----------
   let overlay, pauseEl, root;
   function toggleSiren() { if (state !== 'play') return; P.siren = !P.siren; CG.sfx(P.siren ? 'go' : 'click'); }
@@ -2450,6 +2479,7 @@
   }
   function resume() { if (!paused) return; paused = false; pauseEl.classList.add('hide'); last = 0; ensureAudio(); }
   function buildOverlays() {
+    ffStyle();
     overlay = document.createElement('div');
     overlay.className = 'pp-over';
     const touch = isTouch();
@@ -2463,9 +2493,18 @@
     overlay.innerHTML = `<div class="pp-tcard">${CG.badge('police', 64)}<div class="pp-logo">POLICE<span>PATROL</span></div>` +
       '<p class="pp-tag">Answer the radio, help the town and earn your badges! Follow the dotted line to each call, and stop at red lights.</p>' +
       `<div class="pp-ranks">${RANKS.map((rk) => `<div>${rankBadge(rk, 34)}${rk.name}</div>`).join('')}</div>` +
-      `<div class="pp-ctl">${ctl}</div><button type="button" class="pp-go">${CG.icon('play', 20)} Start shift</button></div>`;
+      `<div class="pp-ctl">${ctl}</div>${ffButtons({ solo: 'Practice alone' })}</div>`;
     root.appendChild(overlay);
-    overlay.querySelector('.pp-go').addEventListener('click', (e) => { e.stopPropagation(); if (CG.modalOpen()) return; startSolo(); });
+    overlay.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-ff]');
+      if (!b) return;
+      e.stopPropagation();
+      if (CG.modalOpen()) return;
+      b.blur();
+      CG.sfx('click');
+      if (b.dataset.ff === 'family') CG.openLobby();
+      else if (state === 'title') startSolo();
+    });
     pauseEl = document.createElement('div');
     pauseEl.className = 'pp-over pp-pause hide';
     pauseEl.innerHTML = `<div class="pp-tcard"><div class="cg-hero" style="margin:0 auto;background:rgba(255,255,255,.15);color:#fff">${CG.icon('pause', 26)}</div><h2>Paused</h2><button type="button" class="pp-go">${CG.icon('play', 20)} Keep driving</button></div>`;
@@ -2483,7 +2522,7 @@
     if (map[k]) { keys[map[k]] = down; e.preventDefault(); }
     if (k === 'e' || k === 'E' || k === 'Enter') { actionHeld = down; if (down && !e.repeat) actionTap = true; }
     if (!down || e.repeat) return;
-    if (state === 'title' && (k === ' ' || k === 'Enter') && !CG.isMulti()) { e.preventDefault(); startSolo(); return; }
+    if (state === 'title' && (k === ' ' || k === 'Enter') && !CG.isMulti()) { if (tag2 !== 'BUTTON') { e.preventDefault(); startSolo(); } return; }
     if (paused) { if (k === ' ' || k === 'Enter' || k === 'p' || k === 'P' || k === 'Escape') { e.preventDefault(); resume(); } return; }
     if (state !== 'play') return;
     if (k === ' ') { e.preventDefault(); toggleSiren(); }

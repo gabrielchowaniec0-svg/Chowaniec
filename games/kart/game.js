@@ -1,6 +1,9 @@
 // Kart Party: a top-down arcade kart racer for Chowaniec Games (Micro Machines meets Mario Kart).
-// Solo: race 3 to 5 friendly computer karts for 3 laps. Together: everyone races live on the same circuit
-// and sees the others' karts glide around (dead reckoning along the track + error easing).
+// Family first: "Play with the family" races everyone live on the same circuit and shows the others' karts
+// gliding around (dead reckoning along the track + error easing). "Practice alone" is a 3-lap time trial
+// against a see-through ghost of your best lap on that track (saved on this device). Computer karts only
+// join when you pick them (Computer karts: 0 / 3 / 5, starting at 0).
+// Scoring: with other karts, place points + a time bonus; in a time trial, points for a fast time only.
 // The track is drawn into cached offscreen tiles; karts, items and effects are drawn on top every frame.
 (function () {
   'use strict';
@@ -165,7 +168,14 @@
   let finishT = 0;
   let myPlace = 0;
   let finalSent = false;
-  let menuTrack = 0, menuRivals = 5;
+  let menuTrack = 0, menuRivals = 0;   // computer karts are off unless someone picks them
+  const RIVAL_CHOICES = [0, 3, 5];
+  // Time trial (practice with no computer karts): lap timing and the best-lap ghost.
+  let trial = false;
+  let lapStart = 0, lastLap = 0, newBest = false;
+  let rec = [];                // this lap so far: x, y, angle×100 every 1/GHOST_HZ s
+  let ghost = null;            // { t, p: [x, y, a100, …] } best lap on this track
+  const GHOST_HZ = 20;
   let raceSeed = 1;
   let preRound = 0;
   let myHazId = 0;
@@ -275,6 +285,9 @@
 
   function setupSolo(ti, rivals, demo) {
     multi = false; multiInfo = null;
+    trial = !demo && rivals === 0;
+    lapStart = 0; lastLap = 0; newBest = false; rec = [];
+    ghost = trial ? loadGhost(ti) : null;
     raceSeed = Math.floor(Math.random() * 2 ** 31);
     if (!G || G.ti !== ti || !W) buildWorld(ti, 7 + ti); else clearTilesIfNeeded();
     resetCommon();
@@ -291,8 +304,56 @@
     if (demo) me = null;
   }
 
+  // ---------- Best-lap ghost (time trial) ----------
+  const ghostKey = (ti) => `chowaniec_kart_ghost_v1_${ti}_${CG.me() || ''}`;
+  function loadGhost(ti) {
+    try {
+      const g = JSON.parse(localStorage.getItem(ghostKey(ti)) || 'null');
+      if (g && typeof g.t === 'number' && g.t > 1 && Array.isArray(g.p) && g.p.length >= 6 && g.p.length % 3 === 0) return g;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+  function saveGhost(ti, g) { try { localStorage.setItem(ghostKey(ti), JSON.stringify(g)); } catch (e) { /* storage full or private mode */ } }
+  function recordGhost() {
+    if (!trial || !me || me.lap < 0 || me.fin != null) return;
+    const lt = raceT - lapStart;
+    if (lt * GHOST_HZ >= rec.length / 3 && rec.length < 3 * GHOST_HZ * 600) rec.push(Math.round(me.x), Math.round(me.y), Math.round(wrapA(me.a) * 100));
+  }
+  function trialLap(k) {
+    // Called when I cross the line: lap 0 starts the clock, every later crossing completes a lap.
+    if (k.lap === 0) { lapStart = raceT; rec = []; recordGhost(); return; }
+    const t = raceT - lapStart;
+    lastLap = t;
+    if (rec.length >= 6 && (!ghost || t < ghost.t)) {
+      const first = !ghost;
+      ghost = { t: Math.round(t * 1000) / 1000, p: rec };
+      saveGhost(G.ti, ghost);
+      newBest = true;
+      if (!first && k.lap < LAPS) setTimeout(() => flash('Best lap!', 'final'), 1350);
+    }
+    lapStart = raceT; rec = []; recordGhost();
+  }
+  // Where the ghost is now (null when it has no lap to show).
+  function ghostPose(o) {
+    if (!trial || !ghost || !me || me.lap < 0 || me.fin != null || state !== 'race') return null;
+    const f = (raceT - lapStart) * GHOST_HZ, i = Math.floor(f), p = ghost.p, n = p.length / 3;
+    if (i >= n - 1) return null;
+    const t = f - i, j = i * 3;
+    o.x = lerp(p[j], p[j + 3], t); o.y = lerp(p[j + 1], p[j + 4], t);
+    o.a = p[j + 2] / 100 + wrapA(p[j + 5] / 100 - p[j + 2] / 100) * t;
+    return o;
+  }
+  const ghostP = { x: 0, y: 0, a: 0 };
+  function trialScore(t) {
+    // Points for a fast 3-lap time (no place points when nobody else races): 1000 at par or better,
+    // about 670 at a third slower, never less than 50.
+    const par = LAPS * G.L / 310;
+    return clamp(Math.round(1000 * (2 - t / par)), 50, 1000);
+  }
+
   function setupMulti(info) {
     multi = true;
+    trial = false; ghost = null;
     const players = info.players.slice();
     const myIndex = players.indexOf(info.me || CG.me());
     multiInfo = { players, colors: info.colors || players.map((_, i) => CG.colors[i % CG.colors.length]), me: info.me || CG.me(), myIndex, round: info.round, t0: 0 };
@@ -425,6 +486,7 @@
   }
 
   function onLap(k) {
+    if (k.isMe && trial && k.fin == null) trialLap(k);
     if (k.lap >= LAPS && k.fin == null) {
       k.fin = raceT;
       if (k.isMe) onMyFinish();
@@ -651,6 +713,7 @@
         checkPickups(k, st);
       }
       collideKarts();
+      if (state === 'race') recordGhost();
       if (state === 'race' && me && me.fin == null) {
         // Wrong way?
         const fx = Math.cos(me.a), fy = Math.sin(me.a);
@@ -667,7 +730,7 @@
   function onMyFinish() {
     state = 'done'; finishT = 0;
     endDrift(me);
-    if (!multi) {
+    if (!multi && !trial) {
       const order = karts.slice().sort(cmpRows);
       myPlace = order.indexOf(me) + 1;
     } else myPlace = 0;
@@ -685,6 +748,10 @@
     if (!multi) {
       if (finishT > 2.6) {
         finalSent = true;
+        if (trial) {
+          CG.gameOver({ score: trialScore(me.fin), title: newBest ? `New best lap: ${fmtTime(ghost.t)}` : `Finished in ${fmtTime(me.fin)}`, again: () => startSolo() });
+          return;
+        }
         const sc = scoreFor(myPlace, me.fin);
         CG.gameOver({ score: sc, title: `${myPlace}${ordinal(myPlace)} place!`, again: () => startSolo() });
       }
@@ -1183,6 +1250,8 @@
     };
     remotes.forEach((r) => { if (!r.gone) dot(r.x, r.y, r.color); });
     for (const k of karts) if (!k.isMe) dot(k.x, k.y, k.color);
+    const gp = ghostPose(ghostP);
+    if (gp) { g.globalAlpha = 0.55; dot(gp.x, gp.y, '#6366f1'); g.globalAlpha = 1; }
     if (me) dot(me.x, me.y, me.color, true);
   }
 
@@ -1291,6 +1360,8 @@
       drawKart(g, { x: r.x, y: r.y, a: r.a + r.spinA, color: r.color, steer: r.steer, drift: r.f & 1 ? 1 : 0, shield: r.f & 4, boost: r.f & 2, hop: 0 }, parked ? 0.55 : 1);
     });
     for (const k of karts) if (!k.isMe && inView(k.x, k.y, 50)) drawKart(g, kv(k), 1);
+    const gp = ghostPose(ghostP);
+    if (gp && inView(gp.x, gp.y, 50)) drawKart(g, { x: gp.x, y: gp.y, a: gp.a, color: '#e0e7ff', steer: 0, drift: 0, shield: 0, boost: 0, hop: 0 }, 0.42);
     if (me && inView(me.x, me.y, 50)) drawKart(g, kv(me), 1);
     // Particles
     for (const p of particles) {
@@ -1342,6 +1413,7 @@
     remotes.forEach((r) => { if (!r.gone) tag(r.x, r.y, r.name, r.color, r.fin != null && raceT - r.fin > 2.5 ? 0.6 : 1); });
     if (state !== 'menu') for (const k of karts) if (!k.isMe) tag(k.x, k.y, k.name, k.color, 1);
     if (f && f !== me && state !== 'menu' && me) { /* watching someone else: own tag helps find yourself */ tag(me.x, me.y, 'You', me.color, 0.8); }
+    if (gp) tag(gp.x, gp.y, 'Best lap', '#6366f1', 0.6);
     // Confetti
     for (const c of confetti) {
       g.save(); g.translate(c.x, c.y); g.rotate(c.r); g.fillStyle = c.c; g.globalAlpha = Math.min(1, c.life); g.fillRect(-c.w / 2, -c.h / 2, c.w, c.h); g.restore();
@@ -1419,6 +1491,9 @@
   .kp-pos.p3 b { background:linear-gradient(180deg,#ffe4c7,#fb923c 55%,#c2410c); -webkit-background-clip:text; background-clip:text; }
   .kp-pos.pn b { background:linear-gradient(180deg,#ffffff,#e0e7ff); -webkit-background-clip:text; background-clip:text; }
   .kp-pos sup { font-size:17px; font-weight:800; margin-right:3px; }
+  .kp-pos.tt { flex-direction:column; align-items:flex-start; gap:2px; padding:6px 12px 7px; }
+  .kp-pos.tt b { font-size:28px; font-variant-numeric:tabular-nums; background:linear-gradient(180deg,#ffffff,#c7d2fe); -webkit-background-clip:text; background-clip:text; }
+  .kp-pos.tt span { display:inline-flex; align-items:center; gap:4px; font-size:13px; opacity:.9; }
   .kp-pos span { font-size:15px; opacity:.8; font-style:normal; font-weight:700; }
   .kp-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:12px; background:rgba(17,17,30,.55); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
   .kp-chip .cg-ic { opacity:.9; }
@@ -1474,7 +1549,12 @@
   .kp-ctl kbd .cg-ic { width:14px; height:14px; }
   .kp-go { display:inline-flex; align-items:center; gap:10px; margin-top:14px; padding:13px 30px; border:0; border-radius:999px; background:linear-gradient(180deg,#ff5a4f,#e8192c); color:#fff; font:800 19px Outfit, system-ui, sans-serif; letter-spacing:.02em; box-shadow:0 6px 0 #9b0f1c, 0 10px 24px rgba(232,25,44,.45); cursor:pointer; animation:kpPulse 1.3s ease-in-out infinite; }
   .kp-go .cg-ic { width:20px; height:20px; }
-  .kp-note { margin-top:12px; font-size:12.5px; opacity:.8; display:flex; align-items:center; justify-content:center; gap:6px; }
+  .kp-card .ff-actions { margin-top:14px; }
+  .kp-card .ff-solo { background:rgba(255,255,255,.12); color:#fff; border-color:rgba(255,255,255,.28); box-shadow:none; }
+  .kp-cpu { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:12px; }
+  .kp-cpu .kp-h { margin:0; }
+  .kp-cpu .kp-seg button { min-width:46px; min-height:40px; font-size:16px; }
+  .kp-cpuhint { margin:6px 0 0; font-size:12.5px; opacity:.85; display:flex; align-items:center; justify-content:center; gap:6px; }
   @keyframes kpPulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.05); } }
   @media (prefers-reduced-motion: reduce) { .kp-go { animation:none; } }
   .kp-pause .kp-card { max-width:300px; }
@@ -1491,6 +1571,35 @@
   @media (max-height: 640px) { .kp-tracks canvas { aspect-ratio:2/1; } .kp-ctl { display:none; } }
   `;
 
+  // ---------- Family first: the shared start-screen buttons (same look in every game) ----------
+  // ffButtons({ solo, soloIcon, extra }) -> HTML: a big "Play with the family" button (data-ff="family")
+  // and an optional secondary solo button (data-ff="solo"). Call ffStyle() once.
+  function ffStyle() {
+    if (document.getElementById('ff-style')) return;
+    const s = document.createElement('style');
+    s.id = 'ff-style';
+    s.textContent = '.ff-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;max-width:360px;margin:16px auto 0;}' +
+      '.ff-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;border:0;border-radius:18px;font:inherit;line-height:1.15;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .12s,filter .12s,box-shadow .12s;}' +
+      '.ff-btn:active{transform:translateY(3px) scale(.985);}' +
+      '.ff-btn:focus-visible{outline:3px solid #60a5fa;outline-offset:3px;}' +
+      '.ff-family{min-height:64px;padding:10px 20px;background:linear-gradient(180deg,#34d399,#16a34a);color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.2);box-shadow:0 5px 0 #15803d,0 12px 26px rgba(22,163,74,.35);}' +
+      '.ff-family:hover{filter:brightness(1.06);}.ff-family:active{box-shadow:0 2px 0 #15803d,0 6px 14px rgba(22,163,74,.3);}' +
+      '.ff-family .cg-ic{width:26px;height:26px;flex:none;}' +
+      '.ff-solo{min-height:50px;padding:8px 16px;background:#ffffff;color:#18181b;border:2px solid rgba(0,0,0,.12);font-size:16px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.08);}' +
+      '.ff-solo:hover{filter:brightness(.97);}.ff-solo .cg-ic{flex:none;}' +
+      '.ff-solo[aria-expanded="true"]{border-color:#16a34a;}' +
+      '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}}' +
+      ':root[data-theme="dark"] .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}';
+    document.head.appendChild(s);
+  }
+  function ffButtons({ solo, soloIcon, extra } = {}) {
+    const ic = window.ChowGames.icon;
+    return '<div class="ff-actions">' +
+      `<button type="button" class="ff-btn ff-family" data-ff="family">${ic('users', 26)}<span>Play with the family</span></button>` +
+      (solo ? `<button type="button" class="ff-btn ff-solo" data-ff="solo">${ic(soloIcon || 'play', 19)}<span>${solo}</span></button>` : '') +
+      (extra || '') + '</div>';
+  }
+
   function ctlHtml() {
     const ic = (n) => CG.icon(n, 14);
     if (isTouch()) {
@@ -1505,6 +1614,7 @@
   }
 
   function buildUi() {
+    ffStyle();
     const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     hudEl = document.createElement('div'); hudEl.className = 'kp-hud kp-hide';
     hudEl.innerHTML = `<div class="kp-row"><div class="kp-pos"><b>1</b><sup>st</sup><span>/6</span></div><div class="kp-item"><canvas width="104" height="104" aria-hidden="true"></canvas></div></div><div class="kp-chip kp-lap">${CG.icon('flag', 16)}<span>Lap 1/3</span></div><div class="kp-chip kp-time">${CG.icon('timer', 16)}<span>0:00.0</span></div><canvas class="kp-mini" aria-hidden="true"></canvas>`;
@@ -1541,16 +1651,17 @@
     // Menu
     menuEl = document.createElement('div'); menuEl.className = 'kp-over';
     menuEl.innerHTML = `<div class="kp-card"><div class="kp-logo">KART<span>PARTY</span></div>` +
-      '<p class="kp-tag">Three laps, friendly karts and sparkly drift turbos!</p>' +
+      '<p class="kp-tag">Three laps and sparkly drift turbos. Race the family live!</p>' +
       `<div class="kp-h">Pick a track</div><div class="kp-tracks">${TRACKS.map((t, i) => `<button type="button" class="kp-track" data-t="${i}"><canvas width="180" height="120" aria-hidden="true"></canvas>${THEMES[t.theme].name}</button>`).join('')}</div>` +
-      `<div class="kp-h">Computer karts</div><div class="kp-seg">${[3, 4, 5].map((n) => `<button type="button" data-n="${n}">${n}</button>`).join('')}</div>` +
-      `<div class="kp-ctl">${ctlHtml()}</div>` +
-      `<button type="button" class="kp-go">${CG.icon('flag', 20)}Start race</button>` +
-      `<div class="kp-note">${CG.icon('users', 15)}Race the family live with Play together</div></div>`;
+      ffButtons({ solo: 'Practice alone', soloIcon: 'flag' }) +
+      `<div class="kp-cpu"><span class="kp-h">Computer karts</span><div class="kp-seg" role="group" aria-label="Computer karts in practice">${RIVAL_CHOICES.map((n) => `<button type="button" data-n="${n}">${n}</button>`).join('')}</div></div>` +
+      '<p class="kp-cpuhint"></p>' +
+      `<div class="kp-ctl">${ctlHtml()}</div></div>`;
     root.appendChild(menuEl);
     menuEl.querySelectorAll('.kp-track').forEach((b) => b.addEventListener('click', () => { CG.sfx('click'); selectTrack(+b.dataset.t); }));
     menuEl.querySelectorAll('.kp-seg button').forEach((b) => b.addEventListener('click', () => { CG.sfx('click'); menuRivals = +b.dataset.n; syncMenu(); }));
-    menuEl.querySelector('.kp-go').addEventListener('click', () => startSolo());
+    menuEl.querySelector('[data-ff="family"]').addEventListener('click', (e) => { e.currentTarget.blur(); CG.sfx('click'); CG.openLobby(); });
+    menuEl.querySelector('[data-ff="solo"]').addEventListener('click', (e) => { e.currentTarget.blur(); startSolo(); });
     menuEl.querySelectorAll('.kp-track canvas').forEach((c, i) => drawThumb(c, i));
     pauseEl = document.createElement('div'); pauseEl.className = 'kp-over kp-pause hide';
     pauseEl.innerHTML = `<div class="kp-card"><h2>${CG.icon('pause', 26)}Paused</h2><button type="button" class="kp-go">${CG.icon('play', 20)}${isTouch() ? 'Keep driving' : 'Keep driving'}</button></div>`;
@@ -1560,7 +1671,12 @@
   }
   function syncMenu() {
     menuEl.querySelectorAll('.kp-track').forEach((b) => b.classList.toggle('on', +b.dataset.t === menuTrack));
-    menuEl.querySelectorAll('.kp-seg button').forEach((b) => b.classList.toggle('on', +b.dataset.n === menuRivals));
+    menuEl.querySelectorAll('.kp-seg button').forEach((b) => { b.classList.toggle('on', +b.dataset.n === menuRivals); b.setAttribute('aria-pressed', +b.dataset.n === menuRivals ? 'true' : 'false'); });
+    const g = loadGhost(menuTrack);
+    menuEl.querySelector('.kp-cpuhint').innerHTML = menuRivals
+      ? `${CG.icon('cpu', 14)}Practice against ${menuRivals} friendly computer karts`
+      : `${CG.icon('ghost', 14)}Time trial: race a ghost of your best lap${g ? ` (${fmtTime(g.t)})` : ''}`;
+    menuEl.querySelector('[data-ff="solo"] span').textContent = menuRivals ? `Race ${menuRivals} computer karts` : 'Practice alone';
   }
   function selectTrack(i) {
     if (i === menuTrack && G && G.ti === i) return;
@@ -1627,11 +1743,18 @@
     const pos = Math.max(1, st.indexOf(me) + 1), n = st.length;
     const lap = clamp(me.lap + 1, 1, LAPS);
     const t = state === 'race' || state === 'done' ? (me.fin != null ? me.fin : raceT) : 0;
-    const key = `${pos}|${n}|${lap}|${Math.floor(t * 10)}`;
+    const lt = trial && me.lap >= 0 && me.fin == null && state === 'race' ? raceT - lapStart : trial && me.fin != null ? lastLap : 0;
+    const key = `${pos}|${n}|${lap}|${Math.floor(t * 10)}|${trial ? Math.floor(lt * 10) + '|' + (ghost ? ghost.t : '') : ''}`;
     if (key !== hudCache) {
       hudCache = key;
-      posEl.className = 'kp-pos ' + (pos === 1 ? '' : pos === 2 ? 'p2' : pos === 3 ? 'p3' : 'pn');
-      posEl.innerHTML = `<b>${pos}</b><sup>${ordinal(pos)}</sup><span>/${n}</span>`;
+      if (trial) {
+        // Time trial: this lap's time, and the best lap to beat.
+        posEl.className = 'kp-pos tt';
+        posEl.innerHTML = `<b>${fmtTime(lt)}</b><span>${ghost ? `${CG.icon('ghost', 14)}Best ${fmtTime(ghost.t)}` : 'Lap time'}</span>`;
+      } else {
+        posEl.className = 'kp-pos ' + (pos === 1 ? '' : pos === 2 ? 'p2' : pos === 3 ? 'p3' : 'pn');
+        posEl.innerHTML = `<b>${pos}</b><sup>${ordinal(pos)}</sup><span>/${n}</span>`;
+      }
       lapEl.textContent = `Lap ${lap}/${LAPS}`;
       timeEl.textContent = fmtTime(t);
     }
@@ -1754,9 +1877,9 @@
     }
     if (!down) return;
     if (state === 'menu' && !CG.isMulti()) {
-      if (k === 'Enter' || k === ' ') { e.preventDefault(); startSolo(); return; }
+      if (k === 'Enter' || k === ' ') { if (tag !== 'BUTTON') { e.preventDefault(); startSolo(); } return; }
       if (k === 'ArrowLeft' || k === 'ArrowRight') { selectTrack((menuTrack + (k === 'ArrowLeft' ? 2 : 1)) % 3); return; }
-      if (k === 'ArrowUp' || k === 'ArrowDown') { menuRivals = clamp(menuRivals + (k === 'ArrowUp' ? 1 : -1), 3, 5); syncMenu(); return; }
+      if (k === 'ArrowUp' || k === 'ArrowDown') { const i = RIVAL_CHOICES.indexOf(menuRivals); menuRivals = RIVAL_CHOICES[clamp(i + (k === 'ArrowUp' ? 1 : -1), 0, RIVAL_CHOICES.length - 1)]; syncMenu(); return; }
     }
     if (paused && (k === ' ' || k === 'Enter' || k === 'p' || k === 'P' || k === 'Escape')) { e.preventDefault(); resume(); return; }
     if ((k === 'e' || k === 'E' || k === 'Enter') && !e.repeat) { itemPressed = true; e.preventDefault(); }
@@ -1849,13 +1972,14 @@
   // ---------- Boot ----------
   CG.mount({
     id: 'kart', title: 'Kart Party', mode: 'race', scoreLabel: 'points', syncMs: 300,
-    help: '<ul><li>Race <b>3 laps</b>. 1st place earns 1000 points, 2nd 700, 3rd 500…, plus a bonus for a fast time.</li>' +
+    help: '<ul><li>Race <b>3 laps</b>. <b>Play with the family</b>: everyone races live on the same track. 1st place earns 1000 points, 2nd 700, 3rd 500…, plus a bonus for a fast time.</li>' +
+      '<li><b>Practice alone</b> is a time trial: a see-through ghost drives your best lap on that track. Points for a fast time (up to 1000). You can add 3 or 5 computer karts if you like.</li>' +
       '<li><b>Phone</b>: steer with the arrow buttons. Your kart drives by itself; tap <b>Brake</b> to slow down.</li>' +
       '<li><b>Keyboard</b>: arrows or W A S D. E or Enter uses your item, P pauses.</li>' +
       '<li><b>Drift</b> (Space, Shift or the Drift button): hold it while turning. Sparks go blue, orange, then pink. Let go for a turbo!</li>' +
       '<li>Rainbow <b>item boxes</b> give a mushroom (speed boost), a shield bubble, or a banana that makes karts spin.</li>' +
       '<li>Orange pads boost you. Grass and snow slow you down.</li>' +
-      '<li><b>Play together</b>: everyone races live on the same track.</li></ul>',
+      '</ul>',
     onReady(c) {
       root = document.createElement('div');
       root.className = 'kp-wrap';
@@ -1883,7 +2007,8 @@
         get hazards() { return hazards; }, get track() { return G && G.ti; }, get L() { return G && G.L; }, get multi() { return multi; }, get place() { return myPlace; },
         set autopilot(v) { autopilot = v === 2 ? 2 : !!v; }, get autopilot() { return autopilot; }, standings: () => standings().map((r) => ({ name: r.name, fin: r.fin, prog: Math.round(r.prog), lap: r.lap })),
         get tiles() { return tiles.size; }, perf() { const r = { avg: +(perf.sum / Math.max(1, perf.n)).toFixed(2), max: +perf.max.toFixed(1), n: perf.n }; perf.n = 0; perf.sum = 0; perf.max = 0; return r; }, give(it) { if (me) me.item = it; }, get pads() { return W && W.pads.map((p) => p.s / G.L); },
-        tp(frac, d) { if (!me) return; pointAt(G, frac * G.L, d || 0, tmpP); me.x = tmpP.x; me.y = tmpP.y; me.a = tmpP.a; me.vx = Math.cos(me.a) * 250; me.vy = Math.sin(me.a) * 250; me.idx = nearestGlobal(G, me.x, me.y); cam.init = false; }, startSolo, selectTrack, setRivals(n) { menuRivals = n; syncMenu(); }
+        tp(frac, d) { if (!me) return; pointAt(G, frac * G.L, d || 0, tmpP); me.x = tmpP.x; me.y = tmpP.y; me.a = tmpP.a; me.vx = Math.cos(me.a) * 250; me.vy = Math.sin(me.a) * 250; me.idx = nearestGlobal(G, me.x, me.y); cam.init = false; }, startSolo, selectTrack, setRivals(n) { menuRivals = n; syncMenu(); },
+        get rivals() { return menuRivals; }, get trial() { return trial; }, get ghost() { return ghost; }, get lapStart() { return lapStart; }, ghostPose() { const o = ghostPose({ x: 0, y: 0, a: 0 }); return o && { x: Math.round(o.x), y: Math.round(o.y) }; }
       };
     },
     roundSetup() { return pickTrack(); }

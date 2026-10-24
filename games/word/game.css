@@ -17,6 +17,10 @@ body.wd-cb { --wd-hit: #f0782f; --wd-near: #4f9fe8; }
 .wd-tabs button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; border: 0; border-radius: 12px; background: transparent; color: var(--cg-muted); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
 .wd-tabs button.on { background: var(--cg-surface); color: var(--cg-ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .wd-icon { flex: none; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 14px; background: var(--wd-tab); color: var(--cg-ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.wd-ffrow { flex: none; width: 100%; max-width: 520px; box-sizing: border-box; padding: 6px 12px 8px; }
+.wd-ffrow .ff-family { min-height: 50px; font-size: 18px; border-radius: 16px; box-shadow: 0 4px 0 #15803d, 0 8px 18px rgba(22,163,74,.3); }
+.wd-ffrow .ff-family .cg-ic { width: 22px; height: 22px; }
+.wd.racing .wd-ffrow { display: none; }
 .wd-info { flex: none; max-width: 100%; box-sizing: border-box; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 20px; margin: 2px 0 0; font-size: 13px; color: var(--cg-muted); text-align: center; padding: 0 12px; }
 .wd-info b { color: var(--cg-ink); font-weight: 600; }
 

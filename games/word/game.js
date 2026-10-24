@@ -83,7 +83,37 @@
   }
 
   // ---------- Building the page ----------
+  // ---------- Family first: the shared start-screen buttons (same look in every game) ----------
+  // ffButtons({ solo, soloIcon, extra }) -> HTML: a big "Play with the family" button (data-ff="family")
+  // and an optional secondary solo button (data-ff="solo"). Call ffStyle() once.
+  function ffStyle() {
+    if (document.getElementById('ff-style')) return;
+    const s = document.createElement('style');
+    s.id = 'ff-style';
+    s.textContent = '.ff-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;max-width:360px;margin:16px auto 0;}' +
+      '.ff-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;border:0;border-radius:18px;font:inherit;line-height:1.15;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .12s,filter .12s,box-shadow .12s;}' +
+      '.ff-btn:active{transform:translateY(3px) scale(.985);}' +
+      '.ff-btn:focus-visible{outline:3px solid #60a5fa;outline-offset:3px;}' +
+      '.ff-family{min-height:64px;padding:10px 20px;background:linear-gradient(180deg,#34d399,#16a34a);color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.2);box-shadow:0 5px 0 #15803d,0 12px 26px rgba(22,163,74,.35);}' +
+      '.ff-family:hover{filter:brightness(1.06);}.ff-family:active{box-shadow:0 2px 0 #15803d,0 6px 14px rgba(22,163,74,.3);}' +
+      '.ff-family .cg-ic{width:26px;height:26px;flex:none;}' +
+      '.ff-solo{min-height:50px;padding:8px 16px;background:#ffffff;color:#18181b;border:2px solid rgba(0,0,0,.12);font-size:16px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.08);}' +
+      '.ff-solo:hover{filter:brightness(.97);}.ff-solo .cg-ic{flex:none;}' +
+      '.ff-solo[aria-expanded="true"]{border-color:#16a34a;}' +
+      '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}}' +
+      ':root[data-theme="dark"] .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}';
+    document.head.appendChild(s);
+  }
+  function ffButtons({ solo, soloIcon, extra } = {}) {
+    const ic = window.ChowGames.icon;
+    return '<div class="ff-actions">' +
+      `<button type="button" class="ff-btn ff-family" data-ff="family">${ic('users', 26)}<span>Play with the family</span></button>` +
+      (solo ? `<button type="button" class="ff-btn ff-solo" data-ff="solo">${ic(soloIcon || 'play', 19)}<span>${solo}</span></button>` : '') +
+      (extra || '') + '</div>';
+  }
+
   function build(root) {
+    ffStyle();
     root.innerHTML = `<div class="wd">
       <div class="wd-top">
         <div class="wd-tabs" role="tablist">
@@ -93,6 +123,7 @@
         <button type="button" class="wd-icon" data-act="results" aria-label="Today’s family results">${G.icon('users', 22)}</button>
         <button type="button" class="wd-icon" data-act="settings" aria-label="Settings">${G.icon('settings', 22)}</button>
       </div>
+      <div class="wd-ffrow"><button type="button" class="ff-btn ff-family" data-ff="family">${G.icon('users', 22)}<span>Race the family</span></button></div>
       <p class="wd-info"></p>
       <div class="wd-race"><h2>${G.icon('flag', 18)}<span>Word race!</span></h2><p>Same word for everyone. Fewest tries wins.</p><div class="wd-ghosts"></div></div>
       <div class="wd-boardwrap"><div class="wd-board" aria-label="Guesses"></div></div>
@@ -127,6 +158,8 @@
       if (b.dataset.mode === 'daily') loadDaily(); else loadPractice(false);
     });
     $('[data-act="settings"]', root).addEventListener('click', openSettings);
+    // Family first: a practice-word race with everyone (the daily word stays one go each, on your own).
+    $('.wd-ffrow [data-ff]', root).addEventListener('click', (e) => { e.currentTarget.blur(); G.sfx('click'); G.openLobby(); });
     $('[data-act="results"]', root).addEventListener('click', () => showResults());
     el.done.addEventListener('click', onDoneClick);
     window.addEventListener('resize', fit);

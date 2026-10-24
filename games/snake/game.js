@@ -56,7 +56,37 @@
     };
   }
 
+  // ---------- Family first: the shared start-screen buttons (same look in every game) ----------
+  // ffButtons({ solo, soloIcon, extra }) -> HTML: a big "Play with the family" button (data-ff="family")
+  // and an optional secondary solo button (data-ff="solo"). Call ffStyle() once.
+  function ffStyle() {
+    if (document.getElementById('ff-style')) return;
+    const s = document.createElement('style');
+    s.id = 'ff-style';
+    s.textContent = '.ff-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;max-width:360px;margin:16px auto 0;}' +
+      '.ff-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;border:0;border-radius:18px;font:inherit;line-height:1.15;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .12s,filter .12s,box-shadow .12s;}' +
+      '.ff-btn:active{transform:translateY(3px) scale(.985);}' +
+      '.ff-btn:focus-visible{outline:3px solid #60a5fa;outline-offset:3px;}' +
+      '.ff-family{min-height:64px;padding:10px 20px;background:linear-gradient(180deg,#34d399,#16a34a);color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.2);box-shadow:0 5px 0 #15803d,0 12px 26px rgba(22,163,74,.35);}' +
+      '.ff-family:hover{filter:brightness(1.06);}.ff-family:active{box-shadow:0 2px 0 #15803d,0 6px 14px rgba(22,163,74,.3);}' +
+      '.ff-family .cg-ic{width:26px;height:26px;flex:none;}' +
+      '.ff-solo{min-height:50px;padding:8px 16px;background:#ffffff;color:#18181b;border:2px solid rgba(0,0,0,.12);font-size:16px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.08);}' +
+      '.ff-solo:hover{filter:brightness(.97);}.ff-solo .cg-ic{flex:none;}' +
+      '.ff-solo[aria-expanded="true"]{border-color:#16a34a;}' +
+      '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}}' +
+      ':root[data-theme="dark"] .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}';
+    document.head.appendChild(s);
+  }
+  function ffButtons({ solo, soloIcon, extra } = {}) {
+    const ic = window.ChowGames.icon;
+    return '<div class="ff-actions">' +
+      `<button type="button" class="ff-btn ff-family" data-ff="family">${ic('users', 26)}<span>Play with the family</span></button>` +
+      (solo ? `<button type="button" class="ff-btn ff-solo" data-ff="solo">${ic(soloIcon || 'play', 19)}<span>${solo}</span></button>` : '') +
+      (extra || '') + '</div>';
+  }
+
   function build() {
+    ffStyle();
     const ic = CG.icon;
     root.innerHTML = `
       <div class="sn">
@@ -96,6 +126,13 @@
       });
     });
     el.overlay.addEventListener('click', (e) => {
+      const f = e.target.closest('button[data-ff]');
+      if (f) {
+        f.blur();
+        if (CG.countingDown && CG.countingDown()) return;
+        if (f.dataset.ff === 'family') { CG.sfx('click'); CG.openLobby(); } else if (phase === 'ready') start('right');
+        return;
+      }
       const b = e.target.closest('button[data-act]');
       if (!b) return;
       if (b.dataset.act === 'play') start('right');
@@ -317,9 +354,9 @@
   function renderOverlay() {
     const o = el.overlay;
     if (phase === 'ready') {
-      o.innerHTML = `<div class="sn-card sn-start"><span class="sn-logo" aria-hidden="true">${CG.badge('snake', 40)}</span><div class="sn-txt"><h2>Snake</h2>
-        <p>${matchMedia('(pointer: coarse)').matches ? 'Swipe to steer' : 'Arrow keys to steer'}, eat the apples!</p></div>
-        <button type="button" class="sn-play" data-act="play">${PLAY_IC}Play</button></div>`;
+      o.innerHTML = `<div class="sn-card sn-start"><div class="sn-head"><span class="sn-logo" aria-hidden="true">${CG.badge('snake', 40)}</span><div class="sn-txt"><h2>Snake</h2>
+        <p>${matchMedia('(pointer: coarse)').matches ? 'Swipe to steer' : 'Arrow keys to steer'}, eat the apples!</p></div></div>
+        ${ffButtons({ solo: 'Practice alone' })}</div>`;
       o.className = 'sn-overlay show';
     } else if (phase === 'paused') {
       o.innerHTML = '<div class="sn-card"><h2>Paused</h2><p>Take a break!</p><button type="button" class="sn-play" data-act="resume">' + PLAY_IC + 'Keep going</button></div>';
@@ -579,6 +616,7 @@
       return;
     }
     if (CG.modalOpen()) return;
+    if ((e.code === 'Space' || e.code === 'Enter') && phase === 'ready' && e.target && e.target.closest && e.target.closest('button')) return; // a focused button handles it
     if (e.code === 'Space' || e.code === 'KeyP' || e.code === 'Escape') {
       if (e.code === 'Space') e.preventDefault();
       if (phase === 'playing') pause();

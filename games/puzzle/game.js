@@ -908,6 +908,35 @@
     kick();
   }
 
+  // ---------- Family first: the shared start-screen buttons (same look in every game) ----------
+  // ffButtons({ solo, soloIcon, extra }) -> HTML: a big "Play with the family" button (data-ff="family")
+  // and an optional secondary solo button (data-ff="solo"). Call ffStyle() once.
+  function ffStyle() {
+    if (document.getElementById('ff-style')) return;
+    const s = document.createElement('style');
+    s.id = 'ff-style';
+    s.textContent = '.ff-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;max-width:360px;margin:16px auto 0;}' +
+      '.ff-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;border:0;border-radius:18px;font:inherit;line-height:1.15;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .12s,filter .12s,box-shadow .12s;}' +
+      '.ff-btn:active{transform:translateY(3px) scale(.985);}' +
+      '.ff-btn:focus-visible{outline:3px solid #60a5fa;outline-offset:3px;}' +
+      '.ff-family{min-height:64px;padding:10px 20px;background:linear-gradient(180deg,#34d399,#16a34a);color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.2);box-shadow:0 5px 0 #15803d,0 12px 26px rgba(22,163,74,.35);}' +
+      '.ff-family:hover{filter:brightness(1.06);}.ff-family:active{box-shadow:0 2px 0 #15803d,0 6px 14px rgba(22,163,74,.3);}' +
+      '.ff-family .cg-ic{width:26px;height:26px;flex:none;}' +
+      '.ff-solo{min-height:50px;padding:8px 16px;background:#ffffff;color:#18181b;border:2px solid rgba(0,0,0,.12);font-size:16px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.08);}' +
+      '.ff-solo:hover{filter:brightness(.97);}.ff-solo .cg-ic{flex:none;}' +
+      '.ff-solo[aria-expanded="true"]{border-color:#16a34a;}' +
+      '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}}' +
+      ':root[data-theme="dark"] .ff-solo{background:#26262c;color:#f4f4f5;border-color:rgba(255,255,255,.14);}';
+    document.head.appendChild(s);
+  }
+  function ffButtons({ solo, soloIcon, extra } = {}) {
+    const ic = window.ChowGames.icon;
+    return '<div class="ff-actions">' +
+      `<button type="button" class="ff-btn ff-family" data-ff="family">${ic('users', 26)}<span>Play with the family</span></button>` +
+      (solo ? `<button type="button" class="ff-btn ff-solo" data-ff="solo">${ic(soloIcon || 'play', 19)}<span>${solo}</span></button>` : '') +
+      (extra || '') + '</div>';
+  }
+
   // ---------- menu & picker ----------
   function pickerHTML(sel) {
     const sizes = sel.mode === 'slide'
@@ -935,6 +964,7 @@
   function refreshPickers() { pickers.forEach((fn) => fn()); }
 
   function showMenu() {
+    ffStyle();
     loadToken++;
     screen = 'menu';
     game = null;
@@ -945,8 +975,10 @@
     const card = $('.pz-menu-card', menuEl);
     const render = () => {
       card.innerHTML = `<div class="pz-head">${G.badge('puzzle', 48)}<div><h2>Picture Puzzle</h2><p>Put the picture back together!</p></div></div>` +
+        ffButtons() + '<p class="pz-ffhint">You choose the picture, everyone races to finish it.</p>' +
+        '<h3 class="pz-or"><span>Or play on my own</span></h3>' +
         `<div class="pz-picker">${pickerHTML(pref)}</div>` +
-        `<div class="pz-actions"><button type="button" class="pz-btn primary" data-a="play">${ic('play', 20)} Play</button><button type="button" class="pz-btn" data-a="family">${ic('users', 20)} Play together</button></div>`;
+        `<div class="pz-actions"><button type="button" class="ff-btn ff-solo" data-a="play">${ic('play', 19)}<span>Play on my own</span></button></div>`;
       const sel = $('.pz-pic.sel', card); if (sel && sel.scrollIntoView && !render.done) { render.done = true; }
     };
     card.__render = render;
@@ -1115,11 +1147,12 @@
     window.addEventListener('keydown', onKey);
     toolsEl.addEventListener('click', (e) => { const b = e.target.closest('button[data-a]'); if (b) tool(b.dataset.a); });
     menuEl.addEventListener('click', (e) => {
+      const f = e.target.closest('button[data-ff="family"]');
+      if (f) { G.sfx('click'); f.blur(); G.openLobby(); return; }
       const b = e.target.closest('button[data-a]');
       if (!b) return;
       G.sfx('click');
       if (b.dataset.a === 'play') soloStart();
-      if (b.dataset.a === 'family') G.openLobby();
     });
     bindPicker($('.pz-menu-card', menuEl), pref, () => { savePref(); const card = $('.pz-menu-card', menuEl); if (card.__render) card.__render(); });
     new ResizeObserver(() => layout(false)).observe(root);
