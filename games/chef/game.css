@@ -1,0 +1,42 @@
+/* Kitchen Rush */
+.kr { position: absolute; inset: 0; display: flex; flex-direction: column; background: #1f1a17; color: #fff; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
+.kr-hud { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 6px; background: linear-gradient(#2b2320, #231c19); border-bottom: 1px solid rgba(255,255,255,.08); }
+.kr-top { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.kr-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; background: rgba(255,255,255,.1); font-variant-numeric: tabular-nums; }
+.kr-pill b { font-size: 16px; }
+.kr-crew { margin-left: auto; display: flex; gap: 6px; overflow: hidden; }
+.kr-crew span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 8px; border-radius: 99px; background: rgba(255,255,255,.08); white-space: nowrap; }
+.kr-crew i { width: 8px; height: 8px; border-radius: 99px; display: inline-block; }
+.kr-orders { display: flex; gap: 6px; min-height: 58px; overflow: hidden; }
+.kr-ticket { flex: 0 0 auto; width: 84px; padding: 5px 6px 6px; border-radius: 10px; background: #fffbe8; color: #3b2a1a; display: flex; flex-direction: column; gap: 3px; box-shadow: 0 2px 6px rgba(0,0,0,.35); animation: kr-in .35s cubic-bezier(.2,1.3,.4,1); transition: opacity .3s; }
+.kr-ticket b { font-size: 12px; line-height: 1.1; }
+.kr-ticket small { font-size: 10px; line-height: 1.15; opacity: .75; }
+.kr-ticket .bar { height: 5px; border-radius: 9px; background: rgba(0,0,0,.12); overflow: hidden; margin-top: auto; }
+.kr-ticket .bar i { display: block; height: 100%; background: #22c55e; transition: width .3s linear, background .3s; }
+.kr-ticket.warn .bar i { background: #f59e0b; }
+.kr-ticket.late .bar i { background: #ef4444; }
+.kr-ticket.gone { opacity: 0; }
+@keyframes kr-in { from { transform: translateY(-14px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+.kr-stage { position: relative; flex: 1; min-height: 0; }
+.kr-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.kr-toast { position: absolute; left: 50%; top: 10px; transform: translate(-50%, -8px); padding: 6px 14px; border-radius: 99px; background: rgba(0,0,0,.72); font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 3; white-space: nowrap; }
+.kr-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.kr-stick { position: absolute; left: 14px; bottom: 14px; width: 132px; height: 132px; border-radius: 99px; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.18); z-index: 2; }
+.kr-stick i { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 99px; background: rgba(255,255,255,.35); transition: transform .06s linear; }
+.kr-act { position: absolute; right: 18px; bottom: 22px; width: 104px; height: 104px; border-radius: 99px; border: 0; background: #f97316; color: #fff; font: 800 18px inherit; letter-spacing: .5px; box-shadow: 0 6px 0 #c2410c, 0 10px 20px rgba(0,0,0,.4); z-index: 2; transition: transform .08s, box-shadow .08s; }
+.kr-act:active, .kr-act.down { transform: translateY(5px); box-shadow: 0 1px 0 #c2410c, 0 4px 10px rgba(0,0,0,.4); }
+@media (hover: hover) and (pointer: fine) { .kr-stick, .kr-act { opacity: .55; } }
+.kr-overlay { position: absolute; inset: 0; z-index: 4; display: none; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: rgba(15, 10, 8, .72); overflow-y: auto; }
+.kr-overlay.show { display: flex; animation: kr-fade .25s ease-out; }
+@keyframes kr-fade { from { opacity: 0; } to { opacity: 1; } }
+.kr-card { width: min(420px, 100%); text-align: center; background: #2b2320; border: 1px solid rgba(255,255,255,.12); border-radius: 22px; padding: 22px 18px; box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+.kr-card h2 { margin: 8px 0 4px; font-size: 26px; }
+.kr-card p { margin: 6px 0 14px; opacity: .8; font-size: 14px; line-height: 1.4; }
+.kr-card h3 { margin: 16px 0 8px; font-size: 13px; opacity: .65; font-weight: 600; text-transform: none; }
+.kr-btn { width: 100%; min-height: 50px; border-radius: 14px; border: 1px solid rgba(255,255,255,.2); background: transparent; color: #fff; font: 700 16px inherit; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+.kr-btn.primary { background: #f97316; border-color: #f97316; }
+.kr-recipes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; text-align: left; font-size: 12px; margin-top: 4px; }
+.kr-recipes div { background: rgba(255,255,255,.07); border-radius: 10px; padding: 6px 8px; line-height: 1.3; }
+.kr-recipes b { display: block; font-size: 13px; }
+@media (max-width: 480px) { .kr-ticket { width: 74px; } .kr-top { font-size: 13px; } }
+@media (prefers-reduced-motion: reduce) { .kr-ticket, .kr-overlay.show { animation: none; } .kr-toast, .kr-act { transition: none; } }
