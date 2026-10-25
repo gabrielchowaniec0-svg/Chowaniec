@@ -5,7 +5,7 @@ and plugs into the shared frame in `/games/core.js` (`window.ChowGames`), which 
 family high scores, the game-over card and multiplayer. Server: `netlify/functions/games.mjs`, storage in
 `netlify/lib/games-store.mjs` (the `GAMES` list there must include the game id).
 
-Game ids: `dino`, `road`, `hop`, `snake`, `2048`, `four`, `memory`, `word`, `kart`, `style`, `police`, `puzzle`, `trivia`, `doodle`, `clash`, `dice`, `golf`, `blocks`, `typing`, `checkers`, `ludo`, `chef`.
+Game ids: `dino`, `road`, `hop`, `snake`, `2048`, `four`, `memory`, `word`, `kart`, `style`, `police`, `puzzle`, `trivia`, `doodle`, `clash`, `dice`, `golf`, `blocks`, `typing`, `checkers`, `ludo`, `chef`, `restaurant`.
 
 ## Page template
 

@@ -27,6 +27,7 @@ export const GAMES = {
   doodle: { name: 'Doodle Guess', emoji: '🎨', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
   clash: { name: 'Color Clash', emoji: '🃏', kind: 'add', limit: 1, mode: 'turns', max: 6 },
   chef: { name: 'Kitchen Rush', emoji: '🍳', kind: 'max', limit: 10000, mode: 'race', max: 8 },
+  restaurant: { name: 'Family Restaurant', emoji: '🍽️', kind: 'max', limit: 1e6, mode: 'race', max: 8 },
   dice: { name: 'Dice Party', emoji: '🎲', kind: 'max', limit: 2000, mode: 'turns', max: 6 },
   golf: { name: 'Mini Golf', emoji: '⛳', kind: 'max', limit: 1e5, mode: 'race', max: 8 },
   blocks: { name: 'Block Drop', emoji: '🧱', kind: 'max', limit: 1e7, mode: 'race', max: 8 },

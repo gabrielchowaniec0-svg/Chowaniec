@@ -48,6 +48,7 @@
     golf: { icon: 'flag', from: '#bef264', to: '#15803d' },
     blocks: { icon: 'grid', from: '#67e8f9', to: '#7c3aed' },
     chef: { icon: 'flame', from: '#fb923c', to: '#dc2626' },
+  restaurant: { icon: 'hat', from: '#f472b6', to: '#be185d' },
   typing: { icon: 'keyboard', from: '#e5e7eb', to: '#334155' },
     checkers: { icon: 'crown', from: '#fca5a5', to: '#1f2937' },
     ludo: { icon: 'home', from: '#fde047', to: '#16a34a' }
