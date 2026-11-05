@@ -22,6 +22,8 @@
   <script src="/robot.js"></script>
   <script src="../passwords.js"></script>
   <script src="../auth-gate.js"></script>
+  <!-- Watch together (synced YouTube for everyone in the call) -->
+  <link rel="stylesheet" href="/watch/watch.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     body {
@@ -145,6 +147,10 @@
 
         <button id="notify-btn" onclick="toggleDrawer('notify')" title="Tell people the meeting has started" class="hidden meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] items-center justify-center text-white">
           <i data-lucide="bell-ring" class="w-4 h-4"></i>
+        </button>
+
+        <button id="btn-watch" onclick="toggleWatchTogether()" title="Watch together" aria-label="Watch together" aria-pressed="false" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="tv" class="w-4 h-4"></i>
         </button>
 
         <button onclick="toggleDrawer('polls')" title="Quick Polls" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
@@ -546,6 +552,7 @@
       callFrame.on('left-meeting', handleLeftMeeting);
       callFrame.on('error', (evt) => endCall(describeJoinError(evt, currentMeetingCode)));
       agentAttach(callFrame);
+      if (window.watchAttach) watchAttach(callFrame);
 
       const joinOptions = {
         url: (access && access.url) || `https://${DAILY_DOMAIN}/${codeInput}`,
@@ -847,6 +854,7 @@
     // Tears down the call frame and returns to the lobby with a message.
     function endCall(message) {
       agentDetach();
+      if (window.watchClose) watchClose();
       if (callFrame) {
         const frame = callFrame;
         callFrame = null;
@@ -1137,6 +1145,7 @@
       const msg = evt.data || {};
       const fromId = evt.fromId;
       if (agentHandleAppMessage(msg, fromId)) return;
+      if (window.watchOnAppMessage && watchOnAppMessage(msg, fromId)) return;
 
       if (msg.type === 'PUSH_FORM' && isPrivileged(fromId) && msg.form) {
         activeForm = sanitizeForm(msg.form);
@@ -1304,6 +1313,7 @@
           </button>`;
         body.innerHTML = `
           <div class="space-y-2">
+            ${item("toggleDrawer(null); toggleWatchTogether()", 'tv', 'Watch Together')}
             ${item("copyInviteLink(); toggleDrawer(null)", 'link-2', 'Copy Meeting Link')}
             ${item("openAudioPanel()", 'volume-2', 'Audio Output (Speaker)')}
             ${isHostUser() ? item("toggleDrawer('notify')", 'bell-ring', 'Notify People') : ''}
@@ -1677,5 +1687,7 @@
     });
   </script>
   <script src="agent.js"></script>
+  <script src="/watch/watch.js"></script>
+  <script src="/watch/meet-watch.js"></script>
 </body>
 </html>
