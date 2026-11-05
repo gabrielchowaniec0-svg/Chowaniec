@@ -499,6 +499,7 @@
   async function raceFinish(score, extra) {
     if (!inSession() || multi.finished || !multi.round || multi.session.round !== multi.round) return;
     multi.finished = true;
+    xpAfterGame();
     multi.myState = Object.assign({}, multi.myState, extra || {}, { score: Math.round(score), alive: false, done: true });
     try {
       const data = await api('POST', '', { action: 'sync', id: multi.session.id, state: multi.myState, round: multi.session.round });
@@ -670,6 +671,7 @@
   }
 
   async function gameOver({ score = 0, title, detail, again, winner } = {}) {
+    xpAfterGame();
     const racing = inSession() && multi.round > 0 && multi.session.round === multi.round;
     if (racing && opts.mode === 'race') {
       await raceFinish(score);
@@ -703,6 +705,106 @@
     else best.textContent = `Your best: ${fmt(result.best)} · #${result.rank} in the family`;
   }
 
+  // ---------- Family XP ----------
+  // XP is granted by the server (scores, settled rounds). After a game we ask /xp?me=1 a few times and show what
+  // changed: a "+25 XP" pop with the level bar, a level-up celebration and any new achievements.
+  const XP_API = '/.netlify/functions/xp';
+  const RARITY_COLORS = { common: ['#5eead4', '#0d9488'], rare: ['#93c5fd', '#2563eb'], epic: ['#d8b4fe', '#9333ea'], legendary: ['#fde68a', '#f59e0b'] };
+  const xp = { base: null, timers: [], queue: [], showing: false };
+  async function xpFetch() {
+    const u = window.getChowaniecUser ? window.getChowaniecUser() : null;
+    const res = await fetch(XP_API + '?me=1', { credentials: 'same-origin', cache: 'no-store', headers: { 'X-Chowaniec-Key': (u && u.key) || '' } });
+    if (!res.ok) throw new Error('xp ' + res.status);
+    const d = await res.json();
+    return d && !d.guest && typeof d.xp === 'number' ? d : null;
+  }
+  const newestUnlock = (d) => ((d.latest || [])[0] || {}).at || '';
+  async function xpBaseline() {
+    try { const d = await xpFetch(); if (d) { xp.base = { xp: d.xp, level: d.level, unlock: newestUnlock(d) }; renderLevelChip(d); } } catch (e) { /* XP is a bonus */ }
+  }
+  // After a game: check now-ish and again once the round has had time to settle for everyone.
+  function xpAfterGame() {
+    xp.timers.forEach(clearTimeout);
+    xp.timers = [1200, 5000, 11000].map((ms) => setTimeout(xpCheck, ms));
+  }
+  async function xpCheck() {
+    let d = null;
+    try { d = await xpFetch(); } catch (e) { return; }
+    if (!d) return;
+    const base = xp.base || { xp: d.xp, level: d.level, unlock: newestUnlock(d) };
+    xp.base = { xp: d.xp, level: d.level, unlock: newestUnlock(d) };
+    renderLevelChip(d);
+    if (d.xp > base.xp) xpQueue({ type: 'pop', gained: d.xp - base.xp, data: d, levelUp: d.level > base.level });
+    if (d.level > base.level) xpQueue({ type: 'level', data: d });
+    (d.latest || []).filter((a) => a.at > base.unlock).reverse().forEach((a) => xpQueue({ type: 'ach', a }));
+  }
+  function xpQueue(item) { xp.queue.push(item); if (!xp.showing) xpNext(); }
+  function xpNext() {
+    const item = xp.queue.shift();
+    if (!item) { xp.showing = false; return; }
+    xp.showing = true;
+    const done = () => setTimeout(xpNext, 250);
+    if (item.type === 'pop') xpPop(item, done);
+    else if (item.type === 'level') xpLevelUp(item.data, done);
+    else xpAchievement(item.a, done);
+  }
+  const ringSvg = (level, frac, size) => {
+    const r = size / 2 - 3;
+    const c = 2 * Math.PI * r;
+    return `<span class="cg-xring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="t"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="f" style="stroke-dasharray:${c};stroke-dashoffset:${c * (1 - Math.max(0, Math.min(1, frac)))}"/></svg><b>${level}</b></span>`;
+  };
+  function renderLevelChip(d) {
+    const bar = $('.cg-bar');
+    if (!bar || !d) return;
+    let chip = $('#cg-level');
+    if (!chip) {
+      chip = document.createElement('a');
+      chip.id = 'cg-level';
+      chip.href = '/trophies/';
+      const help = $('#cg-help');
+      bar.insertBefore(chip, help || null);
+    }
+    chip.setAttribute('aria-label', `Level ${d.level}, ${d.title}. ${fmt(d.xp)} XP. Open trophies`);
+    chip.innerHTML = ringSvg(d.level, d.nextXp ? d.levelXp / d.nextXp : 0, 30) + `<span class="t">${esc(d.title)}</span>`;
+  }
+  function xpPop({ gained, data, levelUp }, done) {
+    const el = document.createElement('div');
+    el.className = 'cg-xpop';
+    el.setAttribute('role', 'status');
+    const frac = data.nextXp ? data.levelXp / data.nextXp : 0;
+    const from = levelUp ? 0 : Math.max(0, (data.levelXp - gained) / (data.nextXp || 1));
+    el.innerHTML = `${ringSvg(data.level, frac, 38)}<span class="b"><span class="g">+${fmt(gained)} XP</span><span class="bar"><i style="width:${from * 100}%"></i></span><small>${fmt(data.toNext)} XP to level ${data.level + 1}</small></span>`;
+    document.body.appendChild(el);
+    sfx('coin');
+    requestAnimationFrame(() => { el.classList.add('in'); setTimeout(() => { const i = el.querySelector('.bar i'); if (i) i.style.width = `${frac * 100}%`; }, 260); });
+    setTimeout(() => { el.classList.remove('in'); el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 320); }, 2300);
+  }
+  function xpLevelUp(d, done) {
+    const el = document.createElement('div');
+    el.className = 'cg-lvlup';
+    el.setAttribute('role', 'alert');
+    const bits = Array.from({ length: 26 }, (_, i) => `<i style="--a:${(i * 360) / 26}deg;--d:${(i % 5) * 40}ms;--c:${COLORS[i % COLORS.length]}"></i>`).join('');
+    el.innerHTML = `<div class="burst" aria-hidden="true">${bits}</div><div class="card"><div class="rays" aria-hidden="true"></div><span class="k">Level up!</span>${ringSvg(d.level, 1, 96)}<b class="tt">${esc(d.title)}</b><span class="sub">${fmt(d.xp)} XP · ${fmt(d.toNext)} to level ${d.level + 1}</span><a class="cg-btn" href="/trophies/">${icon('trophy', 16)} Trophies</a></div>`;
+    document.body.appendChild(el);
+    sfx('win');
+    let closed = false;
+    const close = () => { if (closed) return; closed = true; el.classList.add('out'); setTimeout(() => { el.remove(); done(); }, 300); };
+    el.addEventListener('click', (e) => { if (!e.target.closest('a')) close(); });
+    setTimeout(close, 3800);
+  }
+  function xpAchievement(a, done) {
+    const [c1, c2] = RARITY_COLORS[a.rarity] || RARITY_COLORS.common;
+    const el = document.createElement('a');
+    el.className = `cg-ach r-${esc(a.rarity)}`;
+    el.href = '/trophies/';
+    el.setAttribute('role', 'status');
+    el.innerHTML = `<span class="i" style="background:linear-gradient(135deg,${c1},${c2})">${icon(a.icon, 22)}</span><span class="b"><small>Achievement unlocked · ${esc(a.rarity.charAt(0).toUpperCase() + a.rarity.slice(1))}</small><b>${esc(a.name)}</b><span>${esc(a.hint)}</span></span>`;
+    document.body.appendChild(el);
+    sfx(a.rarity === 'common' ? 'match' : 'win');
+    requestAnimationFrame(() => el.classList.add('in'));
+    setTimeout(() => { el.classList.remove('in'); setTimeout(() => { el.remove(); done(); }, 350); }, 3200);
+  }
+
   // ---------- Frame ----------
   function renderBarState() {
     const b = $('#cg-together');
@@ -721,7 +823,19 @@
     const st = document.createElement('style');
     st.id = 'cg-core-extra';
     st.textContent = 'a.cg-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}' +
-      '.cg-trophy{display:inline-flex;align-items:center;margin-left:4px;color:#f59e0b}.cg-label{display:flex;align-items:center;justify-content:center;gap:6px;color:#f59e0b;font-weight:700}';
+      '.cg-trophy{display:inline-flex;align-items:center;margin-left:4px;color:#f59e0b}.cg-label{display:flex;align-items:center;justify-content:center;gap:6px;color:#f59e0b;font-weight:700}' +
+      // Family XP: level chip, "+XP" pop, level-up celebration, achievement toast.
+      '.cg-xring{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center}.cg-xring svg{position:absolute;inset:0;transform:rotate(-90deg)}.cg-xring circle{fill:none;stroke-width:3.5}.cg-xring .t{stroke:rgba(127,127,127,.28)}.cg-xring .f{stroke:#f59e0b;stroke-linecap:round;transition:stroke-dashoffset .9s cubic-bezier(.3,.8,.3,1)}.cg-xring b{position:relative;font-weight:800;font-size:12px;color:var(--cg-ink)}' +
+      '#cg-level{flex:none;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 10px 0 5px;border-radius:12px;color:var(--cg-ink);text-decoration:none;font-weight:700;font-size:13px}#cg-level:hover{background:var(--cg-soft)}#cg-level .t{white-space:nowrap}@media (max-width:620px){#cg-level{padding:0 5px}#cg-level .t{display:none}}' +
+      '.cg-xpop{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 66px);z-index:9900;display:flex;align-items:center;gap:10px;padding:8px 16px 8px 8px;border-radius:999px;background:var(--cg-surface);color:var(--cg-ink);border:1px solid var(--cg-line);box-shadow:0 14px 40px -10px rgba(0,0,0,.35);transform:translate(-50%,-24px) scale(.8);opacity:0;transition:transform .42s cubic-bezier(.2,1.4,.4,1),opacity .25s;pointer-events:none}' +
+      '.cg-xpop.in{transform:translate(-50%,0) scale(1);opacity:1}.cg-xpop.out{transform:translate(-50%,-16px) scale(.95);opacity:0}.cg-xpop .b{display:flex;flex-direction:column;gap:3px;min-width:132px}.cg-xpop .g{font-weight:800;font-size:18px;letter-spacing:-.01em;background:linear-gradient(90deg,#f59e0b,#ef4444);-webkit-background-clip:text;background-clip:text;color:transparent}.cg-xpop .bar{height:6px;border-radius:9px;background:var(--cg-soft);overflow:hidden}.cg-xpop .bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#fbbf24,#f97316);transition:width .9s cubic-bezier(.3,.8,.3,1)}.cg-xpop small{font-size:11.5px;color:var(--cg-muted)}' +
+      '.cg-lvlup{position:fixed;inset:0;z-index:9950;display:flex;align-items:center;justify-content:center;background:rgba(10,10,20,.5);animation:cgFade .2s ease-out}.cg-lvlup.out{opacity:0;transition:opacity .28s}.cg-lvlup .card{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:8px;padding:26px 30px 22px;border-radius:28px;background:var(--cg-surface);color:var(--cg-ink);box-shadow:0 30px 80px -20px rgba(0,0,0,.5);animation:cgLvl .6s cubic-bezier(.2,1.3,.4,1);min-width:230px}' +
+      '.cg-lvlup .rays{position:absolute;left:50%;top:44%;width:420px;height:420px;margin:-210px 0 0 -210px;background:repeating-conic-gradient(from 0deg,rgba(251,191,36,.18) 0 10deg,transparent 10deg 20deg);animation:cgSpin 9s linear infinite;pointer-events:none}.cg-lvlup .k{position:relative;font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#f59e0b}.cg-lvlup .cg-xring b{font-size:38px}.cg-lvlup .cg-xring circle{stroke-width:7}.cg-lvlup .tt{position:relative;font-size:24px;font-weight:800}.cg-lvlup .sub{position:relative;font-size:13px;color:var(--cg-muted)}.cg-lvlup .cg-btn{position:relative;margin-top:6px;height:38px;padding:0 16px;border-radius:999px;background:var(--cg-soft);color:var(--cg-ink);font-weight:700;font-size:14px}' +
+      '.cg-lvlup .burst{position:absolute;left:50%;top:50%}.cg-lvlup .burst i{position:absolute;width:9px;height:14px;border-radius:3px;background:var(--c);transform:rotate(var(--a)) translateY(0);opacity:0;animation:cgBurst 1.2s cubic-bezier(.1,.8,.3,1) var(--d) forwards}' +
+      '@keyframes cgLvl{0%{transform:scale(.5) rotate(-6deg);opacity:0}100%{transform:none;opacity:1}}@keyframes cgSpin{to{transform:rotate(360deg)}}@keyframes cgBurst{0%{opacity:1;transform:rotate(var(--a)) translateY(0) scale(.6)}100%{opacity:0;transform:rotate(var(--a)) translateY(-210px) rotate(220deg) scale(1)}}' +
+      '.cg-ach{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);z-index:9960;display:flex;align-items:center;gap:12px;width:min(360px,calc(100% - 32px));box-sizing:border-box;padding:10px 14px 10px 10px;border-radius:20px;background:var(--cg-surface);color:var(--cg-ink);text-decoration:none;border:1px solid var(--cg-line);box-shadow:0 18px 50px -12px rgba(0,0,0,.4);transform:translate(-50%,-140%);transition:transform .5s cubic-bezier(.2,1.2,.4,1)}.cg-ach.in{transform:translate(-50%,0)}' +
+      '.cg-ach .i{flex:none;width:46px;height:46px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;color:#fff;box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}.cg-ach .b{display:flex;flex-direction:column;min-width:0}.cg-ach small{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--cg-muted)}.cg-ach b{font-size:16px}.cg-ach .b span{font-size:13px;color:var(--cg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cg-ach.r-legendary{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.25),0 18px 50px -12px rgba(0,0,0,.4)}.cg-ach.r-epic{border-color:#a855f7}' +
+      '@media (prefers-reduced-motion:reduce){.cg-xpop,.cg-ach,.cg-lvlup .card,.cg-lvlup .rays,.cg-lvlup .burst i{transition:none;animation:none}}';
     document.head.appendChild(st);
   }
 
@@ -752,6 +866,7 @@
     const ctx = { root: stage, user: me(), seed: Math.floor(Math.random() * 2 ** 31) };
     if (opts.onReady) opts.onReady(ctx);
     sendPending();
+    xpBaseline();
     api('GET', '?trophies=1').then((d) => { trophies = d.trophies || {}; if (isLobbyOpen()) renderLobby(); }).catch(() => {});
     const params = new URLSearchParams(location.search);
     const sid = params.get('s');
@@ -785,6 +900,7 @@
     leave: () => leaveSession(),
     me, colors: COLORS, icon, badge, meta: GAME_META, now, toLocal,
     uploadImage,
+    xpCheck: () => xpCheck(),
     countingDown: () => { const c = document.getElementById('cg-countdown'); return !!c && !c.classList.contains('go'); },
     isMulti: () => inSession() && multi.round > 0 && multi.session.round === multi.round,
     session: () => multi.session,

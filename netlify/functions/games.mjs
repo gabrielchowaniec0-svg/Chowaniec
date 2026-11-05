@@ -6,6 +6,8 @@
 //   GET  ?cards=<sid,sid>&room=<room>  -> { cards: { <sid>: info | null } }   live game cards in a chat (members only)
 //   GET  ?night=<id>                   -> { night }                      a game night card (members of its chat only)
 //   GET  ?trophies=1                   -> { trophies: { <name>: { title, until } } }   game night champions
+//   GET  ?live=1                       -> { live: [{ id, game, name, status, players, url, room, host, label }] }
+//        games in their lobby or playing, active in the last 2 hours, that I'm in or that were sent to my chats
 //   POST { action: 'score', game, score, day?, session? } -> { best, previous, isRecord, rank, total }
 //        (a new family #1 posts a record card to the session's chat or Everyone, at most hourly)
 //   POST { action: 'create', game, room? }           -> { session }   room: also invite that chat
@@ -25,8 +27,9 @@ import { resolveRoom, roomsFor, dmPartners, isDmId, canAccessRoom } from '../lib
 import { familyTimeZone } from '../lib/group-store.mjs';
 import {
   GAMES, isGame, isSessionId, recordScore, leaderboard, dailyResults, familyDay, createSession, getSession, joinSession, leaveSession,
-  startRound, finishRound, makeMove, syncPlayer, playerStates, saveImage, getImage, reportResult, settleRound, settleIfOver, listTrophies
+  startRound, finishRound, makeMove, syncPlayer, playerStates, saveImage, getImage, reportResult, settleRound, settleIfOver, listTrophies, liveSessions
 } from '../lib/games-store.mjs';
+import { xpForScore, xpForRound } from '../lib/xp.mjs';
 import { inviteChat, cardInfo, canSeeCard, afterSettle, refreshCards, rematch, maybePostRecord } from '../lib/games-cards.mjs';
 import { getNight, nightInfo, createGameNight, startNight, nextGame } from '../lib/game-night.mjs';
 
@@ -35,7 +38,10 @@ import { getNight, nightInfo, createGameNight, startNight, nextGame } from '../l
 async function settle(session, states) {
   if (!session || !settleRound(session, states || {})) return session;
   const { session: fresh, settled } = await settleIfOver(session.id);
-  if (settled) await afterSettle(fresh);
+  if (settled) {
+    await afterSettle(fresh);
+    await xpForRound(fresh).catch((e) => console.error('Round XP failed:', e.message));
+  }
   return fresh || session;
 }
 
@@ -115,6 +121,17 @@ async function handle(req) {
         if (!night || !canAccessRoom(user.name, night.room)) return json(404, { error: 'That game night is gone.' });
         return json(200, { night: await nightInfo(night) });
       }
+      if (q('live')) {
+        const LIVE_MS = 2 * 60 * 60 * 1000;
+        const mine = (s) => s.players.includes(user.name) || (s.invitedTo || []).some((r) => canAccessRoom(user.name, r));
+        const list = (await liveSessions(Date.now() - LIVE_MS)).filter((s) => (!s.room || canAccessRoom(user.name, s.room)) && mine(s));
+        const live = list.slice(0, 20).map((s) => ({
+          id: s.id, game: s.game, name: GAMES[s.game].name, status: s.status, players: s.players.slice(), host: s.host,
+          label: s.label || '', url: `/games/${s.game}/?s=${s.id}`,
+          room: s.room || (s.invitedTo || []).find((r) => canAccessRoom(user.name, r)) || null
+        }));
+        return json(200, { live });
+      }
       if (q('trophies')) {
         const all = await listTrophies();
         const trophies = {};
@@ -138,10 +155,13 @@ async function handle(req) {
         const game = String(body.game || '');
         const day = isGame(game) && GAMES[game].daily ? familyDay(familyTimeZone()) : undefined;
         const result = await recordScore(user.name, game, body.score, { day });
+        let session = null;
         try {
-          const session = isSessionId(String(body.session || '')) ? await getSession(String(body.session)) : null;
-          await maybePostRecord(user, game, result, session && session.players.includes(user.name) ? session : null);
+          const found = isSessionId(String(body.session || '')) ? await getSession(String(body.session)) : null;
+          session = found && found.players.includes(user.name) ? found : null;
+          await maybePostRecord(user, game, result, session);
         } catch (e) { console.error('Record card failed:', e.message); }
+        await xpForScore(user.name, game, body.score, result, session && session.game === game && session.round ? session : null);
         return json(200, result);
       }
       case 'create': {

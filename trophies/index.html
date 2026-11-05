@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#000000"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><script src="/pwa.js" defer></script>
+    <title>Trophies · Chowaniec</title>
+    <link rel="stylesheet" href="/theme.css">
+    <script src="/theme.js"></script>
+    <!-- Tailwind is only used by the shared passcode box -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/passwords.js"></script>
+    <script src="/auth-gate.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+    <link rel="stylesheet" href="/games/games.css">
+    <link rel="stylesheet" href="/trophies/trophies.css">
+    <!-- Only for ChowGames.icon / badge: core.js does nothing else until a game calls mount(). -->
+    <script src="/games/core.js"></script>
+</head>
+<body>
+    <div id="app-root">
+        <div class="tp">
+            <div class="tp-top">
+                <a class="round-btn" href="/" aria-label="Back to the hub" id="tp-back"></a>
+                <a class="round-btn wide" href="/games/" id="tp-games"><span>Games</span></a>
+            </div>
+            <h1>Family <em>Trophies</em></h1>
+            <p class="lead">Play games, chat and join game nights to earn XP. Every month is a new season.</p>
+
+            <section class="hero" id="tp-hero" aria-label="Your level"><div class="sk big"></div></section>
+
+            <div class="cols">
+                <div class="col">
+                    <section class="season" id="tp-season" aria-label="This season"><div class="sk tall"></div></section>
+                    <section class="block" aria-labelledby="tp-cab-h">
+                        <div class="sec"><h2 id="tp-cab-h">Trophy cabinet</h2><span id="tp-cab-count"></span></div>
+                        <div class="cabinet" id="tp-cabinet"><div class="sk"></div></div>
+                        <div class="past" id="tp-past"></div>
+                    </section>
+                </div>
+                <div class="col">
+                    <section class="block" aria-labelledby="tp-fam-h">
+                        <div class="sec"><h2 id="tp-fam-h">The family</h2><span>Tap someone to see their trophies</span></div>
+                        <div class="family" id="tp-family"><div class="sk"></div></div>
+                    </section>
+                    <section class="block" aria-labelledby="tp-feed-h">
+                        <div class="sec"><h2 id="tp-feed-h">Recent XP</h2><span id="tp-feed-sum"></span></div>
+                        <ol class="feed" id="tp-feed"><li class="sk"></li></ol>
+                    </section>
+                </div>
+            </div>
+
+            <section class="block" aria-labelledby="tp-ach-h">
+                <div class="sec"><h2 id="tp-ach-h">Achievements</h2><span id="tp-ach-count"></span></div>
+                <div class="filters" id="tp-filters" role="tablist" aria-label="Achievement groups"></div>
+                <div class="ach-grid" id="tp-ach"><div class="sk"></div></div>
+                <div class="more" id="tp-ach-more"></div>
+            </section>
+
+            <section class="block rules" aria-labelledby="tp-rules-h">
+                <div class="sec"><h2 id="tp-rules-h">How to earn XP</h2></div>
+                <div class="rule-grid" id="tp-rules"></div>
+            </section>
+        </div>
+    </div>
+    <div class="sheet" id="tp-sheet" hidden>
+        <div class="sheet-back" data-close="1"></div>
+        <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="tp-sheet-name">
+            <button type="button" class="sheet-x" data-close="1" aria-label="Close" id="tp-sheet-x"></button>
+            <div id="tp-sheet-body"></div>
+        </div>
+    </div>
+    <script src="/trophies/trophies.js"></script>
+</body>
+</html>

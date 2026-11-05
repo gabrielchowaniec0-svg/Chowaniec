@@ -440,6 +440,17 @@ export async function giveTrophy(name, info, days = 7) {
   throw err(409, 'Please try again.');
 }
 
+// Sessions in their lobby or mid-round that were active since `sinceMs` (for "live now" on the home page).
+// Callers filter by who may see them.
+export async function liveSessions(sinceMs) {
+  const { blobs } = await store().list({ prefix: 'sess/' });
+  const ids = [...new Set(blobs.map((b) => b.key.split('/')).filter((p) => p.length === 2 && isSessionId(p[1])).map((p) => p[1]))];
+  const list = await Promise.all(ids.map((id) => getSession(id).catch(() => null)));
+  const active = (s) => Math.max(...[s.createdAt, s.startAt, s.rematchAt, s.doneAt].map((t) => Date.parse(t || '') || 0));
+  return list.filter((s) => s && (s.status === 'lobby' || s.status === 'playing') && s.players.length && active(s) >= sinceMs)
+    .sort((a, b) => active(b) - active(a));
+}
+
 // For the once-a-minute scheduler: removes sessions older than a day.
 export async function sweepSessions() {
   const { blobs } = await store().list({ prefix: 'sess/' });
