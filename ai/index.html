@@ -9,6 +9,7 @@
     <script src="/pwa.js" defer></script>
     <title>Chowaniec AI</title>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/robot.css">
     <script src="/theme.js"></script>
 
     <!-- Tailwind CSS CDN -->
@@ -114,6 +115,27 @@
         .md-preview th, .md-preview td { border-bottom: 1px solid var(--line-strong); border-right: 1px solid var(--line-strong); padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
         .md-preview th:last-child, .md-preview td:last-child { border-right: 0; }
         .md-preview tbody tr:last-child td { border-bottom: 0; }
+        /* Talk to Bob */
+        .talk-bob { background: color-mix(in srgb, #7c3aed 10%, var(--surface, #fff)); color: var(--text); border: 1px solid color-mix(in srgb, #7c3aed 30%, transparent); transition: transform .2s cubic-bezier(.34,1.4,.5,1), box-shadow .2s; }
+        .talk-bob:hover { box-shadow: 0 10px 30px -14px rgba(124, 58, 237, .8); transform: translateY(-1px); }
+        .talk-bob-mic { background: #7c3aed; color: #fff; box-shadow: 0 0 0 0 rgba(124, 58, 237, .45); animation: talk-ping 2.6s ease-out infinite; }
+        .talk-bob-sub { color: var(--muted); }
+        @keyframes talk-ping { 0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, .45); } 70%, 100% { box-shadow: 0 0 0 12px transparent; } }
+        @media (prefers-reduced-motion: reduce) { .talk-bob-mic { animation: none; } }
+        .composer-fade { background: linear-gradient(to top, var(--bg, #fafafa) 0%, var(--bg, #fafafa) 70%, transparent 100%); }
+        /* Desktop: the chat moves aside so the voice panel never covers it */
+        @media (min-width: 1024px) { body.voice-open main { padding-right: 424px; transition: padding .3s ease; } }
+        .memory-q { flex: none; min-height: 44px; max-width: 18rem; text-align: left; }
+        /* Citations and their sources */
+        .md-preview a.cite { display: inline-flex; align-items: center; justify-content: center; min-width: 1.25rem; height: 1.25rem; padding: 0 .3rem; margin: 0 .1rem; border-radius: 999px; font: 600 .68rem/1 'JetBrains Mono', monospace; vertical-align: .25em; text-decoration: none; background: color-mix(in srgb, var(--accent, #7c3aed) 14%, transparent); color: var(--text); }
+        .md-preview a.cite:hover { background: color-mix(in srgb, var(--accent, #7c3aed) 28%, transparent); }
+        .src-chip { display: inline-flex; align-items: center; gap: .45rem; max-width: 100%; min-height: 36px; padding: .3rem .8rem .3rem .35rem; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text-2); font-size: 12.5px; text-decoration: none; transition: border-color .2s, transform .2s; }
+        .src-chip:hover { border-color: var(--accent, #7c3aed); color: var(--text); }
+        .src-chip .src-n { flex: none; width: 1.4rem; height: 1.4rem; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--accent, #7c3aed) 14%, transparent); font: 600 .68rem/1 'JetBrains Mono', monospace; color: var(--text); }
+        .src-chip svg { width: 14px; height: 14px; flex: none; color: var(--accent, #7c3aed); }
+        .src-chip .src-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14rem; }
+        .src-chip .src-d { flex: none; color: var(--faint); font: 500 11px 'JetBrains Mono', monospace; }
+        .voice-tag { display: inline-flex; vertical-align: -2px; margin-right: .35rem; opacity: .7; }
         .md-preview th { background: var(--surface-2); font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
     </style>
 </head>
@@ -189,7 +211,22 @@
                                 Type <span class="font-mono text-black">/</span> for commands, <span class="font-mono text-black">@</span> to mention someone,
                                 and <span class="font-mono text-black">#</span> to point me at a note or the group chat.
                             </p>
+                            <button type="button" id="btn-talk" class="talk-bob mt-6 inline-flex items-center gap-3 min-h-[56px] pl-2 pr-6 rounded-full text-left">
+                                <span class="talk-bob-mic w-11 h-11 shrink-0 rounded-full flex items-center justify-center"><i data-lucide="mic" class="w-5 h-5"></i></span>
+                                <span class="min-w-0">
+                                    <span class="block text-sm font-semibold">Talk to Bob</span>
+                                    <span class="block text-xs talk-bob-sub">Ask out loud, he answers out loud</span>
+                                </span>
+                            </button>
                             <div id="suggestions" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-8"></div>
+                            <section id="memories" class="mt-8" aria-labelledby="memories-title">
+                                <div class="flex items-center gap-2 mb-1 text-gray-400">
+                                    <i data-lucide="history" class="w-3.5 h-3.5"></i>
+                                    <h2 id="memories-title" class="text-[10px] font-mono uppercase tracking-widest font-medium">Memories</h2>
+                                </div>
+                                <p class="text-xs text-gray-500 font-light mb-3">Ask about family life. Answers link to where it happened.</p>
+                                <div id="memory-row" class="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1 sm:mx-0 sm:px-0 sm:flex-wrap"></div>
+                            </section>
                         </section>
 
                         <!-- Messages -->
@@ -198,7 +235,7 @@
                 </div>
 
                 <!-- Composer -->
-                <div class="shrink-0 bg-gradient-to-t from-[#fafafa] via-[#fafafa] to-[#fafafa]/0 pt-1 px-3 sm:px-6 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <div class="composer-fade shrink-0 pt-1 px-3 sm:px-6 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                     <div id="chat-pick-wrap" class="max-w-[780px] mx-auto mb-2 hidden items-center gap-2 text-xs text-gray-500">
                         <label for="chat-pick" class="font-mono uppercase tracking-widest text-[10px] text-gray-400">Post to</label>
                         <select id="chat-pick" class="min-h-[36px] rounded-full border border-gray-200 bg-white px-3 text-xs text-gray-700"></select>
@@ -218,12 +255,17 @@
                                 <p id="composer-hint" class="text-[10px] sm:text-[11px] font-mono text-gray-400 truncate min-w-0">
                                     <span class="text-gray-600">/</span> commands · <span class="text-gray-600">@</span> people · <span class="text-gray-600">#</span> notes
                                 </p>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                <button id="btn-mic" type="button" title="Talk to Bob" aria-label="Talk to Bob (voice mode)" class="w-11 h-11 shrink-0 rounded-full border border-gray-200 bg-white text-gray-600 flex items-center justify-center hover:border-black hover:text-black transition-colors">
+                                    <i data-lucide="mic" class="w-5 h-5"></i>
+                                </button>
                                 <button id="btn-send" type="submit" title="Send" aria-label="Send message" class="w-11 h-11 shrink-0 rounded-full bg-black text-white flex items-center justify-center hover:bg-gray-800 transition-colors shadow-md disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none">
                                     <i data-lucide="arrow-up" class="w-5 h-5"></i>
                                 </button>
                                 <button id="btn-stop" type="button" title="Stop" aria-label="Stop generating" class="hidden w-11 h-11 shrink-0 rounded-full bg-black text-white items-center justify-center hover:bg-gray-800 transition-colors shadow-md">
                                     <i data-lucide="square" class="w-4 h-4 fill-current"></i>
                                 </button>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -255,6 +297,7 @@
     </div>
 
     <script src="/robot.js"></script>
+    <script src="/voice.js"></script>
     <script src="ai.js"></script>
 </body>
 </html>

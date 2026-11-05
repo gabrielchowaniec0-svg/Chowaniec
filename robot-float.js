@@ -1,5 +1,6 @@
 // Bob the helper: a small robot in the bottom-left corner of Group, Notes, Calendar and Lists.
-//   tap  -> opens Chowaniec AI        hold -> small menu (ask, quick jump, catch me up)
+//   tap  -> talk to Bob (voice mode, see /voice.js; typing works there too)
+//   hold -> small menu (talk, open Chowaniec AI, quick jump, catch me up)
 // He sleeps at night, perks up when you touch him, and celebrates when a poll finishes or a sign-up sheet fills.
 // He moves up out of the way of text boxes and hides while you are typing on a phone.
 (function () {
@@ -28,7 +29,26 @@
     }
     const bob = wrap.querySelector('.bob');
     const say = wrap.querySelector('.bob-say');
-    bob.setAttribute('aria-label', 'Bob, your AI helper. Tap to open Chowaniec AI, press and hold for more.');
+    bob.setAttribute('aria-label', 'Bob, your AI helper. Tap to talk to Bob, press and hold for more.');
+    bob.setAttribute('aria-haspopup', 'dialog');
+    // Voice mode: a small "Talk to Bob" card next to him.
+    let panel = null;
+    const voicePanel = () => {
+      if (!panel && window.BobVoice) {
+        panel = window.BobVoice.mountPanel({
+          variant: 'pop', bob, anchor: wrap,
+          onOpen: () => { bob.setAttribute('aria-expanded', 'true'); wrap.classList.add('talking'); },
+          onClose: () => { bob.setAttribute('aria-expanded', 'false'); wrap.classList.remove('talking'); rest(); }
+        });
+        bob.setAttribute('aria-controls', panel.el.id);
+      }
+      return panel;
+    };
+    // Must run inside the tap itself: iOS only starts listening from a user gesture.
+    const talk = () => {
+      const v = voicePanel();
+      if (v) v.talk(); else location.href = '/ai/';
+    };
     const signedIn = () => window.getChowaniecUser && window.getChowaniecUser();
 
     let sayTimer = null, stateTimer = null, celebrating = false;
@@ -46,7 +66,7 @@
     // ---- Dodge text boxes: sit just above the lowest one, hide while typing on a phone.
     function place() {
       const boxes = Array.from(document.querySelectorAll('textarea, input[type="text"], input:not([type]), [contenteditable="true"]'))
-        .filter((el) => el.offsetParent && !el.closest('#qj') && !el.closest('#bob-menu'));
+        .filter((el) => el.offsetParent && !el.closest('#qj') && !el.closest('#bob-menu') && !el.closest('.bv'));
       let top = innerHeight;
       boxes.forEach((el) => {
         const r = el.getBoundingClientRect();
@@ -56,6 +76,7 @@
       if (wrap.classList.contains('in-header')) return;
       wrap.style.bottom = top < innerHeight ? `calc(env(safe-area-inset-bottom, 0px) + ${Math.round(innerHeight - top + 10)}px)` : '';
       if (top >= innerHeight) wrap.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + ${base}px)`;
+      if (panel && panel.open) setTimeout(() => panel.place(), 320);
     }
     let placeTimer = null;
     const schedulePlace = () => { clearTimeout(placeTimer); placeTimer = setTimeout(place, 150); };
@@ -80,7 +101,8 @@
       if (wrap.classList.contains('in-header')) { menu.style.top = `${Math.round(r.bottom + 6)}px`; menu.style.left = `${Math.max(8, Math.round(r.left - 150))}px`; menu.style.bottom = 'auto'; }
       else menu.style.bottom = `${Math.round(innerHeight - r.top + 6)}px`;
       const entries = [
-        ['Ask Chowaniec AI', () => { location.href = '/ai/'; }],
+        ['Talk to Bob', () => talk()],
+        ['Open Chowaniec AI', () => { location.href = '/ai/'; }],
         ['Search & jump', () => window.ChowaniecQuickJump && window.ChowaniecQuickJump.open()],
         ['Catch me up (read aloud)', () => { location.href = '/ai/?run=recap&speak=1'; }]
       ];
@@ -97,32 +119,32 @@
       if (window.ChowaniecHaptics) window.ChowaniecHaptics.tap('medium');
       bob.dataset.state = 'listening';
     }
-    document.addEventListener('pointerdown', (e) => { if (menu && !menu.contains(e.target) && !wrap.contains(e.target)) { closeMenu(); rest(); } });
+    document.addEventListener('pointerdown', (e) => { if (menu && !menu.contains(e.target) && !wrap.contains(e.target)) { closeMenu(); if (!panel || !panel.open) rest(); } });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && menu) { closeMenu(); rest(); bob.focus(); } });
 
+    const busy = () => panel && panel.open && panel.session.state !== 'idle';
     bob.addEventListener('pointerdown', (e) => {
       held = false; startX = e.clientX; startY = e.clientY;
       clearTimeout(holdTimer);
-      bob.dataset.state = 'listening';
+      if (!busy()) bob.dataset.state = 'listening';
       holdTimer = setTimeout(() => { held = true; openMenu(); }, 480);
     });
     const cancel = () => clearTimeout(holdTimer);
     bob.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - startX, e.clientY - startY) > 10) cancel(); });
-    bob.addEventListener('pointercancel', () => { cancel(); if (!menu) rest(); });
-    bob.addEventListener('pointerup', () => {
+    bob.addEventListener('pointercancel', () => { cancel(); if (!menu && !busy()) rest(); });
+    bob.addEventListener('pointerup', cancel);
+    bob.addEventListener('click', (e) => {
+      e.preventDefault();
       cancel();
-      if (held) return;
+      if (held) { held = false; return; }
       if (window.ChowaniecHaptics) window.ChowaniecHaptics.tap('light');
-      hint('On it!', 900);
-      bob.dataset.state = 'talking';
-      setTimeout(() => { location.href = '/ai/'; }, 350);
+      talk();
     });
     bob.addEventListener('contextmenu', (e) => e.preventDefault());
     bob.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.href = '/ai/'; }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); talk(); }
       else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openMenu(); }
     });
-    bob.addEventListener('click', (e) => e.preventDefault());
 
     // ---- Moods
     window.addEventListener('chowaniec-celebrate', (e) => {
@@ -130,15 +152,16 @@
       clearTimeout(stateTimer);
       bob.dataset.state = 'celebrate';
       const why = e.detail && e.detail.why;
-      hint(why === 'poll' ? 'Everyone voted! 🎉' : why === 'sheet' ? 'Every slot is taken! 🎉' : why === 'birthday' ? 'Happy birthday! 🎂' : 'Hooray! 🎉', 3500);
-      stateTimer = setTimeout(() => { celebrating = false; rest(); }, 3600);
+      hint(why === 'poll' ? 'Everyone voted!' : why === 'sheet' ? 'Every slot is taken!' : why === 'birthday' ? 'Happy birthday!' : 'Hooray!', 3500);
+      stateTimer = setTimeout(() => { celebrating = false; if (!busy()) rest(); }, 3600);
     });
     if (night()) setTimeout(() => { if (!signedIn()) return; hint('Zzz… it’s late. Tap me if you need me.', 3500); }, 1500);
   }
 
   Promise.all([
     ensure('link', { rel: 'stylesheet', href: '/robot.css' }),
-    window.ChowaniecRobot ? Promise.resolve() : ensure('script', { src: '/robot.js' })
+    window.ChowaniecRobot ? Promise.resolve() : ensure('script', { src: '/robot.js' }),
+    window.BobVoice ? Promise.resolve() : ensure('script', { src: '/voice.js' })
   ]).then(() => {
     const go = () => { if (window.ChowaniecRobot) start(); };
     if (document.body) go(); else document.addEventListener('DOMContentLoaded', go);
