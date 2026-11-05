@@ -166,7 +166,7 @@
     '.ch-swipe.is-ready{background:var(--ch-accent,#111);color:var(--ch-accent-ink,#fff)}',
     '.ch-swipe-shade{position:fixed;inset:0;z-index:2147483290;pointer-events:none;background:linear-gradient(90deg,rgba(0,0,0,.18),transparent 40%);opacity:0}',
     // fallback page transition (browsers without cross-document View Transitions)
-    'html.ch-leaving body{opacity:0;transform:translateY(6px);transition:opacity .14s ease,transform .14s ease}',
+    'html.ch-leaving body{opacity:0;transition:opacity .14s ease}',   /* no transform: it would unpin the fixed tab bar */
     // keep floating bits clear of the tab bar; the hub button is redundant next to Home
     'html[data-nav="on"] [onclick="returnToHub()"][title="Return to Hub"]{display:none!important}',
     'html[data-nav="on"] #bob-float:not(.in-header),html[data-nav="on"] #toast.fixed,html[data-nav="on"] .toast,html[data-nav="on"] #chowaniec-notify-card.at-bottom{translate:0 calc(-1 * var(--ch-nav-bottom,0px))}',
@@ -419,15 +419,34 @@
     return !/^(checkbox|radio|button|submit|reset|range|color|file|image|hidden)$/i.test(n.type || 'text');
   }
   function setKb(on) { if (on === kbOpen) return; kbOpen = on; update(); }
+  // The bar only steps aside while the keyboard really takes up the screen. Focus alone isn't enough:
+  // a box can be focused and then removed (e.g. the passcode box closing by itself when a saved sign-in
+  // kicks in), which never fires focusout, and that used to leave the bar hidden on that page.
+  var tallest = window.innerHeight;
+  function keyboardShowing() {
+    tallest = Math.max(tallest, window.innerHeight);
+    var vv = window.visualViewport;
+    var visible = vv ? vv.height * (vv.scale || 1) : window.innerHeight;   // ignore pinch-zoom
+    return window.innerHeight - visible > 150 || tallest - window.innerHeight > 150;
+  }
+  function typingNow() {
+    var a = document.activeElement;
+    return isEditable(a) && a.isConnected && !a.closest('.ch-sheet') && a.getClientRects().length > 0;
+  }
+  var kbCheck = null;
+  function checkKb() {
+    var on = typingNow() && keyboardShowing();
+    setKb(on);
+    clearInterval(kbCheck);
+    if (on) kbCheck = setInterval(function () { if (!(typingNow() && keyboardShowing())) { clearInterval(kbCheck); setKb(false); } }, 2000);
+  }
   if (coarse) {
-    document.addEventListener('focusin', function (e) { if (isEditable(e.target) && !e.target.closest('.ch-sheet')) setKb(true); });
-    document.addEventListener('focusout', function () { setTimeout(function () { if (!isEditable(document.activeElement)) setKb(false); }, 120); });
-    if (window.visualViewport) {
-      visualViewport.addEventListener('resize', function () {
-        var open = window.innerHeight - visualViewport.height > 150;
-        if (open) setKb(true); else if (!isEditable(document.activeElement)) setKb(false);
-      });
-    }
+    document.addEventListener('focusin', function () { setTimeout(checkKb, 350); });   // the keyboard takes a moment to open
+    document.addEventListener('focusout', function () { setTimeout(checkKb, 120); });
+    if (window.visualViewport) visualViewport.addEventListener('resize', checkKb);
+    window.addEventListener('resize', checkKb);
+    window.addEventListener('pageshow', checkKb);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) checkKb(); });
   }
 
   // ---------- swipe from the left edge to go back ----------
