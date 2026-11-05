@@ -967,7 +967,6 @@ mark { background: var(--mark); color: var(--mark-fg); border-radius: 3px; paddi
 .gp-mute-title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
 .gp-mute-opts { display: flex; flex-wrap: wrap; gap: 8px; }
 .gp-mute-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; line-height: 1.4; }
-body[data-muted="1"] #btn-info .wordmark::after { content: ' 🔕'; font-size: .8em; }
 #lightbox { touch-action: none; user-select: none; -webkit-user-select: none; transition: background .2s ease; }
 #lightbox img { transform-origin: center; will-change: transform; -webkit-user-drag: none; user-select: none; }
 @media (prefers-reduced-motion: reduce) { .gp-pop, .gp-item, #lightbox, #lightbox img { transition: none !important; } }
@@ -1022,3 +1021,20 @@ body:has(#sheet-backdrop:not(.hidden)) #bob-float { opacity: 0; pointer-events: 
 .gif-off { column-span: all; padding: 30px 12px; text-align: center; color: var(--muted); line-height: 1.5; }
 .gif-more { text-align: center; color: var(--muted); font-size: 13px; min-height: 18px; }
 .gif-credit { text-align: center; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 8px 0 0; }
+
+/* ---------- design refresh: align the chat's floating surfaces with the shared design system (/design.css) ---------- */
+/* The chat shows its own connection banner (#error-banner + offline queue), so polish.js's global pill would repeat it. */
+#cz-offline { display: none !important; }
+/* The header's back button already goes home; the old floating disc sat on top of the composer on desktop. */
+.hub-btn { display: none !important; }
+/* frosted popovers, menus and sheets */
+.pop { background: var(--ch-glass-strong, var(--surface)); -webkit-backdrop-filter: saturate(1.8) blur(24px); backdrop-filter: saturate(1.8) blur(24px);
+    border-color: var(--ch-glass-border, var(--line)); box-shadow: var(--ch-shadow-3, var(--shadow-lg)); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .pop { background: var(--surface); } }
+.pop-title { font-family: var(--ch-font-ui, 'Outfit', sans-serif); font-weight: 600; font-size: 11px; letter-spacing: .12em; }
+#plus-popup .mi svg { color: var(--ch-accent-text, currentColor); }
+.icon-btn:focus-visible, .cbtn:focus-visible, .send:focus-visible, .micbtn:focus-visible { outline: none; box-shadow: var(--ch-focus, 0 0 0 2px var(--text)); }
+/* muted chats: a bell-off icon instead of an emoji */
+body[data-muted="1"] #btn-info .wordmark::after { content: ''; display: inline-block; width: .8em; height: .8em; margin-left: .3em; vertical-align: -.05em; background: currentColor; opacity: .55;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.27 21a2 2 0 0 0 3.46 0M17 17H4a1 1 0 0 1-.74-1.67C4.59 13.96 6 12.5 6 8a6 6 0 0 1 .26-1.74M8.67 3.03A6 6 0 0 1 18 8c0 1.5.15 2.68.4 3.65M2 2l20 20'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.27 21a2 2 0 0 0 3.46 0M17 17H4a1 1 0 0 1-.74-1.67C4.59 13.96 6 12.5 6 8a6 6 0 0 1 .26-1.74M8.67 3.03A6 6 0 0 1 18 8c0 1.5.15 2.68.4 3.65M2 2l20 20'/%3E%3C/svg%3E") center / contain no-repeat; }

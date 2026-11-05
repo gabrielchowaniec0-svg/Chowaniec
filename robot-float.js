@@ -155,7 +155,13 @@
       hint(why === 'poll' ? 'Everyone voted!' : why === 'sheet' ? 'Every slot is taken!' : why === 'birthday' ? 'Happy birthday!' : 'Hooray!', 3500);
       stateTimer = setTimeout(() => { celebrating = false; if (!busy()) rest(); }, 3600);
     });
-    if (night()) setTimeout(() => { if (!signedIn()) return; hint('Zzz… it’s late. Tap me if you need me.', 3500); }, 1500);
+    // The sleepy hello appears once a night on this device, not on every page.
+    if (night()) setTimeout(() => {
+      if (!signedIn()) return;
+      const d = new Date(Date.now() - 6 * 3600 * 1000).toDateString();   // a night runs until 6 am
+      try { if (localStorage.getItem('chowaniec_bob_night') === d) return; localStorage.setItem('chowaniec_bob_night', d); } catch (e) { /* show it */ }
+      hint('Zzz… it’s late. Tap me if you need me.', 3500);
+    }, 1500);
   }
 
   Promise.all([

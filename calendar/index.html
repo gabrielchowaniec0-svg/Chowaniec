@@ -1,74 +1,99 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="ch-ui ch-refresh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="theme-color" content="#000000">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <script src="/pwa.js" defer></script>
     <title>Chowaniec Calendar</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/design.css">
+    <link rel="stylesheet" href="/design-extra.css">
     <script src="/theme.js"></script>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js" defer></script>
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
-        body { font-family: 'Outfit', sans-serif; background-color: var(--bg); color: var(--text); }
-        .font-serif { font-family: 'Playfair Display', serif; }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        :root { --ch-page-w: 768px; }
+        body { font-family: var(--ch-font-ui); background-color: var(--bg); color: var(--text); }
+        .font-serif { font-family: var(--ch-font-display); }
+        .font-mono { font-family: var(--ch-font-mono); }
         .gone { display: none !important; }
         .grid7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
-        .day { position: relative; min-height: 52px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 6px; gap: 4px; font-size: 14px; color: var(--text); background: transparent; border: 1px solid transparent; }
-        .day.other { color: var(--faint); opacity: .7; }
-        .day.today { border-color: var(--line-strong); font-weight: 600; }
-        .day.sel { background: var(--accent); color: var(--accent-ink); }
+        .day { position: relative; min-height: 52px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 7px; gap: 4px; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--text); background: transparent; border: 1px solid transparent; cursor: pointer; }
+        .day:hover { background: var(--ch-surface-2); }
+        .day:focus-visible { outline: none; box-shadow: var(--ch-focus); }
+        .day.other { color: var(--faint); opacity: .6; }
+        .day.today { color: var(--ch-accent-text); font-weight: 700; background: var(--ch-accent-soft); }
+        .day.sel { background: linear-gradient(150deg, color-mix(in srgb, var(--ch-accent) 80%, #fff), var(--ch-accent)); color: var(--accent-ink); font-weight: 600; box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--ch-accent) 70%, transparent); }
         .day .dots { display: flex; gap: 3px; height: 6px; }
-        .day .dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--muted); }
-        .day.sel .dot { background: var(--accent-ink); }
-        .field label { display: block; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); font-family: 'JetBrains Mono', monospace; margin-bottom: 6px; }
-        .field input, .field select, .field textarea { width: 100%; min-height: 46px; border: 1px solid var(--line-strong); border-radius: 12px; padding: 10px 14px; font-size: 15px; background: var(--surface); color: var(--text); outline: none; }
-        .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
-        .ev { display: block; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .day .dot { width: 5px; height: 5px; border-radius: 9999px; background: var(--ch-accent); opacity: .7; }
+        .day.sel .dot { background: var(--accent-ink); opacity: 1; }
+        .cal-list-title { font: 600 var(--ch-t-xl)/1.2 var(--ch-font-ui); letter-spacing: -.01em; }
+        .day-head { font: 600 var(--ch-t-xs)/1.2 var(--ch-font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ch-muted); padding: 10px 2px 2px; }
+        .field label { display: block; font: 600 var(--ch-t-sm)/1.2 var(--ch-font-ui); color: var(--ch-text-2); margin-bottom: 6px; }
+        .field input, .field select, .field textarea { width: 100%; min-height: 48px; border: 1px solid var(--line-strong); border-radius: var(--ch-r-sm); padding: 11px 14px; font-size: 16px; background: var(--input-bg, var(--surface-2)); color: var(--text); outline: none; transition: border-color var(--ch-dur-2) ease, box-shadow var(--ch-dur-2) ease, background-color var(--ch-dur-2) ease; }
+        .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: var(--ch-focus); background: var(--surface); }
+        .ev { position: relative; display: block; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--ch-r-md); padding: 14px 16px 14px 20px; box-shadow: var(--ch-shadow-1); cursor: pointer; overflow: hidden; }
+        .ev::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 4px; border-radius: 0 4px 4px 0; background: var(--ch-accent); opacity: .85; }
         .ev:hover { border-color: var(--line-strong); }
-        .ev.flash { border-color: var(--accent); }
-        .ev-wrap { margin-bottom: 10px; }
-        .ev-wrap .ev { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-        .rsvp { background: var(--surface); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 18px 18px; padding: 8px 12px 10px; }
-        .rsvp-row { display: flex; gap: 8px; }
-        .rsvp-btn { flex: 1; min-height: 40px; border-radius: 9999px; border: 1px solid var(--line-strong); font-size: 14px; font-weight: 600; color: var(--text-2); background: var(--surface); }
-        .bd-chip { display: inline-flex; gap: 6px; align-items: center; padding: 8px 14px; border-radius: 9999px; background: linear-gradient(135deg, #fef3c7, #fce7f3); color: #3b0764; font-size: 13px; }
-        .ev.bday { box-sizing: border-box; width: 100%; border-radius: 16px; padding: 14px 16px; background: linear-gradient(135deg, #fef9c3, #fce7f3); color: #3b0764; }
-        .callsheet { margin-top: 8px; }
-        .rsvp-btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-        .rsvp-who { font-size: 12px; color: var(--muted); margin-top: 6px; }
-        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 80; display: flex; align-items: flex-end; justify-content: center; }
+        .ev:focus-visible { outline: none; box-shadow: var(--ch-focus); }
+        .ev.flash { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ch-accent) 22%, transparent); }
+        .ev-wrap { margin-bottom: 12px; border-radius: var(--ch-r-md); box-shadow: var(--ch-shadow-2); }
+        .ev-wrap .ev { box-shadow: none; }
+        .ev-wrap .ev:not(:last-child) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+        .rsvp { background: var(--surface); border: 1px solid var(--line); border-top: 0; padding: 4px 12px 12px; }
+        .rsvp:last-child { border-radius: 0 0 var(--ch-r-md) var(--ch-r-md); }
+        .rsvp-row { display: flex; gap: 6px; padding: 3px; border-radius: var(--ch-r-full); background: var(--ch-surface-2); border: 1px solid var(--ch-line); }
+        .rsvp-btn { flex: 1; min-height: 38px; border-radius: 9999px; border: 0; font-size: 14px; font-weight: 600; color: var(--text-2); background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+        .rsvp-btn:hover { color: var(--text); }
+        .rsvp-btn:focus-visible { outline: none; box-shadow: var(--ch-focus); }
+        .rsvp-btn.on { background: var(--accent); color: var(--accent-ink); box-shadow: var(--ch-shadow-1); }
+        .rsvp-who { font-size: 12.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+        .rsvp-who svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 3px; }
+        .bd-chip { display: inline-flex; gap: 8px; align-items: center; min-height: 36px; padding: 0 14px 0 6px; border-radius: 9999px; background: linear-gradient(135deg, color-mix(in srgb, #f59e0b 16%, var(--ch-surface)), color-mix(in srgb, #ec4899 14%, var(--ch-surface))); border: 1px solid color-mix(in srgb, #ec4899 22%, transparent); color: var(--ch-text); font-size: 13.5px; box-shadow: var(--ch-shadow-1); }
+        .bd-ic { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(150deg, #fbbf24, #ec4899); color: #fff; flex: none; }
+        .bd-ic svg { width: 15px; height: 15px; }
+        .ev.bday { box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 12px; border-radius: var(--ch-r-md); padding: 14px 16px; cursor: default;
+            background: linear-gradient(135deg, color-mix(in srgb, #f59e0b 14%, var(--ch-surface)), color-mix(in srgb, #ec4899 12%, var(--ch-surface))); color: var(--ch-text); border-color: color-mix(in srgb, #ec4899 22%, transparent); }
+        .ev.bday::before { display: none; }
+        .ev.bday .bd-ic { width: 38px; height: 38px; } .ev.bday .bd-ic svg { width: 20px; height: 20px; }
+        .callsheet { border-top: 1px dashed var(--line); padding-top: 10px; }
+        .modal { position: fixed; inset: 0; background: var(--overlay, rgba(0,0,0,0.4)); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); z-index: var(--ch-z-sheet); display: flex; align-items: flex-end; justify-content: center; }
         @media (min-width: 640px) { .modal { align-items: center; padding: 16px; } }
-        .sheet { background: var(--surface); color: var(--text); width: 100%; max-width: 440px; max-height: 92dvh; overflow-y: auto; border-radius: 24px 24px 0 0; padding: 22px; }
-        @media (min-width: 640px) { .sheet { border-radius: 24px; } }
+        .sheet { background: var(--ch-glass-strong); -webkit-backdrop-filter: saturate(1.8) blur(28px); backdrop-filter: saturate(1.8) blur(28px); border: 1px solid var(--ch-glass-border); box-shadow: var(--ch-shadow-4); color: var(--text); width: 100%; max-width: 460px; max-height: 92dvh; overflow-y: auto; border-radius: var(--ch-r-xl) var(--ch-r-xl) 0 0; padding: 22px 22px calc(22px + env(safe-area-inset-bottom, 0px)); }
+        @media (min-width: 640px) { .sheet { border-radius: var(--ch-r-xl); box-shadow: var(--ch-shadow-3); padding-bottom: 22px; } }
+        @media (prefers-reduced-motion: no-preference) { html:not([data-motion="reduced"]) .modal:not(.gone) .sheet { animation: cal-sheet-in var(--ch-dur-4) var(--ch-ease-out) both; } }
+        @keyframes cal-sheet-in { from { transform: translateY(40px); opacity: 0; } }
         .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
-    <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
-        <div class="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3 min-w-0">
-                <div class="w-8 h-8 shrink-0 bg-black rounded-full flex items-center justify-center text-white text-xs">CN</div>
-                <div class="font-serif tracking-wide text-xl whitespace-nowrap">Chowaniec <span class="text-gray-400 italic font-light text-base">Calendar</span></div>
-            </div>
-            <button id="btn-new" type="button" class="shrink-0 min-h-[44px] px-5 rounded-full bg-black text-white text-xs font-medium hover:bg-gray-800 flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i> New Event</button>
+    <div class="ch-glow" aria-hidden="true"><i></i><i></i><i></i></div>
+    <header class="ch-header">
+        <div class="ch-header__bar">
+            <a class="ch-iconbtn" href="/" aria-label="Back to home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></a>
+            <span class="ch-header__small" aria-hidden="true">Calendar</span>
+            <div class="ch-header__actions"><button id="btn-new" type="button" class="ch-btn ch-btn--primary ch-btn--sm"><i data-lucide="plus" class="w-4 h-4"></i> New event</button></div>
         </div>
+        <h1 class="ch-header__title">Calendar</h1>
     </header>
 
-    <main class="flex-1 max-w-3xl mx-auto px-4 py-6 pb-28 w-full space-y-6">
+    <main class="flex-1 max-w-3xl mx-auto px-4 pt-4 pb-10 w-full space-y-6">
+        <div id="cal-offline" class="ch-banner ch-banner--warn gone" role="status"></div>
         <div id="bday-strip" class="gone flex flex-wrap gap-2" aria-label="Upcoming birthdays"></div>
         <section class="bg-white rounded-3xl border border-gray-100 shadow-sm p-3 sm:p-5">
             <div class="flex items-center justify-between mb-3">
                 <button id="prev" type="button" aria-label="Previous month" class="w-11 h-11 rounded-full hover:bg-gray-50 flex items-center justify-center"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
-                <h1 id="month-title" class="font-serif text-2xl"></h1>
+                <h2 id="month-title" class="font-serif text-2xl"></h2>
                 <button id="next" type="button" aria-label="Next month" class="w-11 h-11 rounded-full hover:bg-gray-50 flex items-center justify-center"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
             </div>
             <div class="grid7 text-center text-[10px] font-mono uppercase tracking-widest text-gray-400 mb-1">
@@ -79,8 +104,8 @@
 
         <section>
             <div class="flex items-end justify-between mb-3">
-                <h2 id="list-title" class="font-serif text-xl"></h2>
-                <button id="show-upcoming" type="button" class="gone text-xs font-mono uppercase tracking-widest text-gray-400 hover:text-black min-h-[40px]">Show upcoming</button>
+                <h2 id="list-title" class="cal-list-title"></h2>
+                <button id="show-upcoming" type="button" class="gone ch-chip">Show upcoming</button>
             </div>
             <div id="list" class="space-y-3"><div class="sk" style="height:76px" aria-hidden="true"></div><div class="sk" style="height:76px" aria-hidden="true"></div><div class="sk" style="height:76px" aria-hidden="true"></div></div>
         </section>
@@ -133,9 +158,6 @@
 
     <div id="toast" role="status" aria-live="polite" class="gone fixed left-1/2 -translate-x-1/2 bottom-24 z-[90] max-w-[calc(100vw-2rem)] bg-black text-white text-xs font-medium rounded-full px-5 py-3 shadow-xl"></div>
 
-    <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-6 right-6 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full flex items-center justify-center text-gray-600 hover:text-black z-50">
-        <i data-lucide="arrow-left" class="w-5 h-5"></i>
-    </button>
 
     <script src="calendar.js"></script>
 </body>

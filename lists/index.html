@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="ch-ui ch-refresh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -7,42 +7,61 @@
     <meta name="theme-color" content="#000000">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <title>Lists</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/design.css">
+    <link rel="stylesheet" href="/design-extra.css">
     <script src="/theme.js"></script>
 
     <script src="/pwa.js" defer></script>
     <!-- Tailwind is only used by the shared passcode box -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
     <link rel="stylesheet" href="/settings/settings.css">
     <style>
-        .item { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 0; border-top: 1px solid var(--line); }
+        #lists { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+        .item { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 0; border-top: 1px solid var(--ch-line); }
         .item:first-of-type { border-top: 0; }
-        .item input[type=checkbox] { width: 24px; height: 24px; flex: none; }
-        .item .txt { flex: 1; min-width: 0; font-size: 16px; overflow-wrap: anywhere; }
-        .item.done .txt { text-decoration: line-through; color: var(--muted); }
-        .item .by { font-size: 11px; color: var(--muted); }
-        .xbtn { min-width: 40px; min-height: 40px; border: 0; background: transparent; color: var(--muted); font-size: 20px; border-radius: 999px; cursor: pointer; }
-        .xbtn:hover { background: var(--soft); }
-        .addrow { display: flex; gap: 8px; margin-top: 10px; }
-        .addrow input[type=text], .field input[type=text], .field select { flex: 1; min-height: 44px; font: inherit; font-size: 16px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); }
-        .field { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+        .item .txt { flex: 1; min-width: 0; font-size: 16px; overflow-wrap: anywhere; cursor: pointer; transition: color var(--ch-dur-2) ease; }
+        .item.done .txt { text-decoration: line-through; text-decoration-color: var(--ch-line-strong); color: var(--ch-muted); }
+        .item .by { font-size: 12px; color: var(--ch-faint); }
+        .xbtn { min-width: 40px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--ch-muted); border-radius: 999px; cursor: pointer; }
+        .xbtn:hover { background: var(--ch-surface-2); color: var(--ch-text); }
+        .xbtn:focus-visible { outline: none; box-shadow: var(--ch-focus); }
+        .addrow { display: flex; gap: 8px; margin-top: 12px; }
+        .addrow input[type=text], .field input[type=text], .field select { flex: 1; min-width: 0; min-height: 46px; font: inherit; font-size: 16px; padding: 0 14px; border: 1px solid var(--ch-line-strong); border-radius: var(--ch-r-full); background: var(--input-bg, var(--ch-surface-2)); color: var(--ch-text); }
+        .field input[type=text], .field select { border-radius: var(--ch-r-sm); }
+        .addrow input[type=text] { width: 0; }
+        .addrow input:focus, .field input:focus, .field select:focus { outline: none; border-color: var(--ch-accent); box-shadow: var(--ch-focus); background: var(--ch-surface); }
+        .field { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; font-weight: 600; color: var(--ch-text-2); }
         .head { display: flex; align-items: center; gap: 8px; }
-        .head h3 { margin: 0; font-size: 18px; font-weight: 600; flex: 1; }
-        .meter { height: 6px; border-radius: 99px; background: var(--soft); overflow: hidden; margin: 8px 0 4px; }
-        .meter > i { display: block; height: 100%; background: var(--accent); transition: width .4s ease; }
+        .head h3 { margin: 0; font-size: 19px; font-weight: 600; flex: 1; letter-spacing: -.005em; }
+        .head .s { font-variant-numeric: tabular-nums; font-weight: 600; }
+        .meter { height: 6px; border-radius: 99px; background: var(--ch-surface-3); overflow: hidden; margin: 10px 0 6px; }
+        .meter > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--ch-accent) 70%, #fff), var(--ch-accent)); transition: width .5s var(--ch-ease-out); }
         .sk-card { height: 120px; }
+        .list-sheet { position: fixed; inset: 0; z-index: var(--ch-z-sheet); background: var(--overlay, rgba(0,0,0,.4)); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); display: flex; align-items: flex-end; justify-content: center; padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
+        .list-sheet__panel { width: min(480px, 100%); display: grid; gap: 8px; background: var(--ch-glass-strong); -webkit-backdrop-filter: saturate(1.8) blur(28px); backdrop-filter: saturate(1.8) blur(28px); border-color: var(--ch-glass-border); box-shadow: var(--ch-shadow-3); animation: ch-enter var(--ch-dur-3) var(--ch-ease-out) both; }
+        .list-sheet__title { text-align: center; font-weight: 600; color: var(--ch-muted); font-size: 13px; padding-bottom: 4px; }
+        @media (min-width: 640px) { .list-sheet { align-items: center; } }
     </style>
 </head>
 <body>
 <div id="app-root">
-    <header class="topbar"><div class="topbar-in">
-        <a class="back" href="/" aria-label="Back to Chowaniec home">&#8592;</a>
-        <h1 class="serif">Lists</h1>
-        <button type="button" class="btn solid" id="btn-new">New list</button>
-    </div></header>
+    <div class="ch-glow" aria-hidden="true"><i></i><i></i><i></i></div>
+    <header class="ch-header">
+        <div class="ch-header__bar">
+            <a class="ch-iconbtn" href="/" aria-label="Back to home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></a>
+            <span class="ch-header__small" aria-hidden="true">Lists</span>
+            <div class="ch-header__actions"><button type="button" class="ch-btn ch-btn--primary ch-btn--sm" id="btn-new"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New list</button></div>
+        </div>
+        <h1 class="ch-header__title">Lists</h1>
+    </header>
     <main class="wrap" id="main">
         <p class="lead">Shared lists for the family: groceries, packing, costumes. Each list belongs to a chat, so only the people in that chat can see it. You can also ask Chowaniec AI to add things.</p>
         <section class="card hidden" id="new-card" aria-labelledby="h-new">

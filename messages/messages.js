@@ -13,6 +13,10 @@
     if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
+  function svg(d, w) { return '<svg width="' + (w || 14) + '" height="' + (w || 14) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; }
+  var IC_PIN = svg('<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>');
+  var IC_MUTE = svg('<path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7M10.3 21a1.94 1.94 0 0 0 3.4 0M2 2l20 20"/>');
+  var IC_DOTS = svg('<circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/>', 20);
   var PIN_KEY = 'chowaniec_dm_pins';
   function pins() { try { return JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); } catch (e) { return []; } }
   function savePins(list) { try { localStorage.setItem(PIN_KEY, JSON.stringify(list)); } catch (e) { /* storage unavailable */ } }
@@ -33,10 +37,10 @@
         '<button type="button" class="a-read" data-act="read">Mark read</button>' +
       '</div>' +
       '<a class="dm-row" href="/group/?room=' + encodeURIComponent(d.id) + '" data-dm="' + esc(d.id) + '">' + avatar(d) +
-      '<span class="dm-main"><span class="dm-name">' + esc(d.name) + (pinned ? '<span class="dm-pin" title="Pinned">&#128204;</span>' : '') + (muted ? '<span class="dm-mutedi" title="Muted">&#128277;</span>' : '') + '</span><br><span class="dm-last">' + esc(last) + '</span></span>' +
+      '<span class="dm-main"><span class="dm-name">' + esc(d.name) + (pinned ? '<span class="dm-pin" title="Pinned" aria-label="Pinned">' + IC_PIN + '</span>' : '') + (muted ? '<span class="dm-mutedi" title="Muted" aria-label="Muted">' + IC_MUTE + '</span>' : '') + '</span><br><span class="dm-last">' + esc(last) + '</span></span>' +
       (d.last ? '<span class="dm-time">' + esc(when(d.last.createdAt)) + '</span>' : '') +
       (d.unread ? '<span class="dm-badge" aria-label="' + d.unread + ' unread">' + d.unread + '</span>' : '') +
-      '<button type="button" class="dm-more" data-more="1" aria-label="Pin, mute or mark read">&#8942;</button></a></div>';
+      '<button type="button" class="dm-more" data-more="1" aria-label="Pin, mute or mark read">' + IC_DOTS + '</button></a></div>';
   }
 
   function sortTalked(list) {

@@ -7,11 +7,14 @@
     <meta name="theme-color" content="#0b0a10">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <title>Watch party · Chowaniec</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/theme.css">
     <script src="/theme.js"></script>
     <script src="/pwa.js" defer></script>
-    <!-- Tailwind is only used by the shared passcode box -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind is not needed by the passcode box any more; kept (deferred) for any utility classes -->
+    <script src="https://cdn.tailwindcss.com" defer></script>
     <script src="/passwords.js"></script>
     <script src="/auth-gate.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap">

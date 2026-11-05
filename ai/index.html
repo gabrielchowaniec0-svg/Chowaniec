@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="ch-ui ch-refresh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
@@ -8,14 +8,20 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <script src="/pwa.js" defer></script>
     <title>Chowaniec AI</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/design.css">
+    <link rel="stylesheet" href="/design-extra.css">
     <link rel="stylesheet" href="/robot.css">
     <script src="/theme.js"></script>
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js" defer></script>
     <!-- Markdown rendering (always sanitized with DOMPurify) -->
     <script src="https://unpkg.com/marked@18.1.1/lib/marked.umd.js"></script>
     <script src="https://unpkg.com/dompurify@3.4.17/dist/purify.min.js"></script>
@@ -23,11 +29,25 @@
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+        .ai-header .ch-header__bar { position: relative; flex: none; z-index: 30; padding-left: 12px; padding-right: 12px; }
+        .ai-title { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--ch-font-display); font-weight: 400; font-size: 20px; }
+        .ai-bob { width: 30px; height: 30px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; padding: 4px; color: #fff; font: 600 11px var(--ch-font-ui);
+            background: linear-gradient(150deg, #a78bfa, #7c3aed); box-shadow: inset 0 -2px 0 rgba(0,0,0,.14), 0 4px 10px -4px rgba(124,58,237,.7); }
+        #btn-voice[aria-pressed="true"] { color: var(--ai-acc, #7c3aed); background: color-mix(in srgb, var(--ai-acc, #7c3aed) 12%, transparent); }
+        #user-chip { display: none !important; }
+        @media (min-width: 640px) { #user-chip.flex { display: flex !important; } }
+        #sidebar { background: var(--ch-glass-strong); -webkit-backdrop-filter: var(--ch-glass-blur); backdrop-filter: var(--ch-glass-blur); }
+        @media (min-width: 1024px) { #sidebar { background: color-mix(in srgb, var(--ch-surface) 55%, transparent); } }
+        #conv-list a, #conv-list button { border-radius: var(--ch-r-sm); }
+        #composer > .bg-white { border-radius: var(--ch-r-xl); box-shadow: var(--ch-shadow-2); background: var(--ch-glass-strong); -webkit-backdrop-filter: var(--ch-glass-blur); backdrop-filter: var(--ch-glass-blur); }
+        #suggestions > * { border-radius: var(--ch-r-md); box-shadow: var(--ch-shadow-1); }
+        #welcome > .w-12 { background: linear-gradient(150deg, #a78bfa, #7c3aed); color: #fff; box-shadow: inset 0 -2px 0 rgba(0,0,0,.14), 0 10px 22px -10px rgba(124,58,237,.8); }
+        .composer-fade { background: linear-gradient(to top, var(--bg, #fafafa) 0%, var(--bg, #fafafa) 55%, transparent 100%); }
+        #composer-input:focus, #composer-input:focus-visible { box-shadow: none; outline: none; }
 
         html, body { height: 100%; }
         body {
-            font-family: 'Outfit', sans-serif;
+            font-family: var(--ch-font-ui);
             background-color: var(--bg);
             color: var(--text);
         }
@@ -122,7 +142,6 @@
         .talk-bob-sub { color: var(--muted); }
         @keyframes talk-ping { 0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, .45); } 70%, 100% { box-shadow: 0 0 0 12px transparent; } }
         @media (prefers-reduced-motion: reduce) { .talk-bob-mic { animation: none; } }
-        .composer-fade { background: linear-gradient(to top, var(--bg, #fafafa) 0%, var(--bg, #fafafa) 70%, transparent 100%); }
         /* Desktop: the chat moves aside so the voice panel never covers it */
         @media (min-width: 1024px) { body.voice-open main { padding-right: 424px; transition: padding .3s ease; } }
         .memory-q { flex: none; min-height: 44px; max-width: 18rem; text-align: left; }
@@ -144,26 +163,18 @@
     <div id="app-root" class="flex-1 min-h-0 flex flex-col transition-all duration-500">
 
         <!-- Header -->
-        <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 shrink-0 z-30 pt-[env(safe-area-inset-top)]">
-            <div class="px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
-                <div class="flex items-center gap-1 sm:gap-3 min-w-0">
-                    <button id="btn-drawer" type="button" title="Conversations" aria-label="Open conversations" aria-controls="sidebar" aria-expanded="false" class="lg:hidden w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:text-black hover:bg-gray-50">
-                        <i data-lucide="panel-left" class="w-5 h-5"></i>
-                    </button>
-                    <div class="flex items-center gap-2.5 sm:gap-3 min-h-[40px] min-w-0 ml-1 lg:ml-0">
-                        <div id="hdr-bob" class="w-8 h-8 shrink-0 bg-violet-600 rounded-full flex items-center justify-center p-1 text-white text-xs font-sans">
-                            CN
-                        </div>
-                        <div class="font-serif tracking-wide text-xl whitespace-nowrap">
-                            Chowaniec <span class="text-gray-400 italic font-light text-base">AI</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2 min-w-0">
-                    <button id="btn-new-header" type="button" title="New chat" aria-label="New chat" class="lg:hidden w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:text-black hover:bg-gray-50">
+        <header class="ch-header is-collapsed ai-header">
+            <div class="ch-header__bar">
+                <a class="ch-iconbtn" href="/" aria-label="Back to home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></a>
+                <button id="btn-drawer" type="button" title="Conversations" aria-label="Open conversations" aria-controls="sidebar" aria-expanded="false" class="ch-iconbtn lg:hidden">
+                    <i data-lucide="panel-left" class="w-5 h-5"></i>
+                </button>
+                <span class="ch-header__small ai-title"><span id="hdr-bob" class="ai-bob" aria-hidden="true">CN</span><span class="truncate">Chowaniec AI</span></span>
+                <div class="ch-header__actions">
+                    <button id="btn-new-header" type="button" title="New chat" aria-label="New chat" class="ch-iconbtn lg:hidden">
                         <i data-lucide="square-pen" class="w-5 h-5"></i>
                     </button>
-                    <button id="btn-voice" type="button" title="Voice replies off" aria-label="Voice replies off. Tap to change." aria-pressed="false" class="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:text-black hover:bg-gray-50">
+                    <button id="btn-voice" type="button" title="Voice replies off" aria-label="Voice replies off. Tap to change." aria-pressed="false" class="ch-iconbtn text-gray-500">
                         <i data-lucide="volume-2" class="w-5 h-5"></i>
                     </button>
                     <div id="user-chip" class="hidden items-center gap-2 min-w-0 text-[11px] font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-full pl-1.5 pr-1.5 sm:pr-3 py-1.5"></div>
@@ -190,7 +201,7 @@
                 <nav id="conv-list" class="flex-1 min-h-0 overflow-y-auto px-2 pb-4 lg:pb-28 space-y-0.5"></nav>
                 <div class="lg:hidden border-t border-gray-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                     <button id="btn-hub-mobile" type="button" onclick="returnToHub()" class="w-full min-h-[44px] px-4 rounded-full border border-gray-200 text-xs font-medium text-gray-700 hover:border-black hover:text-black flex items-center justify-center gap-2">
-                        <i data-lucide="arrow-left" class="w-4 h-4"></i> Return to Hub
+                        <i data-lucide="house" class="w-4 h-4"></i> Back to home
                     </button>
                 </div>
             </aside>
@@ -274,10 +285,6 @@
         </div>
     </div>
 
-    <!-- Floating Return Button (desktop; sits in the sidebar corner so it never covers the composer) -->
-    <button onclick="returnToHub()" title="Return to Hub" aria-label="Return to Hub" class="hidden lg:flex fixed bottom-8 left-8 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full items-center justify-center text-gray-600 hover:text-black hover:bg-gray-50 hover:scale-105 transition-all z-50">
-        <i data-lucide="arrow-left" class="w-5 h-5"></i>
-    </button>
 
     <!-- Toast -->
     <div id="toast" role="status" aria-live="polite" class="hidden fixed left-1/2 -translate-x-1/2 top-20 z-[70] max-w-[calc(100vw-2rem)] bg-black text-white text-xs font-medium rounded-full px-5 py-3 shadow-xl items-center gap-2"></div>
