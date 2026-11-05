@@ -7,6 +7,14 @@
 
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const icons = () => { try { window.lucide && window.lucide.createIcons(); } catch (e) { /* ignore */ } };
+    const svg = (d, w = 16) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const IC = {
+        cake: svg('<path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1M2 21h20M7 8v3M12 8v3M17 8v3M7 4h.01M12 4h.01M17 4h.01"/>'),
+        here: svg('<path d="M21.8 10A10 10 0 1 1 17 3.34"/><path d="m9 11 3 3L22 4"/>'),
+        car: svg('<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>'),
+        wait: svg('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+        off: svg('<path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M5 12.86a10 10 0 0 1 5.17-2.69M19 12.86a10 10 0 0 0-2.01-1.53M2 8.82a15 15 0 0 1 4.18-2.65M22 8.82a15 15 0 0 0-11.29-3.76M2 2l20 20"/>', 18)
+    };
     const getUser = () => (typeof window.getChowaniecUser === 'function' ? window.getChowaniecUser() : null);
 
     function toast(msg) {
@@ -26,7 +34,7 @@
         let res;
         try {
             res = await fetch(url, { method: o.method || 'GET', headers, body: o.body !== undefined ? JSON.stringify(o.body) : undefined, cache: 'no-store' });
-        } catch (e) { throw new Error('Could not reach the server. Check your connection.'); }
+        } catch (e) { throw Object.assign(new Error('Could not reach the server. Check your connection.'), { offline: true }); }
         let data = {};
         try { data = await res.json(); } catch (e) { data = {}; }
         if (res.status === 401) { $('signin-modal').classList.remove('gone'); throw new Error('Please sign in again.'); }
@@ -64,7 +72,25 @@
         const data = await api(`${API}?from=${lo}&to=${hi}`);
         state.events = data.events || [];
         state.today = data.today || state.today;
+        saveCache();
+        showOffline(null);
     }
+
+    // ---- offline: keep the last calendar we saw on this device and show it with a calm banner ----
+    const cacheKey = () => `chowaniec_cal_cache_${(state.user && state.user.name) || ''}`;
+    function saveCache() {
+        try { localStorage.setItem(cacheKey(), JSON.stringify({ events: state.events, rooms: state.rooms, today: state.today, at: Date.now() })); } catch (e) { /* storage full or blocked */ }
+    }
+    function readCache() { try { return JSON.parse(localStorage.getItem(cacheKey()) || 'null'); } catch (e) { return null; } }
+    function showOffline(cache) {
+        const el = $('cal-offline');
+        if (!el) return;
+        if (!cache && cache !== false) { el.classList.add('gone'); return; }
+        const at = cache && cache.at ? new Date(cache.at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+        el.innerHTML = `${IC.off}<span class="ch-banner__text"><b>You’re offline.</b> ${cache ? `Showing the calendar as it was on ${esc(at)}. Changes will work again once you’re back online.` : 'The calendar will load as soon as you’re back online.'}</span><button type="button" class="ch-btn ch-btn--secondary" data-retry>Try again</button>`;
+        el.classList.remove('gone');
+    }
+    const localToday = () => { const d = new Date(); return ymd(d.getFullYear(), d.getMonth(), d.getDate()); };
 
     // ---- birthdays (from Settings > Birthdays) show up as all-day entries and a countdown ----
     function birthdayEvents() {
@@ -74,7 +100,7 @@
         (state.bdays || []).forEach((b) => {
             [start, start + 1].forEach((yr) => {
                 const date = ymd(yr, b.month - 1, b.day);
-                out.push({ id: `bday-${b.name}-${date}`, virtual: true, title: `🎂 ${b.name}’s birthday`, date, time: null, room: 'everyone', turns: b.year ? yr - b.year : null });
+                out.push({ id: `bday-${b.name}-${date}`, virtual: true, title: `${b.name}’s birthday`, date, time: null, room: 'everyone', turns: b.year ? yr - b.year : null });
             });
         });
         return out;
@@ -87,7 +113,7 @@
         const P = window.ChowaniecPolish;
         const soon = (state.bdays || []).map((b) => ({ b, d: P ? P.daysUntil(b, new Date(`${state.today}T12:00:00`)) : 999 })).filter((x) => x.d <= 45).sort((a, b) => a.d - b.d).slice(0, 3);
         el.classList.toggle('gone', !soon.length);
-        el.innerHTML = soon.map(({ b, d }) => `<span class="bd-chip" aria-label="${esc(b.name)}’s birthday ${d === 0 ? 'is today' : d === 1 ? 'is tomorrow' : `is in ${d} days`}">🎂 ${esc(b.name)} <b>${d === 0 ? 'today!' : d === 1 ? 'tomorrow' : `in ${d} days`}</b></span>`).join('');
+        el.innerHTML = soon.map(({ b, d }) => `<span class="bd-chip" aria-label="${esc(b.name)}’s birthday ${d === 0 ? 'is today' : d === 1 ? 'is tomorrow' : `is in ${d} days`}"><span class="bd-ic">${IC.cake}</span>${esc(b.name)} <b>${d === 0 ? 'today!' : d === 1 ? 'tomorrow' : `in ${d} days`}</b></span>`).join('');
     }
 
     function render() {
@@ -134,15 +160,15 @@
         const waiting = members.filter((n) => !c[n] && (!e.rsvp || e.rsvp[n] !== 'no'));
         const btn = (k, label) => `<button type="button" class="rsvp-btn${mine === k ? ' on' : ''}" data-checkin="${k}" data-eid="${esc(e.id)}" aria-pressed="${mine === k}">${label}</button>`;
         const parts = [];
-        if (names('here').length) parts.push(`✅ Here: ${names('here').map(esc).join(', ')}`);
-        if (names('onway').length) parts.push(`🚗 On the way: ${names('onway').map(esc).join(', ')}`);
-        if (waiting.length) parts.push(`⏳ Not yet: ${waiting.map(esc).join(', ')}`);
+        if (names('here').length) parts.push(`${IC.here}Here: ${names('here').map(esc).join(', ')}`);
+        if (names('onway').length) parts.push(`${IC.car}On the way: ${names('onway').map(esc).join(', ')}`);
+        if (waiting.length) parts.push(`${IC.wait}Not yet: ${waiting.map(esc).join(', ')}`);
         return `<div class="rsvp callsheet" role="group" aria-label="Call sheet for ${esc(e.title)}"><div class="rsvp-who" style="font-weight:600;margin-bottom:6px">Call sheet · today</div><div class="rsvp-row">${btn('onway', 'On my way')}${btn('here', 'I’m here')}</div>${parts.length ? `<div class="rsvp-who" style="margin-top:6px">${parts.join('<br>')}</div>` : ''}</div>`;
     }
 
     function eventCard(e) {
         if (e.virtual) {
-            return `<div class="ev-wrap"><div class="ev bday" role="note"><div class="font-medium text-[15px]">${esc(e.title)}</div><div class="text-xs text-gray-500 mt-0.5">All day${e.turns ? ` · turns ${e.turns}` : ''}</div></div></div>`;
+            return `<div class="ev-wrap"><div class="ev bday" role="note"><span class="bd-ic">${IC.cake}</span><div class="min-w-0"><div class="font-semibold text-[15px]">${esc(e.title)}</div><div class="text-xs text-gray-500 mt-0.5">All day${e.turns ? ` · turns ${e.turns}` : ''}</div></div></div></div>`;
         }
         return `<div class="ev-wrap">${eventCardInner(e)}${rsvpHtml(e)}${callSheetHtml(e)}</div>`;
     }
@@ -150,9 +176,9 @@
     function eventCardInner(e) {
         return `<button type="button" class="ev${state.flash === e.id ? ' flash' : ''}" data-id="${esc(e.id)}">
             <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0"><div class="font-medium text-[15px] truncate">${esc(e.title)}</div>
+                <div class="min-w-0"><div class="font-semibold text-[15px] truncate">${esc(e.title)}</div>
                 <div class="text-xs text-gray-500 mt-0.5">${esc(whenLabel(e))}${e.location ? ` · ${esc(e.location)}` : ''}</div></div>
-                <span class="shrink-0 text-[10px] font-mono uppercase tracking-widest text-gray-400 mt-1">${esc(roomName(e.room))}</span>
+                <span class="shrink-0 ch-chip" style="min-height:24px;font-size:11.5px;padding:0 9px">${esc(roomName(e.room))}</span>
             </div>${e.notes ? `<div class="text-xs text-gray-400 mt-2 line-clamp-2">${esc(e.notes)}</div>` : ''}</button>`;
     }
 
@@ -173,7 +199,7 @@
             if (!items.length) { list.innerHTML = '<p class="text-sm text-gray-400 py-6 text-center">Nothing coming up. Tap New Event to add something.</p>'; return; }
             let last = '';
             list.innerHTML = items.map((e) => {
-                const head = e.date !== last ? `<h3 class="text-[11px] font-mono uppercase tracking-widest text-gray-400 pt-2">${esc(e.date === state.today ? 'Today' : dayLabel(e.date))}</h3>` : '';
+                const head = e.date !== last ? `<h3 class="day-head">${esc(e.date === state.today ? 'Today' : dayLabel(e.date))}</h3>` : '';
                 last = e.date;
                 return head + eventCard(e);
             }).join('');
@@ -260,7 +286,7 @@
             if (!b) return;
             state.selected = state.selected === b.dataset.day ? null : b.dataset.day;
             const p = parse(b.dataset.day);
-            if (p.m !== state.month.m) { state.month = { y: p.y, m: p.m }; load().then(render); } else render();
+            if (p.m !== state.month.m) { state.month = { y: p.y, m: p.m }; load().catch(() => {}).then(render); } else render();
         });
         $('list').addEventListener('click', async (e) => {
             const r = e.target.closest('[data-rsvp]');
@@ -326,19 +352,49 @@
         state.user = getUser();
         if (!state.user || !state.user.key) { $('signin-modal').classList.remove('gone'); return; }
         bind();
+        $('cal-offline').addEventListener('click', (e) => { if (e.target.closest('[data-retry]')) boot(); });
+        window.addEventListener('online', () => boot());
+        await boot();
+    }
+
+    let booted = false, booting = false;
+    async function boot() {
+        if (booting) return;
+        if (booted) { await load().then(render).catch(() => {}); return; }
+        booting = true;
         try {
-            const rooms = await api('/.netlify/functions/group?rooms=1');
-            state.rooms = rooms.rooms || [];
-        } catch (e) { state.rooms = [{ id: 'everyone', name: 'Everyone' }]; }
-        const first = await api(API);
-        state.today = first.today;
-        const p = parse(state.today);
-        state.month = { y: p.y, m: p.m };
+            try {
+                const rooms = await api('/.netlify/functions/group?rooms=1');
+                state.rooms = rooms.rooms || [];
+            } catch (e) { state.rooms = [{ id: 'everyone', name: 'Everyone' }]; }
+            const first = await api(API);
+            state.today = first.today;
+            const p = parse(state.today);
+            state.month = { y: p.y, m: p.m };
+            await load();
+            booted = true;
+        } catch (e) {
+            // No connection (or the server is down): show what this device saw last instead of failing.
+            const cache = readCache();
+            if (cache && cache.events) {
+                state.events = cache.events;
+                if (cache.rooms && cache.rooms.length) state.rooms = cache.rooms;
+                state.today = cache.today || localToday();
+            } else {
+                state.events = [];
+                state.today = state.today || localToday();
+            }
+            if (!state.month) { const p = parse(state.today); state.month = { y: p.y, m: p.m }; }
+            render();
+            if (!e.offline && !(cache && cache.events)) { $('list').innerHTML = `<p class="text-sm text-gray-400 py-6 text-center">${esc(e.message)}</p>`; }
+            else showOffline(cache && cache.events ? cache : false);
+            if (!(cache && cache.events) && e.offline) $('list').innerHTML = `<div class="ch-empty"><span class="ch-empty__icon">${IC.off}</span><span class="ch-empty__title">You’re offline</span><p>Your events will appear here when you’re connected again.</p></div>`;
+            return;
+        } finally { booting = false; }
         const params = new URLSearchParams(location.search);
         const deep = params.get('event');
-        await load();
         render();
-        loadBirthdays();
+        loadBirthdays().catch(() => {});
         // "Add to calendar?" from a chat message opens the form already filled in.
         if (params.get('add') === '1') {
             openForm(null, /^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '') ? params.get('date') : null);

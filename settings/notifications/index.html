@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="ch-ui ch-refresh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -7,12 +7,18 @@
     <meta name="theme-color" content="#000000">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <title>Notifications</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/design.css">
+    <link rel="stylesheet" href="/design-extra.css">
     <script src="/theme.js"></script>
 
     <script src="/pwa.js" defer></script>
     <!-- Tailwind is only used by the shared passcode box -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
     <script src="../../passwords.js"></script>
     <script src="../../auth-gate.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -20,10 +26,14 @@
 </head>
 <body>
 <div id="app-root">
-    <header class="topbar"><div class="topbar-in">
-        <a class="back" href="/settings/" aria-label="Back to Settings">&#8592;</a>
-        <h1 class="serif">Notifications</h1>
-    </div></header>
+    <div class="ch-glow" aria-hidden="true"><i></i><i></i><i></i></div>
+    <header class="ch-header">
+        <div class="ch-header__bar">
+            <a class="ch-iconbtn" href="/settings/" aria-label="Back to Settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></a>
+            <span class="ch-header__small" aria-hidden="true">Notifications</span>
+        </div>
+        <h1 class="ch-header__title">Notifications</h1>
+    </header>
 
     <main class="wrap">
         <!-- Turn on / status -->
@@ -76,6 +86,14 @@
     try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || zone; } catch (e) {}
 
     // ---------- status card ----------
+    var IC = {
+        bell: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.27 21a2 2 0 0 0 3.46 0M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/></svg>',
+        check: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.34"/><path d="m9 11 3 3L22 4"/></svg>',
+        off: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.27 21a2 2 0 0 0 3.46 0M17 17H4a1 1 0 0 1-.74-1.67C4.59 13.96 6 12.5 6 8a6 6 0 0 1 .26-1.74M8.67 3.03A6 6 0 0 1 18 8c0 1.5.15 2.68.4 3.65M2 2l20 20"/></svg>',
+        phone: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg>',
+        info: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
+        warn: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3M12 9v4M12 17h.01"/></svg>'
+    };
     function card(bell, title, text, extra) {
         $('status-card').innerHTML = '<div class="bell" aria-hidden="true">' + bell + '</div><h3>' + title + '</h3><p>' + text + '</p>' + (extra || '');
     }
@@ -96,7 +114,7 @@
         try { st = await pwa.pushStatus(); } catch (e) { st = 'error'; }
         var el = $('status-card');
         if (st === 'disabled') {
-            card('&#128276;', 'Turn on notifications on this device?',
+            card(IC.bell, 'Turn on notifications on this device?',
                 'You&rsquo;ll hear about new family messages and @mentions, even when the app is closed. Your browser will ask you to confirm.',
                 '<div class="actions"><button type="button" class="btn solid" id="btn-yes">Yes, turn them on</button></div>');
             $('btn-yes').addEventListener('click', async function () {
@@ -104,14 +122,14 @@
                 b.disabled = true; b.textContent = 'Waiting for your browser…';
                 var r = await pwa.enablePush();   // opens the browser's own "Allow notifications?" box
                 if (r === 'enabled') {
-                    S.toast('Notifications are on ✓');
+                    S.toast('Notifications are on');
                     sendTest(true);
                 } else if (r === 'denied') S.toast('Notifications were blocked. You can change that in your browser.', true);
                 else S.toast('That didn’t work. Please try again.', true);
                 await paintStatus(); await paintDevices();
             });
         } else if (st === 'enabled') {
-            card('&#9989;', 'Notifications are on', 'This device will get the notifications you choose below.',
+            card(IC.check, 'Notifications are on', 'This device will get the notifications you choose below.',
                 '<div class="actions"><button type="button" class="btn" id="btn-test">Send me a test</button><button type="button" class="btn danger" id="btn-off">Turn off on this device</button></div>');
             $('btn-test').addEventListener('click', function () { sendTest(false); });
             $('btn-off').addEventListener('click', async function () {
@@ -121,19 +139,19 @@
                 await paintStatus(); await paintDevices();
             });
         } else if (st === 'denied') {
-            card('&#128683;', 'Notifications are blocked', 'Your browser is set to block notifications from Chowaniec, so the box can&rsquo;t appear. Switch it back on like this:', platformSteps(st));
+            card(IC.off, 'Notifications are blocked', 'Your browser is set to block notifications from Chowaniec, so the box can&rsquo;t appear. Switch it back on like this:', platformSteps(st));
         } else if (st === 'needs-install') {
-            card('&#128241;', 'Install the app first', 'On iPhone and iPad, notifications only work after Chowaniec is added to your home screen.', platformSteps(st));
+            card(IC.phone, 'Install the app first', 'On iPhone and iPad, notifications only work after Chowaniec is added to your home screen.', platformSteps(st));
         } else if (st === 'unsupported') {
-            card('&#128533;', 'This browser can&rsquo;t do notifications', 'Try Chrome, Edge, Firefox or Safari (added to your home screen on iPhone).');
+            card(IC.info, 'This browser can&rsquo;t do notifications', 'Try Chrome, Edge, Firefox or Safari (added to your home screen on iPhone).');
         } else if (st === 'not-configured') {
             var info = await pwa.serverInfo();
             var miss = (info.missing || []).map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(' and ');
-            card('&#128679;', 'Notifications aren&rsquo;t set up on the server yet',
+            card(IC.info, 'Notifications aren&rsquo;t set up on the server yet',
                 miss ? 'The website can&rsquo;t see ' + miss + '. In Netlify, open <b>Site configuration &rarr; Environment variables</b>, make sure each one is available to <b>Functions</b> for <b>Production</b>, then press <b>Deploys &rarr; Trigger deploy</b>. Netlify only applies changes to new deploys.' :
                 'The server isn&rsquo;t reporting its notification keys. Try again in a minute.');
         } else {
-            card('&#9888;&#65039;', 'Couldn&rsquo;t check right now', 'Your connection or sign-in may have hiccuped.',
+            card(IC.warn, 'Couldn&rsquo;t check right now', 'Your connection or sign-in may have hiccuped.',
                 '<div class="actions"><button type="button" class="btn solid" id="btn-retry">Try again</button></div>');
             $('btn-retry').addEventListener('click', paintStatus);
         }
@@ -162,7 +180,7 @@
             try {
                 var r = await S.api('/.netlify/functions/settings', { method: 'POST', body: { settings: send } });
                 settings = r.settings;
-                S.toast('Saved ✓');
+                S.toast('Saved');
             } catch (e) { S.toast(e.message, true); }
         }, 250);
     }

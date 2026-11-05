@@ -20,6 +20,7 @@ import { sendPush } from './push.mjs';
 import { aiConfigured, aiClient, textOf } from './ai.mjs';
 import { cardInfo } from './games-cards.mjs';
 import { whyBlocked } from './ai-policy.mjs';
+import { xpForNight } from './xp.mjs';
 
 const store = () => getStore({ name: 'games', consistency: 'strong' });
 const NIGHT_ID = /^[a-f0-9]{12}$/;
@@ -321,6 +322,7 @@ async function finishNight(night) {
   for (const name of night.champions) {
     await giveTrophy(name, { title: 'Game night champion', night: night.id, room: night.room }).catch((e) => console.error('Trophy failed:', e.message));
   }
+  await xpForNight(night).catch((e) => console.error('Game night XP failed:', e.message));
   const text = await wrapUpText(night);
   await changeNight(night.id, (n) => { n.wrap = text; });
   const message = await postMessage({ author: AI_NAME, kind: 'ai', room: night.room, text, gamenight: { id: night.id, view: 'wrap' } });

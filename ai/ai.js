@@ -33,6 +33,17 @@
         { icon: 'bell-ring', title: 'Remind someone', sub: 'Nudge a family member', insert: '/remind @' }
     ];
 
+    // Memory Keeper starters: questions about family life (answers cite the chat, note or event they came from).
+    const MEMORY_QUESTIONS = [
+        'When did we last go to the lake?',
+        'What did Grandma say about the recipe?',
+        'Who won game night in October?',
+        'What did we decide about the summer trip?',
+        'Who holds the Kart Party record?'
+    ];
+    const SOURCE_ICONS = { chat: 'message-circle', note: 'file-text', event: 'calendar-days', gamenight: 'trophy', record: 'medal' };
+    const SOURCE_KIND = { chat: 'Chat message', note: 'Note', event: 'Calendar event', gamenight: 'Game night', record: 'Game record' };
+
     const state = {
         user: null,
         people: [],
@@ -379,8 +390,8 @@
             if (conv.title) upsertConversation(id, conv.title, false);
             const all = conv.messages || [];
             all.forEach((m, i) => {
-                if (m.role === 'user') addUserMessage(m.text || '', null);
-                else addAssistantFinal(m.text || '', m.actions || [], i === all.length - 1 ? m.quickAnswers : null);
+                if (m.role === 'user') addUserMessage(m.text || '', null, { voice: !!m.voice });
+                else addAssistantFinal(m.text || '', m.actions || [], i === all.length - 1 ? m.quickAnswers : null, m.sources);
             });
             updateWelcome();
             scrollToBottom(true);
@@ -467,7 +478,8 @@
         if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
     }
 
-    function addUserMessage(text, command) {
+    const MIC_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>';
+    function addUserMessage(text, command, opts) {
         let cmd = command;
         let body = String(text || '');
         if (!cmd) {
@@ -490,6 +502,14 @@
             chip.setAttribute('data-cmd-chip', cmd);
             bubble.appendChild(chip);
         }
+        if (opts && opts.voice) {
+            const tag = document.createElement('span');
+            tag.className = 'voice-tag';
+            tag.setAttribute('data-voice-tag', '');
+            tag.title = 'Spoken';
+            tag.innerHTML = MIC_SVG + '<span class="sr-only-label">Spoken: </span>';
+            bubble.appendChild(tag);
+        }
         appendTokenized(bubble, body);
         row.appendChild(bubble);
         $('messages').appendChild(row);
@@ -508,6 +528,7 @@
                 <div data-slot="tools" class="hidden flex-wrap gap-2"></div>
                 <div data-slot="typing" class="hidden typing-dots items-center gap-1 h-7"><span></span><span></span><span></span></div>
                 <div data-slot="body" class="md-preview"></div>
+                <div data-slot="sources" class="hidden flex-wrap gap-2" aria-label="Sources"></div>
                 <div data-slot="error" class="hidden"></div>
                 <div data-slot="actions" class="hidden flex-wrap gap-2"></div>
                 <div data-slot="quick" class="hidden flex-wrap gap-2" role="group" aria-label="Quick answers"></div>
@@ -521,6 +542,7 @@
             tools: slot('tools'),
             typing: slot('typing'),
             body: slot('body'),
+            sources: slot('sources'),
             error: slot('error'),
             actions: slot('actions'),
             quick: slot('quick'),
@@ -529,6 +551,93 @@
             toolChips: []
         };
     }
+
+    function sourceDate(when) {
+        const s = String(when || '');
+        const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
+        if (isNaN(d.getTime())) return '';
+        const sameYear = d.getFullYear() === new Date().getFullYear();
+        return d.toLocaleDateString('en-US', Object.assign({ month: 'short', day: 'numeric' }, sameYear ? {} : { year: 'numeric' }));
+    }
+
+    // Small tappable chips under a memory answer: icon + title + date, numbered like the [n] marks in the text.
+    function renderSources(view, sources) {
+        const list = (Array.isArray(sources) ? sources : []).filter((x) => x && x.title && safeUrl(x.url));
+        view.sources.innerHTML = '';
+        view.sourceList = list;
+        if (!list.length) {
+            view.sources.classList.add('hidden');
+            view.sources.classList.remove('flex');
+            return;
+        }
+        list.forEach((src) => {
+            const a = document.createElement('a');
+            a.href = safeUrl(src.url);
+            a.className = 'src-chip fade-in';
+            a.setAttribute('data-source', src.type || '');
+            const date = sourceDate(src.when);
+            a.setAttribute('aria-label', `Source ${src.n}: ${SOURCE_KIND[src.type] || 'Source'}, ${src.title}${date ? ', ' + date : ''}`);
+            a.title = `${SOURCE_KIND[src.type] || 'Source'}: ${src.title}`;
+            const n = document.createElement('span');
+            n.className = 'src-n';
+            n.textContent = String(src.n);
+            a.appendChild(n);
+            const ic = document.createElement('i');
+            ic.setAttribute('data-lucide', SOURCE_ICONS[src.type] || 'file-text');
+            a.appendChild(ic);
+            const t = document.createElement('span');
+            t.className = 'src-t';
+            t.textContent = src.title;
+            a.appendChild(t);
+            if (date) {
+                const d = document.createElement('span');
+                d.className = 'src-d';
+                d.textContent = date;
+                a.appendChild(d);
+            }
+            view.sources.appendChild(a);
+        });
+        view.sources.classList.remove('hidden');
+        view.sources.classList.add('flex');
+        linkCitations(view.body, list);
+        icons();
+    }
+
+    // Turns the [1] [2] marks in a rendered answer into small links to their sources.
+    function linkCitations(root, sources) {
+        const byN = new Map(sources.map((x) => [String(x.n), x]));
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => (node.parentElement && node.parentElement.closest('a, code, pre') ? NodeFilter.FILTER_REJECT : /\[\d{1,2}\]/.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT)
+        });
+        const nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        nodes.forEach((node) => {
+            const frag = document.createDocumentFragment();
+            let last = 0;
+            const text = node.nodeValue;
+            text.replace(/\[(\d{1,2})\]/g, (all, n, at) => {
+                const src = byN.get(n);
+                if (!src) return all;
+                if (at > last) frag.appendChild(document.createTextNode(text.slice(last, at)));
+                const a = document.createElement('a');
+                a.className = 'cite';
+                a.href = safeUrl(src.url);
+                a.textContent = n;
+                a.setAttribute('data-cite', n);
+                a.setAttribute('aria-label', `Source ${n}: ${src.title}`);
+                a.title = src.title;
+                frag.appendChild(a);
+                last = at + all.length;
+                return all;
+            });
+            if (last === 0) return;
+            if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+            node.parentNode.replaceChild(frag, node);
+        });
+    }
+
+    // While streaming, the model's raw [m3] refs are hidden; the final text has them as [1], [2]...
+    const hideRawRefs = (t) => String(t || '').replace(/\s?\[m\d+(?:\s*,\s*m\d+)*\]/g, '');
 
     function renderActions(view, actions) {
         const list = (actions || []).filter((a) => a && a.label && safeUrl(a.url));
@@ -643,10 +752,11 @@
         icons();
     }
 
-    function addAssistantFinal(text, actions, quickAnswers) {
+    function addAssistantFinal(text, actions, quickAnswers, sources) {
         const view = assistantShell();
         view.text = String(text || '');
         setMarkdownHtml(view.body, view.text);
+        renderSources(view, sources);
         renderActions(view, actions);
         renderQuickAnswers(view, quickAnswers);
         if (view.text) renderFooter(view);
@@ -842,7 +952,7 @@
         view.renderTimer = setTimeout(() => {
             view.renderTimer = null;
             const stick = nearBottom();
-            setMarkdownHtml(view.body, view.text);
+            setMarkdownHtml(view.body, hideRawRefs(view.text));
             view.body.classList.add('streaming-caret');
             if (stick) scrollToBottom(true);
         }, 70);
@@ -851,7 +961,7 @@
     function flushRender(view) {
         clearTimeout(view.renderTimer);
         view.renderTimer = null;
-        setMarkdownHtml(view.body, view.text);
+        setMarkdownHtml(view.body, hideRawRefs(view.text));
         view.body.classList.remove('streaming-caret');
     }
 
@@ -906,10 +1016,12 @@
                     view.typing.classList.remove('flex');
                     view.text += evt.text;
                     scheduleRender(view);
+                    if (ctx.hooks && ctx.hooks.onText) ctx.hooks.onText(view.text);
                 }
                 break;
             case 'tool':
                 toolChip(view, evt.name, evt.label);
+                if (ctx.hooks && ctx.hooks.onTool) ctx.hooks.onTool(evt.label || '');
                 scrollToBottom(false);
                 break;
             case 'tool_result':
@@ -920,14 +1032,18 @@
                 const msg = evt.message || {};
                 if (typeof msg.text === 'string' && msg.text) view.text = msg.text;
                 flushRender(view);
+                renderSources(view, msg.sources);
                 renderActions(view, msg.actions);
                 renderQuickAnswers(view, msg.quickAnswers);
                 ctx.actions = msg.actions || [];
-                if (view.text && (voiceOn() || voiceOnce())) speakText(view.text);
+                ctx.message = msg;
+                // Voice mode speaks the reply itself (first sentences, lip sync); don't read it twice.
+                if (view.text && !ctx.voice && (voiceOn() || voiceOnce())) speakText(view.text);
                 break;
             }
             case 'error':
                 ctx.errored = true;
+                ctx.errorText = evt.error || 'Something went wrong.';
                 flushRender(view);
                 showStreamError(view, evt.error || 'Something went wrong.', true);
                 break;
@@ -949,7 +1065,7 @@
         const streamState = { controller, view, stopped: false };
         state.stream = streamState;
         setStreamingUi(true);
-        const ctx = { done: false, errored: false, actions: [] };
+        const ctx = { done: false, errored: false, actions: [], hooks: request.hooks || null, voice: !!request.voice, message: null, errorText: '', stopped: false };
 
         const body = { message: request.message };
         if (request.conversationId) body.conversationId = request.conversationId;
@@ -957,6 +1073,7 @@
         if (request.references && request.references.length) body.references = request.references;
         if (request.mentions && request.mentions.length) body.mentions = request.mentions;
         body.chat = chatChoice();
+        if (request.voice) body.voice = true;
 
         try {
             const res = await fetch(AGENT_URL, {
@@ -1005,6 +1122,7 @@
                 }
             }
             if (!ctx.done && !ctx.errored) {
+                ctx.errorText = view.text ? 'The response was cut off.' : 'No response from the assistant.';
                 flushRender(view);
                 showStreamError(view, view.text ? 'The response was cut off.' : 'No response from the assistant.', true);
                 ctx.errored = true;
@@ -1013,6 +1131,8 @@
             flushRender(view);
             view.typing.classList.add('hidden');
             view.typing.classList.remove('flex');
+            ctx.errorText = e && e.name === 'AbortError' ? 'Stopped.' : (e && e.status ? e.message : 'Could not reach the assistant. Check your connection.');
+            ctx.stopped = !!(e && e.name === 'AbortError');
             if (e && e.name === 'AbortError') {
                 const note = document.createElement('p');
                 note.className = 'text-[10px] font-mono uppercase tracking-widest text-gray-400';
@@ -1051,6 +1171,7 @@
             icons();
             scrollToBottom(false);
         }
+        return ctx;
     }
 
     // --- COMMAND PARSING & SEND ---
@@ -1566,6 +1687,62 @@
         window.addEventListener('resize', autoGrow);
     }
 
+    // ---------- Voice mode: talk to Bob (see /voice.js) ----------
+    let voicePanel = null;
+    // One spoken (or typed-in-the-panel) turn, shown in the chat like any other.
+    async function voiceAsk(text, hooks) {
+        if (state.stream) return { error: 'I’m still answering. One moment.' };
+        closeAutocomplete();
+        addUserMessage(text, null, { voice: hooks && hooks.spoken });
+        scrollToBottom(true);
+        const ctx = await runStream({
+            conversationId: state.convId || undefined,
+            message: text,
+            mentions: collectMentions(text),
+            references: [],
+            voice: !!(hooks && hooks.spoken),
+            hooks
+        });
+        if (ctx.done && ctx.message) {
+            return { text: ctx.message.text || '', quickAnswers: ctx.message.quickAnswers || null, sources: ctx.message.sources || [], actions: ctx.message.actions || [] };
+        }
+        return { error: ctx.errorText || 'Something went wrong. Try again.', stopped: ctx.stopped };
+    }
+    function ensureVoicePanel() {
+        if (voicePanel || !window.BobVoice) return voicePanel;
+        voicePanel = window.BobVoice.mountPanel({
+            // On a phone the sheet covers the chat, so it shows the sources and links itself.
+            variant: 'sheet', showExtras: () => !isDesktop(), openInAi: false, ask: voiceAsk,
+            onOpen: () => { document.body.classList.add('voice-open'); ['btn-mic', 'btn-talk'].forEach((id) => { const b = $(id); if (b) b.setAttribute('aria-expanded', 'true'); }); },
+            onClose: () => { document.body.classList.remove('voice-open'); ['btn-mic', 'btn-talk'].forEach((id) => { const b = $(id); if (b) b.setAttribute('aria-expanded', 'false'); }); },
+            onState: (st) => {
+                const b = $('btn-mic');
+                if (b) b.classList.toggle('text-emerald-600', st === 'listening');
+            }
+        });
+        ['btn-mic', 'btn-talk'].forEach((id) => { const b = $(id); if (b) { b.setAttribute('aria-controls', voicePanel.el.id); b.setAttribute('aria-haspopup', 'dialog'); } });
+        return voicePanel;
+    }
+    // Runs inside the tap: iOS only lets a page start listening from a user gesture.
+    function talkToBob() {
+        const v = ensureVoicePanel();
+        if (!v) { toast('Voice mode couldn’t load. You can type instead.', 'error'); return; }
+        if (v.open && v.session.state !== 'idle') { v.session.tap(); return; }
+        v.talk();
+    }
+
+    function renderMemories() {
+        const row = $('memory-row');
+        if (!row) return;
+        row.innerHTML = MEMORY_QUESTIONS.map((q, i) => `<button type="button" data-memory="${i}" class="memory-q px-4 py-2 rounded-2xl border border-gray-200 bg-white text-sm text-gray-700 hover:border-black hover:text-black transition-colors">${escapeHtml(q)}</button>`).join('');
+        row.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-memory]');
+            if (!b || state.stream) return;
+            $('composer-input').value = MEMORY_QUESTIONS[Number(b.getAttribute('data-memory'))];
+            send();
+        });
+    }
+
     let started = false;
     // ---------- which group chat the AI posts to (the one without Emilia unless you change it) ----------
     const CHAT_KEY = 'chowaniec_ai_chat';
@@ -1608,8 +1785,11 @@
         if (hb && window.ChowaniecRobot) hb.innerHTML = window.ChowaniecRobot.face();
         renderUserChip();
         renderSuggestions();
+        renderMemories();
         renderConversations();
         autoGrow();
+        ensureVoicePanel();
+        ['btn-mic', 'btn-talk'].forEach((id) => { const b = $(id); if (b) b.addEventListener('click', talkToBob); });
 
         const deepId = new URLSearchParams(window.location.search).get('c');
         const listPromise = loadConversations();
@@ -1630,7 +1810,8 @@
 
     // Test/debug hook (read-only view of state).
     window.ChowaniecAI = {
-        state: () => ({ convId: state.convId, refs: state.refs.slice(), streaming: !!state.stream, people: state.people.slice() })
+        state: () => ({ convId: state.convId, refs: state.refs.slice(), streaming: !!state.stream, people: state.people.slice() }),
+        voice: () => voicePanel
     };
 
     window.returnToHub = function () {

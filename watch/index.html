@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#0b0a10">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <title>Watch party · Chowaniec</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="/theme.css">
+    <script src="/theme.js"></script>
+    <script src="/pwa.js" defer></script>
+    <!-- Tailwind is not needed by the passcode box any more; kept (deferred) for any utility classes -->
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <script src="/passwords.js"></script>
+    <script src="/auth-gate.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="/watch/watch.css">
+</head>
+<body class="cw-page">
+    <div id="app-root"></div>
+    <script src="/watch/watch.js"></script>
+    <script>
+        (function () {
+            var mounted = null;
+            window.initializeProtectedContent = function () {
+                if (mounted) return;
+                var root = document.getElementById('app-root');
+                var id = new URLSearchParams(location.search).get('p');
+                if (id && /^(?:[a-f0-9]{10}|m[a-f0-9]{15})$/.test(id)) {
+                    document.body.classList.add('cw-in-party');
+                    mounted = window.ChowWatch.mountParty(root, { id: id });
+                } else {
+                    mounted = true;
+                    window.ChowWatch.mountStart(root);
+                }
+            };
+            function boot() { if (window.isAppAuthorized && window.isAppAuthorized()) window.initializeProtectedContent(); }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+        })();
+    </script>
+</body>
+</html>

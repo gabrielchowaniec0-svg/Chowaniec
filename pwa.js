@@ -360,6 +360,7 @@
     add('/polish.js');
     add('/quickjump.js');
     add('/calls.js');
+    add('/appnav.js');
     if (/^\/(group|notes|calendar|lists)(\/|$)/.test(location.pathname)) add('/robot-float.js');
   })();
 
@@ -370,4 +371,112 @@
       changed();
     }).catch(() => {});
   }
+
+  // ---------- Haptics everywhere ----------
+  // /haptics.js gives ChowaniecHaptics.tap/selection/success/warning. One shared listener buzzes for:
+  //   [data-haptic="tap|selection|success|warning|medium|off"] on any element (or an ancestor),
+  //   checkboxes, radios and [role=switch] toggles (selection), and send/submit buttons (tap).
+  // Pages that buzz themselves don't double up: haptics.js merges calls that come within 45 ms.
+  (function haptics() {
+    if (!window.ChowaniecHaptics) {
+      const el = document.createElement('script');
+      el.src = '/haptics.js';
+      el.async = true;
+      document.head.appendChild(el);
+    }
+    const H = () => window.ChowaniecHaptics;
+    const SEND = 'button[type="submit"],input[type="submit"],#btn-send,[data-act="send"],[aria-label^="Send" i]';
+    document.addEventListener('click', (e) => {
+      const h = H();
+      if (!h || !e.isTrusted || !e.target || !e.target.closest) return;
+      const tagged = e.target.closest('[data-haptic]');
+      if (tagged) {
+        const kind = tagged.getAttribute('data-haptic') || 'tap';
+        if (kind === 'off') return;
+        if (typeof h[kind] === 'function' && kind !== 'enabled') h[kind](); else h.tap(kind);
+        return;
+      }
+      if (e.target.closest('[role="switch"],[role="tab"],[aria-pressed]')) { h.selection(); return; }
+      const send = e.target.closest(SEND);
+      if (send && !send.disabled) h.tap('light');
+    }, true);
+    document.addEventListener('change', (e) => {
+      const h = H();
+      const t = e.target;
+      if (!h || !e.isTrusted || !t || t.closest && t.closest('[data-haptic="off"]')) return;
+      if (t.matches && t.matches('input[type="checkbox"],input[type="radio"],input[type="range"],select')) h.selection();
+    }, true);
+  })();
+
+  // ---------- Unread count on the app icon ----------
+  // GET /.netlify/functions/unread -> { total, chats: { <room>: n }, dms: n }. The total goes on the home-screen icon
+  // (Badging API; the service worker also sets it from push payloads while the app is closed). Refreshed when the
+  // app comes to the front, every minute while it is in front, and when a chat page reports it read something
+  // (window event 'chowaniec-chat-read'). Each answer is also sent as a 'chowaniec-unread' window event
+  // (detail = the counts) and kept in ChowaniecBadge.last, so other parts of the page can show it without asking again.
+  (function badge() {
+    const API = '/.netlify/functions/unread';
+    const MIN_GAP_MS = 4000;
+    let lastAt = 0;
+    let inFlight = null;
+    let again = false;
+
+    function apply(total) {
+      const n = Math.max(0, Number(total) || 0);
+      try {
+        if (n > 0 && navigator.setAppBadge) navigator.setAppBadge(n).catch(() => {});
+        else if (n === 0 && navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
+      } catch (e) { /* not supported */ }
+    }
+
+    async function refresh(fresh) {
+      const user = window.getChowaniecUser ? window.getChowaniecUser() : null;
+      if (!user || !user.key || user.name === 'Guest') return null;
+      if (inFlight) { if (fresh) again = true; return inFlight; }
+      if (!fresh && Date.now() - lastAt < MIN_GAP_MS) return window.ChowaniecBadge.last;
+      lastAt = Date.now();
+      inFlight = (async () => {
+        try {
+          const res = await fetch(API + (fresh ? '?fresh=1' : ''), { headers: authHeaders(), cache: 'no-store' });
+          if (!res.ok) return null;
+          const data = await res.json();
+          window.ChowaniecBadge.last = data;
+          apply(data.total);
+          dispatching = true;
+          try { window.dispatchEvent(new CustomEvent('chowaniec-unread', { detail: data })); } finally { dispatching = false; }
+          return data;
+        } catch (e) {
+          return null;   // offline: keep whatever the icon shows
+        } finally {
+          inFlight = null;
+          if (again) { again = false; setTimeout(() => refresh(true), 0); }
+        }
+      })();
+      return inFlight;
+    }
+
+    window.ChowaniecBadge = { last: null, refresh, set: apply };
+    // The tab bar (/appnav.js) polls /unread too and announces it with the same event: use its number instead
+    // of asking again.
+    let dispatching = false;
+    window.addEventListener('chowaniec-unread', (e) => {
+      if (dispatching || !e.detail || typeof e.detail.total !== 'number') return;
+      lastAt = Date.now();
+      apply(e.detail.total);
+    });
+    let readTimer = null;
+    window.addEventListener('chowaniec-chat-read', () => {
+      clearTimeout(readTimer);
+      readTimer = setTimeout(() => refresh(true), 400);
+    });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(false); });
+    window.addEventListener('focus', () => refresh(false));
+    window.addEventListener('online', () => refresh(true));
+    setInterval(() => { if (document.visibilityState === 'visible') refresh(false); }, 60000);
+    let tries = 0;
+    (function first() {
+      if (window.getChowaniecUser && window.getChowaniecUser()) refresh(false);
+      else if (tries++ < 30) setTimeout(first, 1000);
+    })();
+  })();
 })();

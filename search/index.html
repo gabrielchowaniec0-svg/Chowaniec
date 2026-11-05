@@ -1,47 +1,78 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="ch-ui ch-refresh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="theme-color" content="#000000">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <script src="/pwa.js" defer></script>
     <title>Chowaniec Search</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/design.css">
+    <link rel="stylesheet" href="/design-extra.css">
     <script src="/theme.js"></script>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js" defer></script>
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
-        body { font-family: 'Outfit', sans-serif; background-color: var(--bg); color: var(--text); }
-        .font-serif { font-family: 'Playfair Display', serif; }
+        :root { --ch-page-w: 768px; }
+        body { font-family: var(--ch-font-ui); background-color: var(--bg); color: var(--text); }
+        .font-serif { font-family: var(--ch-font-display); }
         .gone { display: none !important; }
-        .hit { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; text-decoration: none; color: inherit; }
-        .hit:hover { border-color: var(--line-strong); }
-        .hit mark { background: var(--warn-bg); color: inherit; outline: 1px solid var(--warn-line); border-radius: 3px; padding: 0 1px; }
+        .sr-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+        .sr-box { display: flex; align-items: center; gap: 6px; padding: 5px 5px 5px 16px; border-radius: var(--ch-r-full); background: var(--ch-glass-strong); -webkit-backdrop-filter: var(--ch-glass-blur); backdrop-filter: var(--ch-glass-blur); border: 1px solid var(--ch-line-strong); box-shadow: var(--ch-shadow-2); transition: border-color var(--ch-dur-2) ease, box-shadow var(--ch-dur-2) ease; }
+        .sr-box:focus-within { border-color: var(--ch-accent); box-shadow: var(--ch-shadow-2), var(--ch-focus); }
+        .sr-box__ic { width: 20px; height: 20px; color: var(--ch-muted); flex: none; }
+        .sr-box input { flex: 1; min-width: 0; min-height: 44px; border: 0; background: transparent; color: var(--ch-text); font: 400 17px/1.3 var(--ch-font-ui); outline: none; }
+        .sr-box input::-webkit-search-cancel-button { cursor: pointer; }
+        #results { display: grid; gap: 28px; }
+        .sr-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .sr-head h2 { font: 600 var(--ch-t-lg)/1.2 var(--ch-font-ui); flex: 1; }
+        .sr-ic { width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: var(--c, var(--ch-accent)); box-shadow: inset 0 -2px 0 rgba(0,0,0,.14), 0 6px 12px -6px var(--c, var(--ch-accent)); }
+        .sr-ic--notes { --c: #d97706; } .sr-ic--chats { --c: #0d9488; } .sr-ic--events { --c: #e11d48; } .sr-ic--meetings { --c: #0284c7; }
+        .sr-list { background: var(--ch-surface); border: 1px solid var(--ch-line); border-radius: var(--ch-r-lg); box-shadow: var(--ch-shadow-2); overflow: hidden; }
+        .hit { display: flex; align-items: center; gap: 12px; padding: 14px 16px; text-decoration: none; color: inherit; transition: background-color var(--ch-dur-1) ease; }
+        .hit + .hit { border-top: 1px solid var(--ch-line); }
+        .hit:hover { background: color-mix(in srgb, var(--ch-surface-2) 70%, transparent); }
+        .hit:focus-visible { outline: none; box-shadow: inset var(--ch-focus); }
+        .hit-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+        .hit-title { font-weight: 600; font-size: 15px; }
+        .hit-sub { font-size: 14px; color: var(--ch-text-2); line-height: 1.45; overflow-wrap: anywhere; }
+        .hit-meta { font-size: 12px; color: var(--ch-muted); }
+        .hit-chev { width: 18px; height: 18px; color: var(--ch-faint); flex: none; }
+        .hit mark { background: var(--mark, var(--warn-bg)); color: var(--mark-fg, inherit); border-radius: 4px; padding: 0 2px; }
         .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
-    <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
-        <div class="max-w-3xl mx-auto px-4 h-16 flex items-center gap-3">
-            <div class="w-8 h-8 shrink-0 bg-black rounded-full flex items-center justify-center text-white text-xs">CN</div>
-            <div class="font-serif tracking-wide text-xl whitespace-nowrap">Chowaniec <span class="text-gray-400 italic font-light text-base">Search</span></div>
+    <div class="ch-glow" aria-hidden="true"><i></i><i></i><i></i></div>
+    <header class="ch-header">
+        <div class="ch-header__bar">
+            <a class="ch-iconbtn" href="/" aria-label="Back to home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></a>
+            <span class="ch-header__small" aria-hidden="true">Search</span>
         </div>
+        <h1 class="ch-header__title">Search</h1>
+        <p class="ch-header__sub">Notes, group chats, meetings and the calendar, all in one place.</p>
     </header>
 
-    <main class="flex-1 max-w-3xl mx-auto px-4 py-6 pb-28 w-full space-y-6">
-        <form id="form" role="search" class="flex gap-2">
-            <label for="q" class="sr-only">Search everything</label>
-            <input id="q" name="q" type="search" autocomplete="off" maxlength="100" class="flex-1 min-w-0 min-h-[50px] bg-white border border-gray-200 rounded-xl px-4 outline-none focus:border-black text-base">
-            <button type="submit" class="shrink-0 min-h-[50px] px-6 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800">Search</button>
+    <main class="flex-1 max-w-3xl mx-auto px-4 pt-4 pb-10 w-full space-y-6">
+        <form id="form" role="search" class="sr-form">
+            <label for="q" class="ch-label">Search everything</label>
+            <div class="sr-box">
+                <i data-lucide="search" class="sr-box__ic"></i>
+                <input id="q" name="q" type="search" autocomplete="off" maxlength="100">
+                <button type="submit" class="ch-btn ch-btn--primary">Search</button>
+            </div>
         </form>
-        <p id="status" class="text-xs font-mono uppercase tracking-widest text-gray-400" role="status" aria-live="polite"></p>
-        <div id="results" class="space-y-8"></div>
+        <p id="status" class="ch-eyebrow" role="status" aria-live="polite"></p>
+        <div id="results"></div>
     </main>
 
     <div id="signin-modal" class="gone fixed inset-0 bg-black/40 z-[80] flex items-center justify-center p-4">
@@ -51,9 +82,6 @@
         </div>
     </div>
 
-    <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-6 right-6 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full flex items-center justify-center text-gray-600 hover:text-black z-50">
-        <i data-lucide="arrow-left" class="w-5 h-5"></i>
-    </button>
     <script src="search.js"></script>
 </body>
 </html>

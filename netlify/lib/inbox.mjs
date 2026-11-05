@@ -15,6 +15,7 @@ export function actionsFor(url) {
   const u = String(url || '/');
   if (/^\/games\/[\w-]+\/\?s=/.test(u)) return [{ label: 'Join game', url: u, icon: 'gamepad' }];
   if (/^\/meet\/\?room=/.test(u)) return [{ label: 'Join meeting', url: u, icon: 'video' }];
+  if (/^\/watch\/\?p=/.test(u)) return [{ label: 'Join watch party', url: u, icon: 'video' }];
   if (/^\/group\//.test(u)) return [{ label: 'Reply', reply: true, icon: 'reply' }, { label: 'Open chat', url: u, icon: 'chat' }];
   if (/^\/calendar\//.test(u)) return [{ label: 'View event', url: u, icon: 'calendar' }];
   if (/^\/notes\//.test(u)) return [{ label: 'Open note', url: u, icon: 'externalLink' }];
@@ -25,7 +26,7 @@ export function actionsFor(url) {
 function kindOf(url) {
   const u = String(url || '');
   if (u.startsWith('/games/')) return 'game';
-  if (u.startsWith('/meet/')) return 'meeting';
+  if (u.startsWith('/meet/') || u.startsWith('/watch/')) return 'meeting';
   if (u.startsWith('/group/')) return 'message';
   if (u.startsWith('/calendar/')) return 'event';
   return 'other';

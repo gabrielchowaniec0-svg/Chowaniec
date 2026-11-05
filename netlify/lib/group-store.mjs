@@ -194,7 +194,14 @@ export async function postMessage({ author, text, image, replyTo, kind = 'user',
   };
   await messages().setJSON(keyOf(message.id, room), message, { onlyIfNew: true });
   if (thread) await bumpThread(thread, room, author, message.createdAt);
+  if (kind === 'user') familyXp('xpForChat', author, message.createdAt);
   return message;
+}
+
+// Family XP (chat streaks, reactions received): fire-and-forget, never awaited, never throws, so it can't slow
+// down or break posting. Loaded lazily (xp.mjs imports this file).
+function familyXp(fn, ...args) {
+  try { import('./xp.mjs').then((m) => m[fn](...args)).catch(() => {}); } catch (e) { /* never mind */ }
 }
 
 // Changes a stored message with `change(message)` (return false to leave it). Returns the message or null.
@@ -292,11 +299,13 @@ export async function toggleReaction(id, user, emoji, room = DEFAULT_ROOM) {
     if (!found) return null;
     const message = found.message;
     const people = new Set(message.reactions[emoji] || []);
+    const added = !people.has(user);
     if (people.has(user)) people.delete(user);
     else people.add(user);
     if (people.size) message.reactions[emoji] = [...people];
     else delete message.reactions[emoji];
     const { modified } = await messages().setJSON(keyOf(id, room), message, { onlyIfMatch: found.etag });
+    if (modified && added && (message.kind || 'user') === 'user') familyXp('xpForReaction', message.user, user, id);
     if (modified) return message;
   }
   throw Object.assign(new Error('Too many reactions at once. Try again.'), { status: 409 });

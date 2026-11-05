@@ -6,6 +6,8 @@
 //   window.ChowaniecRobot.face(cls, opts)    -> small inline SVG face (profile pictures)
 //   window.ChowaniecRobot.mascot(opts)       -> HTML for the animated robot (see robot.css); states via data-state:
 //                                               asleep | idle | listening | thinking | talking | celebrate
+//                                               (voice.js also sets --lvl / data-meter for the ears, data-sync + --mouth
+//                                               for lip sync and data-wake while "Hey Bob" is on)
 //   window.ChowaniecRobot.mountPicker(el, {onChange}) -> full picker UI with a live animated preview
 //   window.ChowaniecRobot.effective(prefs?)  -> accessory ids actually worn (includes seasonal extras)
 //   window.ChowaniecRobot.season()           -> 'autumn' | 'winter' | 'spring' | 'summer' | 'halloween' | 'christmas'
@@ -390,6 +392,8 @@
     return s;
   }
 
+  // Sound waves either side of the head: they glow and pulse with the mic level while the robot listens (voice.js).
+  const EARS = `<svg class="bob-ears" viewBox="0 0 120 130" aria-hidden="true" focusable="false"><path class="e1" d="M21 36 Q13 46 21 56"/><path class="e2" d="M13 29 Q1 46 13 63"/><path class="e1" d="M99 36 Q107 46 99 56"/><path class="e2" d="M107 29 Q119 46 107 63"/></svg>`;
   function mascot(opts) {
     const o = opts || {};
     const cfg = resolve(o);
@@ -399,7 +403,7 @@
     <div class="bob-fx" aria-hidden="true">${fxInner(cfg)}</div>
     <div class="bob-bubbles" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="bob-say hidden" role="status"></div>
-    <svg class="bob-svg" viewBox="0 0 120 130" aria-hidden="true" focusable="false">${mascotInner(cfg)}</svg></div>`;
+    <svg class="bob-svg" viewBox="0 0 120 130" aria-hidden="true" focusable="false">${mascotInner(cfg)}</svg>${EARS}</div>`;
   }
   const vb = (t) => { const q = t.split(' '); return `${q[0]} ${q[1]} ${q[2]} ${q[2]}`; };
   function face(cls, opts) {

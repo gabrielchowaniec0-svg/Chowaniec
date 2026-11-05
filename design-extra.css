@@ -1,0 +1,98 @@
+/* =====================================================================================================
+   Chowaniec design system – page refresh layer  (/design-extra.css)
+   -----------------------------------------------------------------------------------------------------
+   Loaded after /design.css by the app pages (notes, calendar, lists, messages, settings, search, AI,
+   get-the-app, trophies…). Opt in with class="ch-ui ch-refresh" on <html>. It adds:
+     --ch-page-w            the page's content width; the large-title header lines up with it
+     .ch-glow               soft accent glow behind the top of the page (like the home dashboard)
+                            <div class="ch-glow" aria-hidden="true"><i></i><i></i><i></i></div>
+     .ch-header__bar        aligned to --ch-page-w on wide screens
+     .ch-banner             inline status banner (+ --warn / --offline), icon + text + optional action
+     .ch-check              round, accent-filled checkbox (input type=checkbox class="ch-check")
+     Tailwind harmonisation  older pages built with Tailwind utilities pick up the system's radius, layered
+                            shadows, frosted overlays, focus rings and eyebrow type – no markup changes needed.
+   Every colour comes from the theme engine (theme.js) via the --ch-* tokens in /theme.css.
+   ===================================================================================================== */
+
+:root { --ch-page-w: 1080px; }
+
+/* ---------- page canvas ---------- */
+html.ch-refresh { overflow-x: hidden; }
+html.ch-refresh body { position: relative; isolation: isolate; overflow-x: clip; }
+.ch-glow { position: absolute; z-index: -1; top: 0; left: 0; right: 0; height: 460px; pointer-events: none; overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 30%, transparent); mask-image: linear-gradient(#000 30%, transparent); }
+.ch-glow i { position: absolute; border-radius: 50%; filter: blur(64px); opacity: .5; }
+.ch-glow i:nth-child(1) { width: 380px; height: 380px; left: -140px; top: -170px; background: color-mix(in srgb, var(--ch-accent) 30%, transparent); }
+.ch-glow i:nth-child(2) { width: 320px; height: 320px; right: -150px; top: -90px; background: color-mix(in srgb, var(--ch-accent) 16%, #f9a8d4 20%); }
+.ch-glow i:nth-child(3) { width: 260px; height: 260px; left: 40%; top: 40px; background: color-mix(in srgb, var(--ch-accent) 12%, #93c5fd 18%); opacity: .35; }
+html[data-theme="dark"] .ch-glow i { opacity: .32; }
+html[data-look="classic"] .ch-glow i:nth-child(1), html[data-look="mono"] .ch-glow i:nth-child(1) { background: rgba(160, 160, 175, .26); }
+html[data-look="mono"] .ch-glow { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion="reduced"]) .ch-glow i { animation: ch-glow-drift 20s ease-in-out infinite alternate; }
+  html:not([data-motion="reduced"]) .ch-glow i:nth-child(2) { animation-duration: 24s; animation-delay: -7s; }
+}
+@keyframes ch-glow-drift { to { transform: translate(36px, 26px) scale(1.1); } }
+
+/* ---------- header alignment ---------- */
+.ch-header__bar { padding-left: max(var(--ch-s-3), calc((100% - var(--ch-page-w)) / 2 + var(--ch-s-2)));
+  padding-right: max(var(--ch-s-3), calc((100% - var(--ch-page-w)) / 2 + var(--ch-s-2))); }
+.ch-header__title, .ch-header__sub { max-width: var(--ch-page-w); }
+.ch-header__title { padding-bottom: var(--ch-s-1); }
+.ch-header__sub { padding-bottom: var(--ch-s-2); line-height: 1.45; }
+.ch-header__title em { font-style: italic; color: var(--ch-accent-text); }
+.ch-header__actions .ch-btn { min-height: 40px; }
+@media (min-width: 768px) {
+  .ch-header__bar { padding-left: max(var(--ch-s-5), calc((100% - var(--ch-page-w)) / 2 + var(--ch-s-3)));
+    padding-right: max(var(--ch-s-5), calc((100% - var(--ch-page-w)) / 2 + var(--ch-s-3))); }
+}
+/* the back button reads as a soft glass disc while the header is expanded */
+.ch-header:not(.is-collapsed) .ch-header__bar > .ch-iconbtn:first-child { background: var(--ch-glass-bg); -webkit-backdrop-filter: var(--ch-glass-blur); backdrop-filter: var(--ch-glass-blur); box-shadow: 0 0 0 1px var(--ch-glass-border), var(--ch-shadow-1); }
+
+/* ---------- banner ---------- */
+.ch-banner { display: flex; align-items: center; gap: var(--ch-s-3); padding: var(--ch-s-3) var(--ch-s-4); border-radius: var(--ch-r-md);
+  background: var(--ch-surface-2); border: 1px solid var(--ch-line); color: var(--ch-text-2); font-size: var(--ch-t-sm); line-height: 1.4; }
+.ch-banner svg { flex: none; width: 18px; height: 18px; color: var(--ch-muted); }
+.ch-banner__text { flex: 1; min-width: 0; }
+.ch-banner__text b { color: var(--ch-text); font-weight: 600; }
+.ch-banner--warn { background: var(--warn-bg, var(--ch-surface-2)); border-color: var(--warn-line, var(--ch-line)); color: var(--warn-fg, var(--ch-text)); }
+.ch-banner--warn svg { color: currentColor; }
+.ch-banner .ch-btn { min-height: 36px; padding: 0 var(--ch-s-4); font-size: var(--ch-t-sm); }
+
+/* ---------- round checkbox ---------- */
+.ch-check { appearance: none; -webkit-appearance: none; flex: none; width: 24px; height: 24px; margin: 0; border-radius: 50%; cursor: pointer;
+  border: 2px solid var(--ch-line-strong); background: var(--ch-surface); display: inline-grid; place-content: center;
+  transition: background-color var(--ch-dur-2) ease, border-color var(--ch-dur-2) ease, transform var(--ch-dur-2) var(--ch-ease-spring); }
+.ch-check::after { content: ''; width: 11px; height: 6px; border: 2.4px solid var(--ch-accent-ink); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px) scale(0); transition: transform var(--ch-dur-2) var(--ch-ease-spring); }
+.ch-check:checked { background: var(--ch-accent); border-color: var(--ch-accent); }
+.ch-check:checked::after { transform: rotate(-45deg) translate(1px, -1px) scale(1); }
+.ch-check:hover { border-color: color-mix(in srgb, var(--ch-accent) 60%, var(--ch-line-strong)); }
+.ch-check:active { transform: scale(.88); }
+.ch-check:focus-visible { outline: none; box-shadow: var(--ch-focus); }
+
+/* =====================================================================================================
+   Tailwind harmonisation (only on pages that opt in with html.ch-refresh)
+   ===================================================================================================== */
+/* cards */
+html.ch-refresh :is(.rounded-3xl, .rounded-\[24px\]):is(.bg-white, .border) { border-radius: var(--ch-r-lg); }
+html.ch-refresh .bg-white.rounded-3xl.border, html.ch-refresh .bg-white.rounded-2xl.border.shadow-sm { border-color: var(--ch-line); box-shadow: var(--ch-shadow-2); }
+html.ch-refresh .shadow-sm:not(.bg-white) { box-shadow: var(--ch-shadow-1); }
+html.ch-refresh :is(.shadow-xl, .shadow-2xl) { box-shadow: var(--ch-shadow-3); }
+html.ch-refresh .shadow-md:not(.bg-black) { box-shadow: var(--ch-shadow-1); }
+/* frosted overlays and the panels inside them */
+html.ch-refresh .fixed.inset-0:is(.bg-black\/40, .bg-black\/30) { background: var(--overlay, rgba(10, 10, 10, .32)); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+html.ch-refresh .fixed.inset-0:is(.bg-black\/40, .bg-black\/30) > .bg-white { background: var(--ch-glass-strong); -webkit-backdrop-filter: saturate(1.8) blur(28px); backdrop-filter: saturate(1.8) blur(28px); border-color: var(--ch-glass-border); box-shadow: var(--ch-shadow-3); }
+/* menus and popovers */
+html.ch-refresh [role="menu"].bg-white, html.ch-refresh [role="listbox"].bg-white { background: var(--ch-glass-strong); -webkit-backdrop-filter: saturate(1.8) blur(24px); backdrop-filter: saturate(1.8) blur(24px); border-color: var(--ch-glass-border); border-radius: var(--ch-r-md); }
+/* primary buttons get the system's soft accent glow */
+html.ch-refresh :is(button, a).bg-black:not(:disabled) { box-shadow: 0 1px 0 rgba(255, 255, 255, .18) inset, 0 6px 16px -6px color-mix(in srgb, var(--ch-accent) 55%, transparent); }
+html.ch-refresh :is(button, a).bg-black:not(:disabled):hover { background-color: color-mix(in srgb, var(--ch-accent) 88%, var(--ch-text)); }
+/* fields: accent border + focus ring */
+html.ch-refresh :is(input, textarea, select):is(.focus\:border-black, .border-gray-200):focus { border-color: var(--ch-accent); box-shadow: var(--ch-focus); }
+html.ch-refresh .focus-within\:border-black:focus-within { border-color: var(--ch-accent); box-shadow: var(--ch-focus); }
+/* small mono caps labels become the system eyebrow */
+html.ch-refresh .font-mono.uppercase { font-family: var(--ch-font-ui); font-weight: 600; letter-spacing: .1em; }
+/* toasts: a calm floating pill above the tab bar */
+html.ch-refresh #toast.fixed { background: var(--toast-bg, #111); color: var(--toast-fg, #fff); border-radius: var(--ch-r-full); box-shadow: var(--ch-shadow-3); font-size: var(--ch-t-sm); }
+/* the old floating "Return to Hub" disc: the header's back button and the tab bar replace it */
+html.ch-refresh button.fixed[title="Return to Hub"] { display: none !important; }

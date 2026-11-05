@@ -29,16 +29,17 @@
         ['meetings', 'Meetings', (r) => ({ title: r.title, sub: r.snippet, meta: when(r.when) })]
     ];
 
+    const ICONS = { notes: 'notebook-pen', chats: 'messages-square', events: 'calendar', meetings: 'video' };
     function show(data, q) {
         $('status').textContent = data.total ? `${data.total} result${data.total === 1 ? '' : 's'}` : 'Nothing found';
         $('results').innerHTML = GROUPS.map(([key, label, fmt]) => {
             const list = data[key] || [];
             if (!list.length) return '';
-            return `<section><h2 class="font-serif text-xl mb-3">${label}</h2><div class="space-y-3">${list.map((r) => {
+            return `<section class="sr-group ch-enter"><div class="sr-head"><span class="sr-ic sr-ic--${key}"><i data-lucide="${ICONS[key]}" class="w-4 h-4"></i></span><h2>${label}</h2><span class="ch-badge ch-badge--muted">${list.length}</span></div><div class="sr-list">${list.map((r) => {
                 const v = fmt(r);
-                return `<a class="hit" href="${esc(r.url)}"><div class="font-medium text-[15px]">${mark(v.title, q)}</div>${v.sub ? `<div class="text-sm text-gray-500 mt-1">${mark(v.sub, q)}</div>` : ''}<div class="text-[11px] font-mono uppercase tracking-widest text-gray-400 mt-2">${esc(v.meta)}</div></a>`;
+                return `<a class="hit" href="${esc(r.url)}"><span class="hit-main"><span class="hit-title">${mark(v.title, q)}</span>${v.sub ? `<span class="hit-sub">${mark(v.sub, q)}</span>` : ''}<span class="hit-meta">${esc(v.meta)}</span></span><i data-lucide="chevron-right" class="hit-chev"></i></a>`;
             }).join('')}</div></section>`;
-        }).join('') || (data.total ? '' : '<p class="text-sm text-gray-400 py-6 text-center">Try different words. You only see notes shared with you, chats you are in, and events for you.</p>');
+        }).join('') || (data.total ? '' : '<div class="ch-empty"><span class="ch-empty__icon"><i data-lucide="search-x" class="w-6 h-6"></i></span><span class="ch-empty__title">Nothing found</span><p>Try different words. You only see notes shared with you, chats you are in, and events for you.</p></div>');
     }
 
     async function run(q) {

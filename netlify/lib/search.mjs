@@ -5,6 +5,7 @@ import { listVisible } from './notes-store.mjs';
 import { latest } from './group-store.mjs';
 import { roomsFor } from './rooms.mjs';
 import { listEvents, todayLocal, addDays, describeWhen } from './calendar-store.mjs';
+import { messageLink } from './memory.mjs';
 
 const CHAT_SCAN = 300;     // most recent messages looked at per chat
 const PER_GROUP = 8;
@@ -37,7 +38,7 @@ export async function searchEverything(user, query) {
     const recent = await latest(CHAT_SCAN, room.id);
     return recent.filter((m) => m.kind !== 'system' && matches(`${m.text || ''}`.toLowerCase(), ws)).map((m) => ({
       type: 'chat', id: m.id, room: room.id, roomName: room.name, user: m.user, snippet: snippet(m.text, ws), when: m.createdAt,
-      url: room.id === 'everyone' ? '/group/' : `/group/?room=${room.id}`
+      url: messageLink(room.id, m.id)
     }));
   })).then((groups) => groups.flat().sort((a, b) => (a.when < b.when ? 1 : -1)).slice(0, PER_GROUP));
 

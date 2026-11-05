@@ -13,6 +13,10 @@
     if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
+  function svg(d, w) { return '<svg width="' + (w || 14) + '" height="' + (w || 14) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; }
+  var IC_PIN = svg('<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>');
+  var IC_MUTE = svg('<path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7M10.3 21a1.94 1.94 0 0 0 3.4 0M2 2l20 20"/>');
+  var IC_DOTS = svg('<circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/>', 20);
   var PIN_KEY = 'chowaniec_dm_pins';
   function pins() { try { return JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); } catch (e) { return []; } }
   function savePins(list) { try { localStorage.setItem(PIN_KEY, JSON.stringify(list)); } catch (e) { /* storage unavailable */ } }
@@ -33,10 +37,10 @@
         '<button type="button" class="a-read" data-act="read">Mark read</button>' +
       '</div>' +
       '<a class="dm-row" href="/group/?room=' + encodeURIComponent(d.id) + '" data-dm="' + esc(d.id) + '">' + avatar(d) +
-      '<span class="dm-main"><span class="dm-name">' + esc(d.name) + (pinned ? '<span class="dm-pin" title="Pinned">&#128204;</span>' : '') + (muted ? '<span class="dm-mutedi" title="Muted">&#128277;</span>' : '') + '</span><br><span class="dm-last">' + esc(last) + '</span></span>' +
+      '<span class="dm-main"><span class="dm-name">' + esc(d.name) + (pinned ? '<span class="dm-pin" title="Pinned" aria-label="Pinned">' + IC_PIN + '</span>' : '') + (muted ? '<span class="dm-mutedi" title="Muted" aria-label="Muted">' + IC_MUTE + '</span>' : '') + '</span><br><span class="dm-last">' + esc(last) + '</span></span>' +
       (d.last ? '<span class="dm-time">' + esc(when(d.last.createdAt)) + '</span>' : '') +
       (d.unread ? '<span class="dm-badge" aria-label="' + d.unread + ' unread">' + d.unread + '</span>' : '') +
-      '<button type="button" class="dm-more" data-more="1" aria-label="Pin, mute or mark read">&#8942;</button></a></div>';
+      '<button type="button" class="dm-more" data-more="1" aria-label="Pin, mute or mark read">' + IC_DOTS + '</button></a></div>';
   }
 
   function sortTalked(list) {
@@ -55,13 +59,48 @@
     $('talked').innerHTML = talked.length ? talked.map(row).join('') : '<p class="dm-empty">No conversations yet. Pick someone below.</p>';
     $('others').innerHTML = others.length ? others.map(row).join('') : '<p class="dm-empty">You are already talking with everyone.</p>';
   }
+  // A copy of the list is kept on this device so it opens instantly and still shows without a connection.
+  function cacheKey() {
+    var u = window.getChowaniecUser ? window.getChowaniecUser() : null;
+    return 'chowaniec_dms_cache_' + String((u && u.name) || '').toLowerCase();
+  }
+  function readCache() { try { var v = JSON.parse(localStorage.getItem(cacheKey()) || 'null'); return v && Array.isArray(v.dms) ? v : null; } catch (e) { return null; } }
+  function writeCache(dms) { try { localStorage.setItem(cacheKey(), JSON.stringify({ at: Date.now(), dms: dms })); } catch (e) { /* storage full */ } }
+  var lastSum = null;
+  function offlineNote(show, at) {
+    var el = document.getElementById('dm-offline');
+    if (!show) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('p');
+      el.id = 'dm-offline';
+      el.className = 'dm-empty';
+      el.setAttribute('role', 'status');
+      var talked = $('talked');
+      talked.parentNode.insertBefore(el, talked);
+    }
+    el.textContent = 'You’re offline. Showing your chats as of ' + (at ? when(new Date(at).toISOString()) : 'earlier') + '.';
+  }
   function load() {
     if (busy) return;
     S.api('/.netlify/functions/group?dms=1').then(function (data) {
       if (busy) return;
       lastDms = data.dms || [];
+      writeCache(lastDms);
+      offlineNote(false);
       draw();
-    }).catch(function (e) { $('talked').innerHTML = '<p class="dm-empty">' + esc(e.message) + '</p>'; });
+      // When the unread numbers change, bring the app icon badge up to date too.
+      var sum = lastDms.reduce(function (a, d) { return a + (d.unread || 0); }, 0);
+      if (lastSum !== null && sum !== lastSum && window.ChowaniecBadge) window.ChowaniecBadge.refresh(true);
+      lastSum = sum;
+    }).catch(function (e) {
+      var cached = readCache();
+      if (cached && (!e.status || navigator.onLine === false)) {
+        if (!lastDms.length) { lastDms = cached.dms; draw(); }
+        offlineNote(true, cached.at);
+        return;
+      }
+      if (!lastDms.length) $('talked').innerHTML = '<p class="dm-empty">' + esc(e.message) + '</p>';
+    });
   }
 
   // ---- swipe a row left to show Pin / Mute / Mark read (the three-dots button does the same)
@@ -139,7 +178,10 @@
     } else if (what === 'read') {
       if (!d.last || !d.last.id) { S.toast('Nothing to mark.'); closeRow(); return; }
       S.api('/.netlify/functions/group', { method: 'POST', body: { action: 'read', id: d.last.id, room: id } })
-        .then(function () { d.unread = 0; hap('success'); closeRow(); draw(); })
+        .then(function () {
+          d.unread = 0; hap('success'); closeRow(); draw(); writeCache(lastDms);
+          window.dispatchEvent(new CustomEvent('chowaniec-chat-read', { detail: { room: id, id: d.last.id } }));
+        })
         .catch(function (err) { S.toast(err.message, true); });
     } else if (what === 'mute') {
       if (d.mutedUntil) {
@@ -164,7 +206,10 @@
       }).catch(function (err) { S.toast(err.message, true); });
   }
   S.whenSignedIn(function () {
+    var cached = readCache();
+    if (cached && cached.dms.length) { lastDms = cached.dms; draw(); }
     load();
+    window.addEventListener('online', load);
     setInterval(function () { if (document.visibilityState === 'visible') load(); }, 8000);
   });
 })();

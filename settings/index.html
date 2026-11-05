@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="ch-ui ch-refresh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -7,12 +7,18 @@
     <meta name="theme-color" content="#000000">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <title>Settings</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/design.css">
+    <link rel="stylesheet" href="/design-extra.css">
     <script src="/theme.js"></script>
 
     <script src="/pwa.js" defer></script>
     <!-- Tailwind is only used by the shared passcode box -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -20,10 +26,15 @@
 </head>
 <body>
 <div id="app-root">
-    <header class="topbar"><div class="topbar-in">
-        <a class="back" href="/" aria-label="Back to Chowaniec home">&#8592;</a>
-        <h1 class="serif">Settings</h1>
-    </div></header>
+    <div class="ch-glow" aria-hidden="true"><i></i><i></i><i></i></div>
+    <header class="ch-header">
+        <div class="ch-header__bar">
+            <a class="ch-iconbtn" href="/" aria-label="Back to home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></a>
+            <span class="ch-header__small" aria-hidden="true">Settings</span>
+        </div>
+        <h1 class="ch-header__title">Settings</h1>
+        <p class="ch-header__sub">Make Chowaniec yours: theme, robot, notifications and AI.</p>
+    </header>
 
     <main class="wrap" id="main">
         <section class="card" aria-labelledby="h-you">
@@ -41,9 +52,10 @@
         <section class="card" aria-labelledby="h-notif">
             <h2 id="h-notif">Notifications</h2>
             <a class="linkrow" href="/settings/notifications/">
+                <span class="row-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.27 21a2 2 0 0 0 3.46 0M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/></svg></span>
                 <div class="grow"><div class="t" style="font-weight:500">Push notifications</div>
                     <div class="s" id="notif-summary" style="font-size:13px;color:var(--muted);margin-top:2px">Checking&hellip;</div></div>
-                <span class="chev" aria-hidden="true">&#8250;</span>
+                <span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
             </a>
             <p style="color:var(--muted);font-size:13px">Turn them on, choose what you hear about, set quiet hours and manage your devices.</p>
         </section>
@@ -125,9 +137,10 @@
                 <button type="button" class="btn danger" id="btn-signout">Sign out</button>
             </div>
             <a class="linkrow" href="/settings/notifications/#devices">
+                <span class="row-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg></span>
                 <div class="grow"><div class="t" style="font-weight:500">Your notification devices</div>
                     <div class="s" style="font-size:13px;color:var(--muted);margin-top:2px">See and remove the phones and computers that receive your notifications.</div></div>
-                <span class="chev" aria-hidden="true">&#8250;</span>
+                <span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
             </a>
             <div class="row">
                 <div class="grow"><div class="t">Changing your passcode</div>
@@ -138,9 +151,10 @@
         <section class="card" aria-labelledby="h-app">
             <h2 id="h-app">More</h2>
             <a class="linkrow" href="/get-the-app/">
+                <span class="row-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span>
                 <div class="grow"><div class="t" style="font-weight:500">Install the app</div>
                     <div class="s" style="font-size:13px;color:var(--muted);margin-top:2px">Add Chowaniec to your phone's home screen.</div></div>
-                <span class="chev" aria-hidden="true">&#8250;</span>
+                <span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
             </a>
         </section>
     </main>

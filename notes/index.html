@@ -1,20 +1,26 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="ch-ui ch-refresh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="theme-color" content="#000000">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <script src="/pwa.js" defer></script>
     <title>Chowaniec Notes</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/design.css">
+    <link rel="stylesheet" href="/design-extra.css">
     <script src="/theme.js"></script>
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js" defer></script>
     <!-- Markdown rendering (always sanitized with DOMPurify) -->
     <script src="https://unpkg.com/marked@18.1.1/lib/marked.umd.js"></script>
     <script src="https://unpkg.com/dompurify@3.4.17/dist/purify.min.js"></script>
@@ -22,10 +28,20 @@
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+        :root { --ch-page-w: 1280px; }
+        #user-chip { display: none !important; }
+        @media (min-width: 640px) { #user-chip.flex { display: flex !important; } }
+        @media (max-width: 1023px) {
+            html:has(#editor-pane:not(.hidden)) .ch-header__title, html:has(#editor-pane:not(.hidden)) .ch-header__sub { display: none; }
+        }
+        /* note cards in the list */
+        #notes-list > button, #notes-list > a, #notes-list > div:not(.sk) { border-radius: var(--ch-r-md); }
+        #filter-chips button { min-height: 36px; }
+        #editor > div:first-child { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 56px); z-index: 5; background: var(--ch-glass-strong); -webkit-backdrop-filter: var(--ch-glass-blur); backdrop-filter: var(--ch-glass-blur); border-radius: var(--ch-r-lg) var(--ch-r-lg) 0 0; }
+        .view-tab[aria-selected="true"] { background: var(--ch-surface); color: var(--ch-text); box-shadow: var(--ch-shadow-1), 0 0 0 1px var(--ch-line); }
 
         body {
-            font-family: 'Outfit', sans-serif;
+            font-family: var(--ch-font-ui);
             background-color: var(--bg);
             color: var(--text);
         }
@@ -106,37 +122,24 @@
 
     <div id="app-root" class="flex-1 flex flex-col transition-all duration-500">
 
-        <!-- Header -->
-        <header class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3 min-h-[40px] min-w-0">
-                    <div class="w-8 h-8 shrink-0 bg-black rounded-full flex items-center justify-center text-white text-xs font-sans">
-                        CN
-                    </div>
-                    <div class="font-serif tracking-wide text-xl whitespace-nowrap">
-                        Chowaniec <span class="text-gray-400 italic font-light text-base">Notes</span>
-                    </div>
-                </div>
-                <div id="user-chip" class="hidden items-center gap-2 min-w-0 text-[11px] font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-full pl-1.5 pr-3 py-1.5"></div>
+        <div class="ch-glow" aria-hidden="true"><i></i><i></i><i></i></div>
+        <header class="ch-header">
+            <div class="ch-header__bar">
+                <a class="ch-iconbtn" href="/" aria-label="Back to home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></a>
+                <span class="ch-header__small" aria-hidden="true">Notes</span>
+                <div class="ch-header__actions"><div id="user-chip" class="hidden items-center gap-2 min-w-0 text-[11px] font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-full pl-1.5 pr-3 py-1.5"></div>
+                    <button id="btn-new" type="button" class="ch-btn ch-btn--primary ch-btn--sm"><i data-lucide="plus" class="w-4 h-4"></i> New note</button></div>
             </div>
+            <h1 class="ch-header__title">Notes</h1>
+            <p class="ch-header__sub">The family notebook. Everything saves as you type.</p>
         </header>
 
         <!-- Main Container -->
-        <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-28 w-full">
+        <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-10 w-full">
             <div class="lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-8 items-start">
 
                 <!-- LIST PANE -->
-                <aside id="list-pane" class="lg:block space-y-6 min-w-0 lg:sticky lg:top-28 fade-in">
-                    <div class="flex items-end justify-between gap-4">
-                        <div class="min-w-0">
-                            <p class="text-xs font-mono uppercase tracking-widest text-gray-400 mb-2 font-medium">Family Notebook</p>
-                            <h1 class="text-3xl sm:text-4xl font-serif text-black">Notes</h1>
-                        </div>
-                        <button id="btn-new" type="button" class="shrink-0 min-h-[44px] px-5 py-2.5 rounded-full bg-black text-white text-xs font-medium hover:bg-gray-800 transition-colors shadow-md flex items-center gap-2">
-                            <i data-lucide="plus" class="w-4 h-4"></i> New Note
-                        </button>
-                    </div>
-
+                <aside id="list-pane" class="lg:block space-y-6 min-w-0 lg:sticky lg:top-20 fade-in">
                     <div class="space-y-3">
                         <div class="text-xs font-mono">
                             <label for="search" class="block text-gray-400 uppercase tracking-widest mb-1.5">Search</label>
@@ -296,19 +299,8 @@
             </div>
         </main>
 
-        <!-- Footer -->
-        <footer class="mt-auto border-t border-gray-100 py-8 text-xs font-mono text-gray-400">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-center">
-                <span>&copy; Chowaniec Notes &bull; All Rights Reserved</span>
-                <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Saved automatically</span>
-            </div>
-        </footer>
     </div>
 
-    <!-- Floating Return Button -->
-    <button onclick="returnToHub()" title="Return to Hub" class="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 w-14 h-14 bg-white border border-gray-200 shadow-xl rounded-full flex items-center justify-center text-gray-600 hover:text-black hover:bg-gray-50 hover:scale-105 transition-all z-50">
-        <i data-lucide="arrow-left" class="w-5 h-5"></i>
-    </button>
 
     <!-- Toast -->
     <div id="toast" role="status" aria-live="polite" class="hidden fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-10 z-[70] max-w-[calc(100vw-2rem)] bg-black text-white text-xs font-medium rounded-full px-5 py-3 shadow-xl items-center gap-2"></div>

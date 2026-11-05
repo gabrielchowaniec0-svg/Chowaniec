@@ -16,6 +16,8 @@
 //   mountPicker(el, opts)    -> full theme picker UI. opts: { onChange(look), autosave:true }. Returns { get(), destroy() }
 //   tokens(look)             -> { dark, id, vars } computed design tokens (used by tests)
 // }
+// Also: sets <html data-nav="on|off"> early so the app navigation (/appnav.js) has room before the first paint,
+// and marks cross-document page transitions with a 'back' / 'forward' type.
 // Event 'chowaniec-theme-change' on window: detail = { look, season (real season), decor (decoration kind or ''), dark, id }
 (function () {
   'use strict';
@@ -488,6 +490,33 @@
       if (fresh.length && fresh.length <= 6) fresh.forEach(function (row) { row.classList.add('cz-enter'); });
     }).observe(document.body, { childList: true, subtree: true });
   }
+
+  // ---------- app navigation hint + page transitions ----------
+  // /appnav.js draws the tab bar later; marking <html data-nav="on"> now lets /theme.css reserve its room
+  // before the first paint, so pages don't jump when it appears. appnav.js has the final say.
+  function navHint() {
+    try {
+      if (root.getAttribute('data-appnav') === 'off' || root.hasAttribute('data-nav')) return;
+      var p = location.pathname.replace(/index\.html$/, '');
+      var immersive = /^\/group(\/|$)/.test(p) || /^\/games\/[^/]+/.test(p) || /^\/meet(\/|$)/.test(p) ||
+        (/^\/watch(\/|$)/.test(p) && location.search.length > 1) || /^\/offline/.test(p);
+      var signedIn = sessionStorage.getItem('chowaniec_authenticated') === 'true' || /(?:^|;\s*)chowaniec_auth=[0-9a-f]{64}/.test(document.cookie);
+      root.setAttribute('data-nav', !immersive && signedIn ? 'on' : 'off');
+    } catch (e) { /* storage blocked: appnav.js decides */ }
+  }
+  navHint();
+  // Cross-document View Transitions (see theme.css): mark the direction so going back slides the other way.
+  window.addEventListener('pagereveal', function (e) {
+    if (!e.viewTransition) return;
+    if (root.getAttribute('data-motion') === 'reduced') { e.viewTransition.skipTransition(); return; }
+    root.classList.add('cz-vt');
+    try {
+      var act = window.navigation && navigation.activation;
+      var back = act && act.navigationType === 'traverse' && act.from && act.entry && act.entry.index < act.from.index;
+      if (e.viewTransition.types) e.viewTransition.types.add(back ? 'back' : 'forward');
+    } catch (err) { /* ignore */ }
+    e.viewTransition.finished.finally(function () { root.classList.remove('cz-vt'); });
+  });
 
   // ---------- start ----------
   applyLook(current, { animate: false });

@@ -10,14 +10,18 @@
     <!-- Tailwind CSS CDN (also used by the shared auth gate) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/lucide@1.55.0/dist/umd/lucide.min.js" defer></script>
     <!-- Security Gate & Passcodes -->
     <script src="../passwords.js"></script>
     <script src="../auth-gate.js"></script>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
     <link rel="stylesheet" href="group.css">
     <link rel="stylesheet" href="gamecards.css">
+    <link rel="stylesheet" href="location.css">
 </head>
 <body class="overflow-hidden">
 
@@ -79,7 +83,7 @@
                     <div id="empty" class="state-box hidden fade-in">
                         <div class="empty-badge"><i data-lucide="messages-square" class="w-7 h-7"></i></div>
                         <p class="eyebrow mb-2">Family Group Chat</p>
-                        <h2 class="font-serif text-2xl mb-2" style="color:var(--text)">Say hi to the family 👋</h2>
+                        <h2 class="font-serif text-2xl mb-2" style="color:var(--text)">Say hi to the family</h2>
                         <p class="text-sm max-w-xs">Share photos, reply to each other, and type <span class="font-mono" style="color:var(--text)">@</span> to mention someone, or <span class="font-mono" style="color:var(--text)">@AI</span> to ask Chowaniec AI.</p>
                     </div>
                     <div id="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
@@ -108,6 +112,7 @@
                         <button id="btn-poll" type="button" role="menuitem" class="mi"><i data-lucide="chart-no-axes-column"></i>Poll</button>
                         <button id="btn-share" type="button" role="menuitem" class="mi"><i data-lucide="link"></i>Share a note, event or meeting</button>
                         <button id="btn-sheet" type="button" role="menuitem" class="mi"><i data-lucide="clipboard-check"></i>Sign-up sheet</button>
+                        <button id="btn-location" type="button" role="menuitem" class="mi"><i data-lucide="map-pin"></i>Share live location</button>
                         <button id="btn-sticker" type="button" role="menuitem" class="mi"><i data-lucide="smile-plus"></i>Sticker</button>
                         <button id="btn-saved" type="button" role="menuitem" class="mi"><i data-lucide="star"></i>Saved messages</button>
                         <button id="btn-smart" type="button" role="menuitemcheckbox" aria-checked="true" class="mi" title="Turns plans in your message into calendar events and questions into polls"><i data-lucide="wand-sparkles"></i><span id="smart-label">Smart detect: on</span></button>
@@ -272,5 +277,6 @@
     <script src="polish.js"></script>
     <script src="suggest.js"></script>
     <script src="gamecards.js"></script>
+    <script src="location.js"></script>
 </body>
 </html>

@@ -2,14 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#000000">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <script src="/pwa.js" defer></script>
   <title>Chowaniec Meet</title>
-    <link rel="stylesheet" href="/theme.css">
-    <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://cdn.tailwindcss.com">
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="/theme.css">
+  <link rel="stylesheet" href="/design.css">
+  <script src="/theme.js"></script>
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -22,6 +27,8 @@
   <script src="/robot.js"></script>
   <script src="../passwords.js"></script>
   <script src="../auth-gate.js"></script>
+  <!-- Watch together (synced YouTube for everyone in the call) -->
+  <link rel="stylesheet" href="/watch/watch.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     body {
@@ -40,6 +47,44 @@
     .meet-btn:active {
       transform: scale(0.95);
     }
+    /* ---------- design refresh ----------
+       The call itself stays an immersive dark stage whatever the theme (theme.css would otherwise map these greys to the theme). */
+    html[data-look] body { background: #202124; color: #e8eaed; }
+    html[data-look] .bg-\[\#18191b\] { background-color: #18191b; }
+    html[data-look] .bg-\[\#1e1f22\] { background-color: #1e1f22; }
+    html[data-look] .bg-\[\#202124\] { background-color: #202124; }
+    html[data-look] .bg-\[\#282a2d\] { background-color: #282a2d; }
+    html[data-look] .bg-\[\#3c4043\] { background-color: #3c4043; }
+    html[data-look] .bg-\[\#474a4d\] { background-color: #474a4d; }
+    /* The lobby and the "new meeting" sheet follow the person's theme, like every other page. */
+    #lobby-screen { background: var(--page-bg, var(--bg)); background-color: var(--ch-bg); color: var(--ch-text); font-family: var(--ch-font-ui); isolation: isolate; }
+    #lobby-screen::before, #lobby-screen::after { content: ''; position: fixed; z-index: -1; border-radius: 50%; filter: blur(70px); pointer-events: none; }
+    #lobby-screen::before { width: 380px; height: 380px; left: -140px; top: -160px; background: color-mix(in srgb, var(--ch-accent) 28%, transparent); opacity: .55; }
+    #lobby-screen::after { width: 340px; height: 340px; right: -140px; bottom: -120px; background: color-mix(in srgb, #0284c7 30%, transparent); opacity: .35; }
+    html[data-theme="dark"] #lobby-screen::before, html[data-theme="dark"] #lobby-screen::after { opacity: .3; }
+    #brief-modal { background: var(--overlay, rgba(0,0,0,.5)); }
+    #lobby-screen > .lobby-card, #brief-modal > div { background: var(--ch-glass-strong); -webkit-backdrop-filter: saturate(1.8) blur(28px); backdrop-filter: saturate(1.8) blur(28px);
+      border: 1px solid var(--ch-glass-border); border-radius: var(--ch-r-xl); box-shadow: var(--ch-shadow-3); color: var(--ch-text); }
+    #lobby-screen .text-white, #brief-modal .text-white { color: var(--ch-text); }
+    #lobby-screen :is(.text-zinc-400, .text-zinc-500, .text-zinc-300), #brief-modal :is(.text-zinc-400, .text-zinc-500, .text-zinc-300) { color: var(--ch-muted); }
+    #lobby-screen label, #brief-modal label { font-family: var(--ch-font-ui); font-weight: 600; font-size: var(--ch-t-sm); letter-spacing: 0; text-transform: none; color: var(--ch-text-2); }
+    #lobby-screen :is(input, textarea), #brief-modal :is(input, textarea) { min-height: 48px; background: var(--input-bg, var(--ch-surface-2)); color: var(--ch-text); border: 1px solid var(--ch-line-strong);
+      border-radius: var(--ch-r-md); font-size: 16px; color-scheme: light dark; }
+    #lobby-screen :is(input, textarea):focus, #brief-modal :is(input, textarea):focus { border-color: var(--ch-accent); background: var(--ch-surface); box-shadow: var(--ch-focus); }
+    .lobby-mark { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #fff; flex: none;
+      background: linear-gradient(150deg, #38bdf8, #0284c7); box-shadow: inset 0 -2px 0 rgba(0,0,0,.14), 0 8px 18px -8px rgba(2,132,199,.8); }
+    .lobby-mark svg { width: 22px; height: 22px; }
+    #lobby-screen .lobby-title { font-family: var(--ch-font-display); font-weight: 400; font-size: 26px; letter-spacing: -.01em; line-height: 1.1; }
+    #lobby-code-badge { background: var(--ch-accent-soft); border-color: transparent; color: var(--ch-accent-text); font-family: var(--ch-font-ui); font-weight: 600; }
+    .lobby-primary, #brief-submit { min-height: 50px; background: var(--ch-accent) !important; color: var(--ch-accent-ink) !important; font-weight: 600 !important;
+      box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 6px 16px -6px color-mix(in srgb, var(--ch-accent) 55%, transparent) !important; }
+    .lobby-primary:hover, #brief-submit:hover { background: color-mix(in srgb, var(--ch-accent) 88%, var(--ch-text)) !important; }
+    #new-meeting-btn, #brief-modal button:not(#brief-submit) { min-height: 50px; background: var(--ch-surface) !important; color: var(--ch-text) !important; border: 1px solid var(--ch-line-strong) !important; font-weight: 600; box-shadow: var(--ch-shadow-1); }
+    #new-meeting-btn:hover, #brief-modal button:not(#brief-submit):hover { background: var(--ch-surface-2) !important; }
+    #lobby-screen button:focus-visible, #brief-modal button:focus-visible { outline: none; box-shadow: var(--ch-focus); }
+    #lobby-screen .text-red-400, #brief-modal .text-red-400 { color: var(--ch-danger); }
+    #lobby-brief { color: var(--ch-text); }
+    @media (prefers-reduced-motion: no-preference) { html:not([data-motion="reduced"]) #lobby-screen:not(.hidden) > .lobby-card { animation: ch-enter var(--ch-dur-4) var(--ch-ease-out) both; } }
   </style>
 </head>
 <body class="h-[100dvh] w-screen overflow-hidden flex flex-col justify-between selection:bg-sky-500/20 relative">
@@ -147,6 +192,10 @@
           <i data-lucide="bell-ring" class="w-4 h-4"></i>
         </button>
 
+        <button id="btn-watch" onclick="toggleWatchTogether()" title="Watch together" aria-label="Watch together" aria-pressed="false" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
+          <i data-lucide="tv" class="w-4 h-4"></i>
+        </button>
+
         <button onclick="toggleDrawer('polls')" title="Quick Polls" class="meet-btn w-10 h-10 rounded-full bg-[#3c4043] hover:bg-[#474a4d] flex items-center justify-center text-white">
           <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
         </button>
@@ -200,14 +249,12 @@
 
   <!-- Pre-Join Lobby -->
   <div id="lobby-screen" class="fixed inset-0 bg-[#202124]/95 backdrop-blur-md z-40 flex p-4 pb-24 sm:p-6 overflow-y-auto">
-    <div class="m-auto max-w-md w-full bg-[#282a2d] border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black font-semibold text-sm">
-            CP
-          </div>
-          <div>
-            <h2 class="text-xl font-medium text-white tracking-wide">Chowaniec Meet</h2>
+    <div class="lobby-card m-auto max-w-md w-full p-6 sm:p-8 space-y-6">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="lobby-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.22 3.48a.5.5 0 0 0 .78-.42V7.87a.5.5 0 0 0-.75-.43L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2.5"/></svg></div>
+          <div class="min-w-0">
+            <h2 class="lobby-title text-white">Chowaniec Meet</h2>
             <p class="text-xs text-zinc-400 font-light">Theater & Production Stage</p>
           </div>
         </div>
@@ -221,28 +268,28 @@
 
       <div class="space-y-4">
         <div>
-          <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Your Name</label>
+          <label for="user-name-input" class="block mb-1.5">Your name</label>
           <input type="text" id="user-name-input" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none transition-all">
           <p id="host-hint" class="text-[11px] text-zinc-500 mt-1">Host priority is based on the passcode you signed in with.</p>
         </div>
 
         <div>
-          <label class="block text-xs font-mono text-zinc-400 uppercase tracking-widest mb-1.5">Meeting Code</label>
+          <label for="room-code-input" class="block mb-1.5">Meeting code</label>
           <div class="relative">
-            <input type="text" id="room-code-input" oninput="scheduleBriefLookup()" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono text-xs transition-all">
+            <input type="text" id="room-code-input" oninput="scheduleBriefLookup()" class="w-full bg-[#1e1f22] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-sky-400 outline-none font-mono transition-all">
           </div>
           <p id="room-subtext" class="text-[11px] text-zinc-500 mt-1">Room code will be appended to invite links.</p>
         </div>
       </div>
 
       <div class="space-y-3">
-        <button onclick="joinMeeting()" class="w-full py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-medium text-sm transition-all shadow-lg flex items-center justify-center gap-2">
-          <span>Enter Studio</span>
+        <button type="button" onclick="joinMeeting()" class="lobby-primary w-full py-3.5 rounded-full text-sm transition-all flex items-center justify-center gap-2">
+          <span>Join meeting</span>
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </button>
         <button id="new-meeting-btn" onclick="createNewMeeting()" class="w-full py-3.5 rounded-full bg-transparent border border-white/15 hover:bg-white/5 text-white font-medium text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-wait">
           <i data-lucide="plus" class="w-4 h-4"></i>
-          <span id="new-meeting-label">New Meeting</span>
+          <span id="new-meeting-label">New meeting</span>
         </button>
         <p id="new-meeting-error" class="hidden text-[11px] text-red-400 text-center"></p>
       </div>
@@ -546,6 +593,7 @@
       callFrame.on('left-meeting', handleLeftMeeting);
       callFrame.on('error', (evt) => endCall(describeJoinError(evt, currentMeetingCode)));
       agentAttach(callFrame);
+      if (window.watchAttach) watchAttach(callFrame);
 
       const joinOptions = {
         url: (access && access.url) || `https://${DAILY_DOMAIN}/${codeInput}`,
@@ -847,6 +895,7 @@
     // Tears down the call frame and returns to the lobby with a message.
     function endCall(message) {
       agentDetach();
+      if (window.watchClose) watchClose();
       if (callFrame) {
         const frame = callFrame;
         callFrame = null;
@@ -1137,6 +1186,7 @@
       const msg = evt.data || {};
       const fromId = evt.fromId;
       if (agentHandleAppMessage(msg, fromId)) return;
+      if (window.watchOnAppMessage && watchOnAppMessage(msg, fromId)) return;
 
       if (msg.type === 'PUSH_FORM' && isPrivileged(fromId) && msg.form) {
         activeForm = sanitizeForm(msg.form);
@@ -1304,6 +1354,7 @@
           </button>`;
         body.innerHTML = `
           <div class="space-y-2">
+            ${item("toggleDrawer(null); toggleWatchTogether()", 'tv', 'Watch Together')}
             ${item("copyInviteLink(); toggleDrawer(null)", 'link-2', 'Copy Meeting Link')}
             ${item("openAudioPanel()", 'volume-2', 'Audio Output (Speaker)')}
             ${isHostUser() ? item("toggleDrawer('notify')", 'bell-ring', 'Notify People') : ''}
@@ -1677,5 +1728,7 @@
     });
   </script>
   <script src="agent.js"></script>
+  <script src="/watch/watch.js"></script>
+  <script src="/watch/meet-watch.js"></script>
 </body>
 </html>
