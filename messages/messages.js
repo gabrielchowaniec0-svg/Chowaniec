@@ -55,13 +55,48 @@
     $('talked').innerHTML = talked.length ? talked.map(row).join('') : '<p class="dm-empty">No conversations yet. Pick someone below.</p>';
     $('others').innerHTML = others.length ? others.map(row).join('') : '<p class="dm-empty">You are already talking with everyone.</p>';
   }
+  // A copy of the list is kept on this device so it opens instantly and still shows without a connection.
+  function cacheKey() {
+    var u = window.getChowaniecUser ? window.getChowaniecUser() : null;
+    return 'chowaniec_dms_cache_' + String((u && u.name) || '').toLowerCase();
+  }
+  function readCache() { try { var v = JSON.parse(localStorage.getItem(cacheKey()) || 'null'); return v && Array.isArray(v.dms) ? v : null; } catch (e) { return null; } }
+  function writeCache(dms) { try { localStorage.setItem(cacheKey(), JSON.stringify({ at: Date.now(), dms: dms })); } catch (e) { /* storage full */ } }
+  var lastSum = null;
+  function offlineNote(show, at) {
+    var el = document.getElementById('dm-offline');
+    if (!show) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('p');
+      el.id = 'dm-offline';
+      el.className = 'dm-empty';
+      el.setAttribute('role', 'status');
+      var talked = $('talked');
+      talked.parentNode.insertBefore(el, talked);
+    }
+    el.textContent = 'You’re offline. Showing your chats as of ' + (at ? when(new Date(at).toISOString()) : 'earlier') + '.';
+  }
   function load() {
     if (busy) return;
     S.api('/.netlify/functions/group?dms=1').then(function (data) {
       if (busy) return;
       lastDms = data.dms || [];
+      writeCache(lastDms);
+      offlineNote(false);
       draw();
-    }).catch(function (e) { $('talked').innerHTML = '<p class="dm-empty">' + esc(e.message) + '</p>'; });
+      // When the unread numbers change, bring the app icon badge up to date too.
+      var sum = lastDms.reduce(function (a, d) { return a + (d.unread || 0); }, 0);
+      if (lastSum !== null && sum !== lastSum && window.ChowaniecBadge) window.ChowaniecBadge.refresh(true);
+      lastSum = sum;
+    }).catch(function (e) {
+      var cached = readCache();
+      if (cached && (!e.status || navigator.onLine === false)) {
+        if (!lastDms.length) { lastDms = cached.dms; draw(); }
+        offlineNote(true, cached.at);
+        return;
+      }
+      if (!lastDms.length) $('talked').innerHTML = '<p class="dm-empty">' + esc(e.message) + '</p>';
+    });
   }
 
   // ---- swipe a row left to show Pin / Mute / Mark read (the three-dots button does the same)
@@ -139,7 +174,10 @@
     } else if (what === 'read') {
       if (!d.last || !d.last.id) { S.toast('Nothing to mark.'); closeRow(); return; }
       S.api('/.netlify/functions/group', { method: 'POST', body: { action: 'read', id: d.last.id, room: id } })
-        .then(function () { d.unread = 0; hap('success'); closeRow(); draw(); })
+        .then(function () {
+          d.unread = 0; hap('success'); closeRow(); draw(); writeCache(lastDms);
+          window.dispatchEvent(new CustomEvent('chowaniec-chat-read', { detail: { room: id, id: d.last.id } }));
+        })
         .catch(function (err) { S.toast(err.message, true); });
     } else if (what === 'mute') {
       if (d.mutedUntil) {
@@ -164,7 +202,10 @@
       }).catch(function (err) { S.toast(err.message, true); });
   }
   S.whenSignedIn(function () {
+    var cached = readCache();
+    if (cached && cached.dms.length) { lastDms = cached.dms; draw(); }
     load();
+    window.addEventListener('online', load);
     setInterval(function () { if (document.visibilityState === 'visible') load(); }, 8000);
   });
 })();

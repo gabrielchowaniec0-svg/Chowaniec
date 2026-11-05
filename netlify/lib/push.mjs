@@ -7,6 +7,7 @@ import { whoWantsPush } from './user-settings.mjs';
 import { familyNames } from './auth.mjs';
 import { onlineAmong } from './presence.mjs';
 import { addToInbox } from './inbox.mjs';
+import { bumpBadges, readBadge } from './badge.mjs';
 
 const store = () => getStore({ name: 'push-subscriptions', consistency: 'strong' });
 
@@ -64,6 +65,9 @@ export function withChatTag(payload) {
   return { ...payload, tag: payload.tag || `chat-${m[1] || 'everyone'}`, replyable: true };
 }
 
+// Chat messages (group chats and direct messages) are what the badge counts.
+const isChatPush = (payload, kind) => ['message', 'mention', 'important'].includes(kind) && /^\/group\//.test(String((payload && payload.url) || ''));
+
 export async function sendPush(users, payload, { exclude, kind = 'other', room = null, inApp = true } = {}) {
   const config = pushConfig();
   const { blobs } = await store().list({ prefix: 'sub/' });
@@ -91,10 +95,18 @@ export async function sendPush(users, payload, { exclude, kind = 'other', room =
 
   const wanted = new Set(names);
   const targets = blobs.filter((b) => wanted.has(ownerOf(b)));
-  const body = JSON.stringify(withChatTag(payload));
+  if (!targets.length) return delivered;
+  // The app icon badge: a new chat message adds one to each recipient's count; anything else just repeats it.
+  const owners = [...new Set(targets.map(ownerOf))];
+  const counts = isChatPush(payload, kind)
+    ? await bumpBadges(owners)
+    : Object.fromEntries(await Promise.all(owners.map(async (n) => [n, await readBadge(n)])));
+  const tagged = withChatTag(payload);
+  const bodies = new Map(owners.map((n) => [n, JSON.stringify({ ...tagged, ...(counts[n] != null ? { badge: counts[n] } : {}) })]));
   const results = await Promise.all(targets.map(async (b) => {
     const record = await store().get(b.key, { type: 'json' });
     if (!record) return 0;
+    const body = bodies.get(ownerOf(b));
     try {
       await webpush.sendNotification(record.subscription, body, { TTL: 60 * 60 * 24 });
       return 1;

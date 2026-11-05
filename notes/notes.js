@@ -113,16 +113,19 @@
     let toastTimer = null;
     function toast(message, kind) {
         const el = $('toast');
-        const icon = kind === 'error' ? 'circle-alert' : 'check';
-        el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 shrink-0 ${kind === 'error' ? 'text-red-300' : 'text-emerald-300'}"></i><span>${escapeHtml(message)}</span>`;
+        const icon = kind === 'error' ? 'circle-alert' : kind === 'warn' ? 'triangle-alert' : kind === 'offline' ? 'cloud-off' : 'check';
+        el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 shrink-0 ${kind === 'error' ? 'text-red-300' : kind === 'warn' || kind === 'offline' ? 'text-amber-300' : 'text-emerald-300'}"></i><span>${escapeHtml(message)}</span>`;
         el.classList.remove('hidden');
         el.classList.add('flex');
+        // Long messages (offline sync news) read better in a rounded box than in the pill.
+        el.style.borderRadius = message.length > 70 ? '18px' : '';
+        el.style.textAlign = message.length > 70 ? 'left' : '';
         icons();
         clearTimeout(toastTimer);
         toastTimer = setTimeout(() => {
             el.classList.add('hidden');
             el.classList.remove('flex');
-        }, kind === 'error' ? 5000 : 2400);
+        }, kind === 'warn' ? 10000 : kind === 'error' ? 5000 : kind === 'offline' ? 4000 : 2400);
     }
 
     async function copyText(text) {
@@ -361,9 +364,21 @@
             state.notes = Array.isArray(data.notes) ? data.notes : [];
             state.listLoaded = true;
             state.listError = '';
+            state.offline = false;
+            Offline.saveList(state.notes);
+            Offline.overlayList();
         } catch (e) {
-            if (!state.listLoaded) state.listError = e.message;
-            else if (e.status !== 401) toast(e.message, 'error');
+            const cached = e.status === 0 ? Offline.readList() : null;
+            if (cached) {
+                // No connection: show the saved list (with any edits made offline).
+                if (!state.listLoaded || state.offline) state.notes = cached.notes;
+                state.listLoaded = true;
+                state.listError = '';
+                if (!state.offline) toast('You’re offline. Showing notes saved on this device.', 'offline');
+                state.offline = true;
+                Offline.overlayList();
+            } else if (!state.listLoaded) state.listError = e.message;
+            else if (e.status !== 401 && e.status !== 0) toast(e.message, 'error');
         }
         renderList();
     }
@@ -376,6 +391,182 @@
         state.notes.unshift(summary);
         state.notes.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
     }
+
+    // --- OFFLINE ---
+    // Notes are kept on this device so they can be read without a connection:
+    //   the list (chowaniec_notes_list_<user>) and each note you open (chowaniec_note_<user>_<id>, at most
+    //   NOTE_CACHE_MAX notes, least recently opened dropped first, very large notes skipped).
+    // Edits made offline wait in chowaniec_notes_outbox_<user> with the version (etag) they started from and are
+    // sent when the connection is back. If someone else changed the note in the meantime (409), both versions
+    // are kept: theirs stays in the note and yours is saved as a new note "… (your offline copy)".
+    const NOTE_CACHE_MAX = 40;
+    const NOTE_CACHE_BYTES = 200 * 1024;
+    const Offline = (() => {
+        const who = () => String((state.user && state.user.name) || '').toLowerCase();
+        const listKey = () => `chowaniec_notes_list_${who()}`;
+        const indexKey = () => `chowaniec_notes_index_${who()}`;
+        const noteKey = (id) => `chowaniec_note_${who()}_${id}`;
+        const outboxKey = () => `chowaniec_notes_outbox_${who()}`;
+        const read = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } };
+        const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
+        const drop = (k) => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } };
+
+        function saveList(notes) { write(listKey(), { at: Date.now(), notes }); }
+        function readList() { const v = read(listKey(), null); return v && Array.isArray(v.notes) ? v : null; }
+
+        function saveNote(note, etag) {
+            if (!note || !note.id) return;
+            const json = JSON.stringify({ at: Date.now(), note, etag: etag || null });
+            if (json.length > NOTE_CACHE_BYTES) return;
+            const index = read(indexKey(), {});
+            index[note.id] = Date.now();
+            const ids = Object.keys(index).sort((a, b) => index[b] - index[a]);
+            // Never evict a note with an offline edit waiting.
+            const waiting = outbox();
+            ids.slice(NOTE_CACHE_MAX).forEach((id) => { if (!waiting[id]) { drop(noteKey(id)); delete index[id]; } });
+            try { localStorage.setItem(noteKey(note.id), json); } catch (e) {
+                const oldest = Object.keys(index).filter((id) => id !== note.id && !waiting[id]).sort((a, b) => index[a] - index[b]).slice(0, 5);
+                oldest.forEach((id) => { drop(noteKey(id)); delete index[id]; });
+                try { localStorage.setItem(noteKey(note.id), json); } catch (x) { delete index[note.id]; }
+            }
+            write(indexKey(), index);
+        }
+        function readNote(id) { const v = read(noteKey(id), null); return v && v.note ? v : null; }
+        function forgetNote(id) { drop(noteKey(id)); const index = read(indexKey(), {}); delete index[id]; write(indexKey(), index); }
+
+        function outbox() { const v = read(outboxKey(), {}); return v && typeof v === 'object' ? v : {}; }
+        function setOutbox(box) { if (Object.keys(box).length) write(outboxKey(), box); else drop(outboxKey()); }
+        const queuedFor = (n) => (n ? outbox()[n.id || n.localId] || null : null);
+
+        // Keeps the latest offline version of `n` (the open note) to send later.
+        function queue(n) {
+            if (!n.id && !n.localId) n.localId = `local-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+            const key = n.id || n.localId;
+            const box = outbox();
+            const before = box[key];
+            box[key] = {
+                id: n.id || null, localId: n.localId || null,
+                title: n.title, markdown: n.markdown,
+                baseEtag: before ? before.baseEtag : (n.etag || null),
+                shared: !!n.shared, sharedWith: peopleList(n).slice(), lockEdit: !!n.lockEdit, lockCheck: !!n.lockCheck,
+                at: Date.now()
+            };
+            setOutbox(box);
+            const now = new Date().toISOString();
+            const copy = { id: key, title: n.title, markdown: n.markdown, shared: !!n.shared, sharedWith: peopleList(n).slice(), lockEdit: !!n.lockEdit, lockCheck: !!n.lockCheck,
+                owner: n.owner || state.user.name, source: n.source || 'manual', createdAt: n.createdAt || now, updatedAt: now, updatedBy: state.user.name, offline: true };
+            saveNote(copy, box[key].baseEtag);
+            upsertSummary(copy);
+            const list = readList();
+            if (list) saveList([Object.assign({}, copy, { preview: previewOf(copy.markdown), markdown: undefined })].concat(list.notes.filter((x) => x.id !== key)));
+        }
+
+        // Shows offline edits in the list (titles, previews, notes made offline).
+        function overlayList() {
+            const box = outbox();
+            Object.keys(box).forEach((key) => {
+                const q = box[key];
+                const existing = state.notes.find((x) => x.id === key);
+                const summary = Object.assign({}, existing || { id: key, owner: state.user.name, source: 'manual', shared: q.shared, createdAt: new Date(q.at).toISOString() },
+                    { title: q.title, preview: previewOf(q.markdown), updatedAt: new Date(q.at).toISOString(), updatedBy: state.user.name, offline: true });
+                state.notes = state.notes.filter((x) => x.id !== key);
+                state.notes.unshift(summary);
+            });
+            state.notes.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+        }
+
+        let flushing = false;
+        async function flush() {
+            if (flushing || navigator.onLine === false) return;
+            const box = outbox();
+            const keys = Object.keys(box).sort((a, b) => box[a].at - box[b].at);
+            if (!keys.length) return;
+            flushing = true;
+            let synced = 0;
+            let conflicts = 0;
+            try {
+                for (const key of keys) {
+                    const q = outbox()[key];
+                    if (!q) continue;
+                    const n = state.current;
+                    const isOpen = !!n && (n.id || n.localId) === key;
+                    if (isOpen && (state.saving || state.dirty)) continue;   // the editor will save it itself
+                    try {
+                        let data;
+                        if (!q.id) {
+                            data = await api(API, { method: 'POST', body: { title: q.title, markdown: q.markdown, shared: q.shared, sharedWith: q.sharedWith, lockEdit: q.lockEdit, lockCheck: q.lockCheck } });
+                            state.notes = state.notes.filter((x) => x.id !== key);
+                            forgetNote(key);
+                        } else {
+                            const body = { id: q.id, title: q.title, markdown: q.markdown };
+                            if (q.baseEtag) body.etag = q.baseEtag;
+                            data = await api(API, { method: 'PUT', body });
+                        }
+                        const left = outbox();
+                        // A newer offline edit may have been queued while this was sending: keep it, based on the new version.
+                        const newer = left[key] && left[key].at !== q.at ? left[key] : null;
+                        delete left[key];
+                        if (newer) left[data.note.id] = Object.assign({}, newer, { id: data.note.id, localId: null, baseEtag: data.etag });
+                        setOutbox(left);
+                        saveNote(data.note, data.etag);
+                        upsertSummary(data.note);
+                        if (isOpen && state.current === n) {
+                            n.id = data.note.id;
+                            n.localId = null;
+                            n.etag = data.etag;
+                            n.updatedAt = data.note.updatedAt;
+                            n.updatedBy = data.note.updatedBy;
+                            setUrlId(n.id);
+                        }
+                        synced++;
+                    } catch (e) {
+                        if (e.status === 0 || e.status === 401) break;
+                        if (e.status === 409 || e.status === 404 || e.status === 403) {
+                            await keepBoth(key, q, e);
+                            conflicts++;
+                        } else if (e.status === 400 || e.status === 413) {
+                            const left = outbox(); delete left[key]; setOutbox(left);
+                            toast(`Couldn’t sync “${q.title || 'Untitled'}”: ${e.message}`, 'error');
+                        } else break;
+                    }
+                }
+            } finally {
+                flushing = false;
+                renderList();
+                renderStatus();
+            }
+            // A "both versions kept" message matters more than "synced", so it is not covered up.
+            if (synced && !conflicts) toast(synced === 1 ? 'Your offline edit is synced' : `${synced} offline edits are synced`);
+        }
+
+        // Conflict: the note changed (or went away) while this device was offline. Nothing is thrown away.
+        async function keepBoth(key, q, err) {
+            const title = `${q.title || 'Untitled'} (your offline copy)`;
+            try {
+                const made = await api(API, { method: 'POST', body: { title, markdown: q.markdown, shared: false } });
+                const left = outbox(); delete left[key]; setOutbox(left);
+                saveNote(made.note, made.etag);
+                upsertSummary(made.note);
+                const n = state.current;
+                if (n && (n.id || n.localId) === key) {
+                    if (err.status === 409 && err.data && err.data.note) {
+                        openNoteObject(err.data.note, err.data.etag);
+                        saveNote(err.data.note, err.data.etag);
+                    } else {
+                        openNoteObject(made.note, made.etag);
+                        setUrlId(made.note.id);
+                    }
+                }
+                toast(err.status === 409
+                    ? `Someone else changed “${q.title || 'Untitled'}” while you were offline. Both versions are kept: yours is saved as “${title}”.`
+                    : `“${q.title || 'Untitled'}” was deleted or unshared while you were offline. Your version is saved as “${title}”.`, 'warn');
+            } catch (e) {
+                if (e.status !== 0) toast(`Couldn’t sync “${q.title || 'Untitled'}”: ${e.message}`, 'error');
+            }
+        }
+
+        return { saveList, readList, saveNote, readNote, queue, queuedFor, overlayList, flush, outbox };
+    })();
 
     // --- PANES / LAYOUT ---
     function setPane(pane) {
@@ -512,6 +703,8 @@
             html = '<i data-lucide="triangle-alert" class="w-3.5 h-3.5 shrink-0 text-amber-500"></i><span class="truncate text-amber-600">Conflict &mdash; choose a version</span>';
         } else if (state.saving) {
             html = '<i data-lucide="loader-circle" class="w-3.5 h-3.5 shrink-0 spin"></i><span class="truncate">Saving&hellip;</span>';
+        } else if (!state.dirty && Offline.queuedFor(n)) {
+            html = '<i data-lucide="cloud-off" class="w-3.5 h-3.5 shrink-0 text-amber-500"></i><span class="truncate">Saved on this device &middot; syncs when you&rsquo;re online</span>';
         } else if (state.saveError) {
             html = `<i data-lucide="circle-alert" class="w-3.5 h-3.5 shrink-0 text-red-500"></i><span class="truncate text-red-600">Not saved: ${escapeHtml(state.saveError)} &middot; tap to retry</span>`;
         } else if (state.dirty) {
@@ -522,7 +715,7 @@
             html = '<i data-lucide="cloud-check" class="w-3.5 h-3.5 shrink-0 text-emerald-500"></i><span class="truncate">Saved</span>';
         }
         el.innerHTML = html;
-        el.dataset.state = state.conflict ? 'conflict' : state.saving ? 'saving' : state.saveError ? 'error' : state.dirty ? 'dirty' : n.id ? 'saved' : 'draft';
+        el.dataset.state = state.conflict ? 'conflict' : state.saving ? 'saving' : state.saveError ? 'error' : state.dirty ? 'dirty' : Offline.queuedFor(n) ? 'queued' : n.id ? 'saved' : 'draft';
         icons();
     }
 
@@ -560,7 +753,8 @@
 
     function openNoteObject(note, etag) {
         state.current = {
-            id: note.id || null,
+            id: note.id && !String(note.id).startsWith('local-') ? note.id : null,
+            localId: note.id && String(note.id).startsWith('local-') ? note.id : null,
             title: note.title || '',
             markdown: note.markdown || '',
             shared: !!note.shared,
@@ -627,9 +821,13 @@
         setPane('editor');
         renderList();
         try {
+            if (String(id).startsWith('local-')) throw new ApiError(0, 'Made offline');
             const data = await api(`${API}?id=${encodeURIComponent(id)}`);
             if (seq !== state.openSeq) return;
-            openNoteObject(data.note, data.etag);
+            // An edit made offline that hasn't synced yet wins over the server copy (it syncs, with conflict checks, shortly).
+            const waiting = Offline.outbox()[data.note.id];
+            openNoteObject(waiting ? Object.assign({}, data.note, { title: waiting.title, markdown: waiting.markdown }) : data.note, waiting ? (waiting.baseEtag || data.etag) : data.etag);
+            if (!waiting) Offline.saveNote(data.note, data.etag);
             setUrlId(data.note.id);
             if (!state.notes.some((n) => n.id === data.note.id)) {
                 upsertSummary(data.note);
@@ -637,8 +835,22 @@
             }
         } catch (e) {
             if (seq !== state.openSeq) return;
+            const saved = e.status === 0 ? Offline.readNote(id) : null;
+            if (saved) {
+                const waiting = Offline.outbox()[id];
+                openNoteObject(waiting ? Object.assign({}, saved.note, { title: waiting.title, markdown: waiting.markdown }) : saved.note, waiting ? waiting.baseEtag : saved.etag);
+                setUrlId(id);
+                if (!String(id).startsWith('local-')) toast('You’re offline. This is the copy saved on this device.', 'offline');
+                return;
+            }
             state.current = null;
             setUrlId(null);
+            if (e.status === 0) {
+                renderEditor();
+                if (!isDesktop()) setPane('list');
+                toast('You’re offline, and this note isn’t saved on this device yet.', 'error');
+                return;
+            }
             renderEditor();
             if (!isDesktop()) setPane('list');
             if (e.status !== 401) toast(e.message, 'error');
@@ -701,6 +913,11 @@
         renderStatus();
         try {
             let data;
+            if (navigator.onLine === false) throw new ApiError(0, 'Offline');
+            if (Offline.queuedFor(note)) {
+                // An offline edit for this note is still waiting: keep queueing until it has synced.
+                throw new ApiError(0, 'Waiting to sync');
+            }
             if (!note.id) {
                 data = await api(API, { method: 'POST', body: { title: snapshot.title, markdown: snapshot.markdown, shared: snapshot.shared, sharedWith: snapshot.sharedWith, lockEdit: snapshot.lockEdit, lockCheck: snapshot.lockCheck } });
             } else {
@@ -717,6 +934,7 @@
             const wasNew = !note.id;
             note.id = data.note.id;
             note.etag = data.etag;
+            Offline.saveNote(Object.assign({}, data.note, { title: snapshot.title, markdown: snapshot.markdown }), data.etag);
             note.owner = data.note.owner;
             note.shared = !!data.note.shared;
             note.sharedWith = peopleList(data.note).slice();
@@ -743,7 +961,13 @@
             renderList();
         } catch (e) {
             if (state.current !== note) return;
-            if (e.status === 409) {
+            if (e.status === 0) {
+                // No connection: keep it on this device and send it when the connection is back.
+                Offline.queue(note);
+                state.dirty = note.title !== snapshot.title || note.markdown !== snapshot.markdown;
+                renderList();
+                if (navigator.onLine !== false) setTimeout(() => Offline.flush(), 3000);
+            } else if (e.status === 409) {
                 state.conflict = { note: e.data.note || null, etag: e.data.etag || null };
                 showModal('conflict-modal');
                 icons();
@@ -905,7 +1129,7 @@
     let syncBusy = false;
     async function syncOpenNote() {
         const n = state.current;
-        if (syncBusy || !n || !n.id || state.dirty || state.saving || state.conflict || state.liveLock || document.hidden) return;
+        if (syncBusy || !n || !n.id || state.dirty || state.saving || state.conflict || state.liveLock || document.hidden || Offline.queuedFor(n)) return;
         syncBusy = true;
         try {
             const data = await api(`${API}?id=${encodeURIComponent(n.id)}`);
@@ -1438,9 +1662,21 @@
         icons();
 
         const deepId = new URLSearchParams(window.location.search).get('id');
+        // The saved list shows straight away; the network copy replaces it a moment later.
+        const savedList = Offline.readList();
+        if (savedList) {
+            state.notes = savedList.notes;
+            state.listLoaded = true;
+            Offline.overlayList();
+            renderList();
+        }
         const listPromise = loadList();
         if (deepId) await openNote(deepId);
         await listPromise;
+        Offline.flush();
+        window.addEventListener('online', () => { Offline.flush().then(() => loadList()); });
+        window.addEventListener('offline', () => toast('You’re offline. Notes you’ve opened can still be read, and edits sync later.', 'offline'));
+        setInterval(() => { if (!document.hidden && Object.keys(Offline.outbox()).length) Offline.flush(); }, 15000);
     }
 
     // Bridge for Live Notes (notes/live.js).

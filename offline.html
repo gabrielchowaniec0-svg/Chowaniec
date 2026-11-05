@@ -12,6 +12,10 @@
     h1 { font-family: Georgia, serif; font-weight: 400; font-size: 1.5rem; margin: 1rem 0 0.5rem; }
     p { color: #6b7280; line-height: 1.5; margin: 0 0 1.5rem; }
     button { min-height: 44px; padding: 0 1.5rem; border: 0; border-radius: 999px; background: #000; color: #fff; font-size: 0.9rem; cursor: pointer; }
+    #saved { margin: 1.5rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }
+    #saved a { display: inline-block; padding: .5rem .9rem; border-radius: 999px; border: 1px solid #e5e7eb; color: inherit; text-decoration: none; font-size: .85rem; }
+    #saved-title { margin: 1.5rem 0 0; font-size: .8rem; color: #6b7280; }
+    @media (prefers-color-scheme: dark) { body { background: #0b0b0d; color: #f2f2f4; } .card { background: #16161a; border-color: #26262c; } p { color: #a8a8b0; } button { background: #f2f2f4; color: #111; } #saved a { border-color: #33333a; } }
   </style>
 </head>
 <body>
@@ -20,6 +24,21 @@
     <h1>You're offline</h1>
     <p>Chowaniec needs an internet connection for this page. Check your connection and try again.</p>
     <button onclick="location.reload()">Try Again</button>
+    <p id="saved-title" hidden>These work offline on this device:</p>
+    <ul id="saved"></ul>
   </div>
+  <script>
+    // Pages the app saved for offline use (see /sw.js): chats and notes you've opened can still be read.
+    (async function () {
+      if (!window.caches) return;
+      const names = { '/': 'Home', '/group/': 'Group Chat', '/messages/': 'Messages', '/notes/': 'Notes', '/calendar/': 'Calendar', '/lists/': 'Lists', '/games/': 'Games', '/ai/': 'AI', '/settings/': 'Settings', '/watch/': 'Watch', '/trophies/': 'Trophies' };
+      const found = [];
+      for (const path of Object.keys(names)) if (await caches.match(path, { ignoreSearch: true })) found.push(path);
+      if (!found.length) return;
+      document.getElementById('saved-title').hidden = false;
+      document.getElementById('saved').innerHTML = found.map((p) => '<li><a href="' + p + '">' + names[p] + '</a></li>').join('');
+    })();
+    window.addEventListener('online', () => location.reload());
+  </script>
 </body>
 </html>

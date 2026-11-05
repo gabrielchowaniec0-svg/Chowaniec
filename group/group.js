@@ -587,7 +587,7 @@
 
         let status = '';
         if (m._pending === 'sending') status = `<div class="msg-status">Sending…</div>`;
-        else if (m._pending === 'offline') status = `<div class="msg-status offline">Waiting for a connection. It will send by itself.</div>`;
+        else if (m._pending === 'offline') status = `<div class="msg-status offline">Will send when online</div>`;
         else if (m._pending === 'failed') {
             status = `<button type="button" class="msg-status failed" data-act="retry" data-id="${escapeHtml(m.id)}"><i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Failed — tap to retry</button>`;
         }
@@ -920,12 +920,113 @@
         icons(bar);
     }
 
+    // ---------- deep links: /group/?room=<id>&msg=<messageId> ----------
+    // Bob's memory citations and search results point at one message. After the first page from the server has
+    // rendered, scroll to it (loading up to a few older pages) and flash it. The msg= is then dropped from the
+    // address so a reload doesn't jump again.
+    try {
+        const wanted = new URLSearchParams(location.search).get('msg');
+        if (wanted && /^\d{13}-[a-f0-9]{8}$/.test(wanted)) state.deepMsg = wanted;
+    } catch (e) { /* ignore */ }
+    function openDeepLink() {
+        const id = state.deepMsg;
+        state.deepMsg = null;
+        state.stick = false;
+        try {
+            const url = new URL(location.href);
+            url.searchParams.delete('msg');
+            history.replaceState(history.state, '', url.pathname + url.search + url.hash);
+        } catch (e) { /* ignore */ }
+        requestAnimationFrame(() => { revealMessage(id, 5); });
+    }
+
+    // ---------- offline copy of this chat ----------
+    // The latest 50 messages of each chat (plus pinned and the room list / DM header) are kept on this device,
+    // per person, so the chat opens instantly and can be read without a connection. Kept small: at most
+    // CHAT_CACHE_ROOMS chats of CHAT_CACHE_BYTES each; the least recently opened chat is dropped first.
+    const CHAT_CACHE_KEEP = 50;
+    const CHAT_CACHE_BYTES = 150 * 1024;
+    const CHAT_CACHE_ROOMS = 8;
+    const CHAT_CACHE_INDEX = 'chowaniec_chatcache_index';
+    const chatCacheKey = (room) => `chowaniec_chatcache_${String(myName()).toLowerCase()}_${room || ROOM}`;
+    let cacheSaveTimer = null;
+    function readCacheIndex() {
+        try { const v = JSON.parse(localStorage.getItem(CHAT_CACHE_INDEX) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; }
+    }
+    function writeChatCache(key, json) {
+        const index = readCacheIndex();
+        index[key] = Date.now();
+        const keys = Object.keys(index).sort((a, b) => index[b] - index[a]);
+        keys.slice(CHAT_CACHE_ROOMS).forEach((k) => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } delete index[k]; });
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                localStorage.setItem(key, json);
+                localStorage.setItem(CHAT_CACHE_INDEX, JSON.stringify(index));
+                return true;
+            } catch (e) {
+                // Storage full: drop the oldest other chat and try again.
+                const oldest = Object.keys(index).filter((k) => k !== key).sort((a, b) => index[a] - index[b])[0];
+                if (!oldest) return false;
+                try { localStorage.removeItem(oldest); } catch (x) { /* ignore */ }
+                delete index[oldest];
+            }
+        }
+        return false;
+    }
+    function saveChatCache() {
+        clearTimeout(cacheSaveTimer);
+        cacheSaveTimer = setTimeout(() => {
+            if (!state.user || !state.messages.length) return;
+            let list = state.messages.filter((m) => m && m.id && !String(m.id).startsWith('tmp-')).slice(-CHAT_CACHE_KEEP);
+            let json = '';
+            for (;;) {
+                json = JSON.stringify({ v: 1, at: Date.now(), messages: list, pinned: state.pinned || null, hasMore: state.hasMore || list.length >= CHAT_CACHE_KEEP });
+                if (json.length <= CHAT_CACHE_BYTES || list.length <= 5) break;
+                list = list.slice(Math.ceil(list.length / 4));
+            }
+            writeChatCache(chatCacheKey(), json);
+        }, 600);
+    }
+    function loadChatCache() {
+        try {
+            const raw = localStorage.getItem(chatCacheKey());
+            if (!raw) return false;
+            const data = JSON.parse(raw);
+            if (!data || !Array.isArray(data.messages) || !data.messages.length) return false;
+            data.messages.forEach((m) => { if (m && m.id != null) state.byId.set(m.id, m); });
+            resort();
+            const sorted = data.messages.slice().sort(compareMsgs);
+            state.latestId = sorted[sorted.length - 1].id;
+            state.pinned = data.pinned || null;
+            state.hasMore = !!data.hasMore;
+            state.cachedAt = data.at || 0;
+            state.fromCache = true;
+            state.loaded = true;
+            return true;
+        } catch (e) { return false; }
+    }
+    function readSmallCache(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
+    function writeSmallCache(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage full */ } }
+    const isOffline = () => navigator.onLine === false;
+    function offlineText() {
+        const queued = state.pending.filter((p) => p.status === 'offline').length;
+        const when = state.cachedAt ? ` from ${new Date(state.cachedAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : '';
+        return `You’re offline. Showing saved messages${state.fromCache ? when : ''}.` +
+            (queued ? ` ${queued === 1 ? '1 message' : queued + ' messages'} will send when you’re back online.` : ' Anything you send will go when you’re back online.');
+    }
+    function showOfflineBanner() {
+        state.offlineBanner = true;
+        showBanner(offlineText());
+        const b = $('error-banner');
+        if (b) b.classList.add('offline');
+    }
+
     // ---------- polling ----------
     function showBanner(text) {
         $('error-text').textContent = text;
         show($('error-banner'), 'block');
     }
-    function hideBanner() { hide($('error-banner'), 'block'); }
+    function hideBanner() { state.offlineBanner = false; const b = $('error-banner'); if (b) b.classList.remove('offline'); hide($('error-banner'), 'block'); }
 
     function schedulePoll(ms) {
         clearTimeout(state.pollTimer);
@@ -978,11 +1079,22 @@
             }
             if (!rendered && extrasSignature() !== state.extrasSig) render('auto');
             state.failures = 0;
+            state.fromCache = false;
             hideBanner();
+            if (full || list.length) saveChatCache();
+            if (state.deepMsg) openDeepLink();
         } catch (e) {
             if (e.status === 401) return;
             state.failures++;
             const wait = Math.round(Math.min(30000, 2000 * Math.pow(2, state.failures - 1)) / 1000);
+            if (e.status === 0 && (isOffline() || state.loaded)) {
+                showOfflineBanner();
+                if (!state.loaded) {
+                    $('initial-loading').innerHTML = `<i data-lucide="wifi-off" class="w-6 h-6"></i><span class="eyebrow mt-3">Offline &mdash; nothing saved for this chat yet</span>`;
+                    icons($('initial-loading'));
+                }
+                return;
+            }
             showBanner(`${state.loaded ? 'Can’t reach the chat' : 'Couldn’t load messages'}: ${e.message.replace(/\.$/, '')}. Retrying in ${wait}s.`);
             if (!state.loaded) {
                 $('initial-loading').innerHTML = `<i data-lucide="wifi-off" class="w-6 h-6"></i><span class="eyebrow mt-3">Waiting for connection&hellip;</span>`;
@@ -1050,7 +1162,9 @@
         }
         state.readSentId = id;
         state.readSentAt = Date.now();
-        api(API, { method: 'POST', body: { action: 'read', id } }).catch(() => {
+        api(API, { method: 'POST', body: { action: 'read', id } }).then(() => {
+            window.dispatchEvent(new CustomEvent('chowaniec-chat-read', { detail: { room: ROOM, id } }));
+        }).catch(() => {
             if (state.readSentId === id) state.readSentId = null;
         });
     }
@@ -1150,12 +1264,14 @@
             const data = await api(API, { method: 'POST', body });
             state.pending = state.pending.filter((x) => x !== p);
             saveOutbox();
+            if (state.offlineBanner) { if (isOffline()) showOfflineBanner(); else hideBanner(); }
             if (data && data.message) {
                 const all = Array.isArray(data.messages) && data.messages.length ? data.messages : [data.message];
                 all.forEach((m) => state.confirmed.add(m.id));
                 upsert(all);
                 const last = all[all.length - 1];
                 if (last && (!state.latestId || last.id > state.latestId)) state.latestId = last.id;
+                saveChatCache();
             }
             render('auto');
         } catch (e) {
@@ -1163,6 +1279,7 @@
                 // No connection: keep it and send automatically when the phone is back online.
                 p.status = 'offline';
                 saveOutbox();
+                showOfflineBanner();
                 render('auto');
                 return;
             }
@@ -1666,12 +1783,12 @@
     }
 
     // Scrolls to a message, loading earlier pages if needed (bounded).
-    async function revealMessage(id) {
+    async function revealMessage(id, maxPages) {
         let row = rowEl(id);
         if (row) { flashRow(row); return true; }
         if (!state.hasMore) { toast('That message is no longer here.'); return false; }
         toast('Finding that message…');
-        for (let i = 0; i < 20 && !row && state.hasMore; i++) {
+        for (let i = 0; i < (maxPages || 20) && !row && state.hasMore; i++) {
             await loadOlderAndWait();
             if (state.olderError) break;
             row = rowEl(id);
@@ -2499,6 +2616,7 @@
             }
         });
         window.addEventListener('online', () => { state.failures = 0; poll(); flushOutbox(); });
+        window.addEventListener('offline', () => { if (state.started) showOfflineBanner(); });
         window.addEventListener('resize', () => { if (state.menuFor) closeActions(); });
 
         // iOS: keep the composer above the on-screen keyboard.
@@ -2525,12 +2643,20 @@
 
     // Finds the chats this person is in, shows the switcher, and limits @mentions to this chat's members.
     async function loadDm() {
+        const dmKey = `chowaniec_dminfo_${String(myName()).toLowerCase()}_${ROOM}`;
         try {
             const data = await api(`${API}?dminfo=1`);
             if (!data.dm) throw new Error('missing');
             state.dm = data.dm;
             state.people = data.dm.members;
-        } catch (e) { location.replace('/messages/'); return; }
+            writeSmallCache(dmKey, data.dm);
+        } catch (e) {
+            // Offline: use the saved header instead of leaving the chat.
+            const saved = e && e.status === 0 ? readSmallCache(dmKey) : null;
+            if (!saved) { if (e && e.status === 0) return; location.replace('/messages/'); return; }
+            state.dm = saved;
+            state.people = saved.members || [];
+        }
         const back = $('btn-back');
         if (back) back.onclick = () => { location.href = '/messages/'; };
         if (state.dm.ai) $('btn-call').classList.add('hidden');
@@ -2542,10 +2668,16 @@
 
     async function loadRooms() {
         if (IS_DM) return loadDm();
+        const roomsKey = `chowaniec_rooms_${String(myName()).toLowerCase()}`;
         try {
             const data = await api(`${API}?rooms=1`);
             state.rooms = Array.isArray(data.rooms) ? data.rooms : [];
-        } catch (e) { return; }
+            writeSmallCache(roomsKey, state.rooms);
+        } catch (e) {
+            const saved = e && e.status === 0 ? readSmallCache(roomsKey) : null;
+            if (!Array.isArray(saved)) return;
+            state.rooms = saved;
+        }
         const mine = state.rooms.find((r) => r.id === ROOM);
         if (!mine) {
             const first = state.rooms.find((r) => r.id === 'everyone') || state.rooms[0];
@@ -2588,7 +2720,11 @@
         autosize();
         updateSendButton();
         loadOutbox();
-        if (state.pending.length) { render('bottom'); if (navigator.onLine !== false) flushOutbox(); }
+        // Show the saved copy of this chat straight away; poll() then brings it up to date.
+        const cached = loadChatCache();
+        if (cached || state.pending.length) render('bottom');
+        if (isOffline()) showOfflineBanner();
+        if (state.pending.length && !isOffline()) flushOutbox();
         refreshBell();
         // /pwa.js is deferred: check again shortly in case it arrives without an event.
         [600, 2000, 5000].forEach((ms) => setTimeout(() => { if (!pwa() || state.push === 'loading') refreshBell(); }, ms));
