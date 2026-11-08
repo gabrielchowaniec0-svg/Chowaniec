@@ -18,7 +18,7 @@
 //     each pulse is one "tick" (success = 2, warning/error = 3, spaced 110 ms; the timers are started from the
 //     tap itself so WebKit forwards the gesture to them).
 //   Desktop (no touch screen): nothing.
-// Off when the person prefers reduced motion or switched it off in Settings (localStorage chowaniec_haptics = "off").
+// Off only when switched off in Settings (localStorage chowaniec_haptics = "off").
 // Calls closer together than 45 ms are merged, so a page and the shared tap handler never buzz twice for one tap -
 // unless the later one is stronger (e.g. success right after the send button's tap), which then wins.
 // Visit any page with ?haptics=test for a small panel with a button per haptic and the method in use.
@@ -26,15 +26,16 @@
   'use strict';
   if (window.ChowaniecHaptics && window.ChowaniecHaptics.version >= 3) return;
 
+  // Long enough to feel: many phone motors (Samsung included) render nothing for pulses under ~20 ms.
   const PATTERNS = {
-    selection: 6,
-    light: 10,
-    tap: 10,
-    medium: 20,
-    heavy: 32,
-    success: [14, 55, 22],
-    warning: [26, 60, 26, 60, 26],
-    error: [45, 55, 45, 55, 45]
+    selection: 22,
+    light: 30,
+    tap: 30,
+    medium: 45,
+    heavy: 65,
+    success: [35, 70, 50],
+    warning: [50, 80, 50, 80, 50],
+    error: [80, 70, 80, 70, 80]
   };
   // iOS can only play one fixed tick, so a pattern becomes a number of ticks.
   const TICKS = { selection: 1, light: 1, tap: 1, medium: 1, heavy: 1, success: 2, warning: 3, error: 3 };
@@ -75,14 +76,15 @@
     try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
   }
 
+  // Haptics aren't motion on screen, so "reduce motion / remove animations" (often switched on on Samsung
+  // phones) no longer turns them off; only the Settings switch does.
   function enabled() {
-    return METHOD.method !== 'none' && setting() && !reducedMotion();
+    return METHOD.method !== 'none' && setting();
   }
 
   function status() {
     if (METHOD.method === 'none') return METHOD;
     if (!setting()) return { method: 'none', reason: 'switched off in Settings', device: METHOD.method };
-    if (reducedMotion()) return { method: 'none', reason: 'phone is set to reduce motion', device: METHOD.method };
     return METHOD;
   }
 
@@ -193,7 +195,7 @@
   function buzz(pattern, opts) {
     opts = opts || {};
     if (METHOD.method !== 'vibrate' || !activated()) return false;
-    if (!opts.always && (!setting() || reducedMotion())) return false;
+    if (!opts.always && !setting()) return false;
     try { return navigator.vibrate(pattern) !== false; } catch (e) { return false; }
   }
 

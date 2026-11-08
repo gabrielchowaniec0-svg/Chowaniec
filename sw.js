@@ -4,7 +4,7 @@
 //   Chat photos  (/.netlify/functions/group?media=…, immutable)   cache first, capped
 //   Other API calls are never cached here (the pages keep their own offline copies of chats and notes).
 // Bumping VERSION throws the old caches away and re-downloads the shell, so every deploy busts stale scripts.
-const VERSION = 'v10';
+const VERSION = 'v11';
 const SHELL_CACHE = `chowaniec-shell-${VERSION}`;
 const RUNTIME_CACHE = `chowaniec-rt-${VERSION}`;
 const MEDIA_CACHE = `chowaniec-media-${VERSION}`;
