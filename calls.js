@@ -128,7 +128,8 @@
         });
       });
     }
-    if (navigator.vibrate) { try { navigator.vibrate([700, 300, 700]); } catch (e) { /* ignore */ } }
+    // Through /haptics.js: skipped until the page has been tapped once (Chrome blocks it and warns otherwise).
+    if (window.ChowaniecHaptics && window.ChowaniecHaptics.buzz) window.ChowaniecHaptics.buzz([700, 300, 700], { always: true });
   }
   function startRinging() {
     stopRinging();
@@ -139,7 +140,7 @@
   function stopRinging() {
     clearInterval(ringTimer);
     ringTimer = null;
-    if (navigator.vibrate) { try { navigator.vibrate(0); } catch (e) { /* ignore */ } }
+    if (window.ChowaniecHaptics && window.ChowaniecHaptics.buzz) window.ChowaniecHaptics.buzz(0, { always: true });
   }
 
   // ---------- Incoming call popup ----------
@@ -295,7 +296,7 @@
       `<button type="button" class="ct-x" data-ct="close" aria-label="Dismiss">${svg('close', 16)}</button>`;
     stack.appendChild(el);
     chime();
-    if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) { /* ignore */ } }
+    if (window.ChowaniecHaptics && window.ChowaniecHaptics.buzz) window.ChowaniecHaptics.buzz(25);
 
     let timer = null;
     let held = false;

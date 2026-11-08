@@ -230,7 +230,7 @@
     row.classList.remove('shake'); void row.offsetWidth; row.classList.add('shake');
     setTimeout(() => row.classList.remove('shake'), 520);
     G.sfx('wrong');
-    if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) { /* ignore */ }
+    if (window.ChowaniecHaptics) window.ChowaniecHaptics.error();
   }
 
   // ---------- Input ----------
