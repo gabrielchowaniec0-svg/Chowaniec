@@ -4,7 +4,7 @@
 //   Chat photos  (/.netlify/functions/group?media=…, immutable)   cache first, capped
 //   Other API calls are never cached here (the pages keep their own offline copies of chats and notes).
 // Bumping VERSION throws the old caches away and re-downloads the shell, so every deploy busts stale scripts.
-const VERSION = 'v9';
+const VERSION = 'v10';
 const SHELL_CACHE = `chowaniec-shell-${VERSION}`;
 const RUNTIME_CACHE = `chowaniec-rt-${VERSION}`;
 const MEDIA_CACHE = `chowaniec-media-${VERSION}`;
@@ -15,7 +15,10 @@ const PAGE_TIMEOUT_MS = 3000;
 // Must succeed for the worker to install.
 const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/badge-96.png', '/manifest.webmanifest'];
 // The main pages: each is cached along with the scripts and styles it links to. Missing pages (a 404) are skipped.
-const PAGES = ['/', '/group/', '/messages/', '/notes/', '/calendar/', '/lists/', '/games/', '/ai/', '/settings/', '/watch/', '/trophies/'];
+const PAGES = ['/', '/group/', '/messages/', '/notes/', '/calendar/', '/lists/', '/games/', '/ai/', '/settings/', '/watch/', '/trophies/', '/studio/'];
+// Studio (camera app): its own files, plus the export helpers export.js loads on demand, so it opens offline.
+const STUDIO = ['/studio/studio.css', '/studio/studio.js', '/studio/store.js', '/studio/camera.js', '/studio/gestures.js', '/studio/export.js',
+  '/studio/vendor/mp4-muxer.js', '/studio/vendor/webm-muxer.js', '/studio/vendor/mp4box.all.min.js'];
 // Shared scripts that pages add at run time (pwa.js loadExtras and friends), so they aren't in any page's HTML.
 const SHARED = ['/theme.js', '/theme.css', '/theme-fx.js', '/onboarding.js', '/polish.js', '/quickjump.js', '/robot-float.js', '/robot.js', '/robot.css',
   '/haptics.js', '/pwa.js', '/calls.js', '/appnav.js', '/voice.js', '/design.css', '/passwords.js', '/auth-gate.js', '/directory.js', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
@@ -59,7 +62,7 @@ async function fetchAsset(href) {
 async function cacheShell() {
   const cache = await caches.open(SHELL_CACHE);
   await cache.addAll(PRECACHE.map((u) => new Request(u, { cache: 'reload' })));
-  const assets = new Set(SHARED.map((u) => new URL(u, self.location.origin).href));
+  const assets = new Set(SHARED.concat(STUDIO).map((u) => new URL(u, self.location.origin).href));
   await Promise.all(PAGES.map(async (path) => {
     try {
       const res = await fetch(new Request(path, { cache: 'reload', credentials: 'same-origin' }));

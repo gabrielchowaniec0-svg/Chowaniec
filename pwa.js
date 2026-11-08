@@ -376,7 +376,9 @@
   // /haptics.js gives ChowaniecHaptics.tap/selection/success/warning. One shared listener buzzes for:
   //   [data-haptic="tap|selection|success|warning|medium|off"] on any element (or an ancestor),
   //   checkboxes, radios and [role=switch] toggles (selection), and send/submit buttons (tap).
-  // Pages that buzz themselves don't double up: haptics.js merges calls that come within 45 ms.
+  // Pages that buzz themselves don't double up: haptics.js merges calls that come within 45 ms (a stronger one,
+  // like a page's success() right after this tap, still wins). Everything here runs synchronously inside the tap,
+  // which iPhone needs (its haptic only plays from a real tap; see /haptics.js). ?haptics=test shows a test panel.
   (function haptics() {
     if (!window.ChowaniecHaptics) {
       const el = document.createElement('script');
@@ -393,7 +395,7 @@
       if (tagged) {
         const kind = tagged.getAttribute('data-haptic') || 'tap';
         if (kind === 'off') return;
-        if (typeof h[kind] === 'function' && kind !== 'enabled') h[kind](); else h.tap(kind);
+        if (/^(selection|success|warning|error)$/.test(kind)) h[kind](); else h.tap(kind);
         return;
       }
       if (e.target.closest('[role="switch"],[role="tab"],[aria-pressed]')) { h.selection(); return; }

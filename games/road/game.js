@@ -899,7 +899,7 @@
     shake = 0.4; bumpCool = 0.5;
     CG.sfx('hit');
     burst(L.cx, L.carY - 50, 8, 'smoke');
-    if (navigator.vibrate) try { navigator.vibrate(40); } catch (e) { /* ignore */ }
+    if (window.ChowaniecHaptics && window.ChowaniecHaptics.buzz) window.ChowaniecHaptics.buzz(40);
   }
 
   function finish() {

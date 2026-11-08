@@ -54,6 +54,15 @@ window.DIRECTORY_CONFIG = [
     description: "Shared groceries, packing and costume lists the whole family can tick off."
   },
   {
+    id: "studio",
+    title: "Chowaniec Studio",
+    path: "/studio/",
+    localFallback: "./studio/index.html",
+    icon: "play",
+    status: "Active",
+    description: "Shoot scenes take by take with a voice countdown, review each take, and export the best ones in order."
+  },
+  {
     id: "games",
     title: "Games",
     path: "/games/",

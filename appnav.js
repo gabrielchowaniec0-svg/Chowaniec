@@ -202,6 +202,7 @@
     { label: 'Lists', href: '/lists/', icon: 'lists', c: '#16a34a' },
     { label: 'Meet', href: '/meet/', icon: 'video', c: '#0284c7' },
     { label: 'Watch party', href: '/watch/', icon: 'tv', c: '#e11d48' },
+    { label: 'Studio', href: '/studio/', icon: 'play', c: '#18181b' },
     { label: 'Trophies', href: '/trophies/', icon: 'trophy', c: '#ca8a04' },
     { label: 'Search', href: '/search/', icon: 'search', c: '#475569' },
     { label: 'Settings', href: '/settings/', icon: 'settings', c: '#52525b' },
