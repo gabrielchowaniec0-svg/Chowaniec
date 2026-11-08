@@ -200,6 +200,7 @@
     { label: 'Group chat', href: '/group/', icon: 'users', c: '#0d9488' },
     { label: 'Notes', href: '/notes/', icon: 'notes', c: '#d97706' },
     { label: 'Lists', href: '/lists/', icon: 'lists', c: '#16a34a' },
+    { label: 'Note Uploader', href: '/uploader/', icon: 'fileText', c: '#0f766e', unread: '/.netlify/functions/uploads?unread=1' },
     { label: 'Meet', href: '/meet/', icon: 'video', c: '#0284c7' },
     { label: 'Watch party', href: '/watch/', icon: 'tv', c: '#e11d48' },
     { label: 'Studio', href: '/studio/', icon: 'play', c: '#18181b' },
@@ -406,6 +407,17 @@
     el.addEventListener('ch-sheet-open', function () { var b = btn(); if (b) { b.setAttribute('aria-expanded', 'true'); b.classList.add('is-on'); } });
     el.addEventListener('ch-sheet-close', function () { var b = btn(); if (b) { b.setAttribute('aria-expanded', 'false'); if (activeTab() !== 'more') b.classList.remove('is-on'); } });
     el.addEventListener('click', function (e) { if (e.target.closest('.ch-more__item')) hap('light'); });
+    // Tiles with an `unread` URL ({ unread }) get a count badge.
+    MORE.forEach(function (m) {
+      if (!m.unread || !u.key) return;
+      fetch(m.unread, { headers: { 'X-Chowaniec-Key': u.key }, cache: 'no-store', credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+        var tile = d && d.unread > 0 && el.querySelector('.ch-more__item[href="' + m.href + '"] .ch-more__tile');
+        if (!tile) return;
+        tile.style.position = 'relative';
+        tile.insertAdjacentHTML('beforeend', '<span class="ch-badge" style="position:absolute;top:-5px;right:-5px;box-shadow:0 0 0 2px var(--ch-surface)">' + (d.unread > 99 ? '99+' : d.unread) + '</span>');
+        tile.parentNode.setAttribute('aria-label', m.label + ', ' + d.unread + ' new');
+      }).catch(function () { /* no badge */ });
+    });
     return moreSheet;
   }
   function openMore() { buildMore().open(); }
