@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" class="ch-ui ch-refresh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#000000">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <title>Note Uploader</title>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/design.css">
+    <link rel="stylesheet" href="/design-extra.css">
+    <script src="/theme.js"></script>
+
+    <script src="/pwa.js" defer></script>
+    <!-- Tailwind is only used by the shared passcode box -->
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <!-- Markdown rendering (always sanitized with DOMPurify); same pinned versions as /notes -->
+    <script src="https://unpkg.com/marked@18.1.1/lib/marked.umd.js" defer></script>
+    <script src="https://unpkg.com/dompurify@3.4.17/dist/purify.min.js" defer></script>
+    <script src="../passwords.js"></script>
+    <script src="../auth-gate.js"></script>
+    <link rel="stylesheet" href="/uploader/uploader.css">
+</head>
+<body>
+<div id="app-root">
+    <div class="ch-glow" aria-hidden="true"><i></i><i></i><i></i></div>
+    <header class="ch-header">
+        <div class="ch-header__bar">
+            <a class="ch-iconbtn" href="/" id="btn-back" aria-label="Back to home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></a>
+            <span class="ch-header__small" aria-hidden="true">Note Uploader</span>
+        </div>
+        <h1 class="ch-header__title">Note Uploader</h1>
+        <p class="ch-header__sub" id="sub">Meeting notes, sent straight to the family heads.</p>
+    </header>
+
+    <main class="ch-page ch-page--narrow up-main" id="main">
+        <div class="up-tabs" id="tabs" hidden>
+            <div class="ch-segmented ch-segmented--block" role="group" aria-label="Show">
+                <button type="button" id="tab-a" aria-pressed="true"></button>
+                <button type="button" id="tab-b" aria-pressed="false"></button>
+            </div>
+        </div>
+
+        <div id="loading" class="ch-stack" aria-busy="true">
+            <div class="ch-skel" style="height:120px;border-radius:var(--ch-r-lg)"></div>
+            <div class="ch-skel" style="height:220px;border-radius:var(--ch-r-lg)"></div>
+        </div>
+
+        <!-- Not for this person -->
+        <section id="view-blocked" class="ch-card up-blocked" hidden>
+            <div class="ch-empty">
+                <span class="ch-empty__icon" data-icon="lock"></span>
+                <h2 class="ch-empty__title">Meeting notes live here</h2>
+                <p>This is for Liliana, Amelia and Emilia to send meeting notes to Gabriel, Vicky and Nicole.</p>
+                <a class="ch-btn ch-btn--secondary" href="/" style="margin-top:12px">Back to home</a>
+            </div>
+        </section>
+
+        <!-- Send notes -->
+        <section id="view-send" class="ch-stack" hidden>
+            <div class="ch-card" id="card-meeting">
+                <div class="ch-card__head"><span class="ch-card__icon" data-icon="calendar"></span><h2 class="ch-card__title">Which meeting?</h2></div>
+                <div class="up-chips" id="meeting-chips" role="group" aria-label="Recent meetings"></div>
+                <div class="ch-field">
+                    <label class="ch-label" for="meeting-title">Meeting name</label>
+                    <input class="ch-input" id="meeting-title" maxlength="120" autocomplete="off" enterkeyhint="next">
+                    <p class="ch-help" id="meeting-help">Tap a meeting above, or type its name.</p>
+                </div>
+            </div>
+
+            <div class="ch-card" id="card-notes">
+                <div class="ch-card__head"><span class="ch-card__icon" data-icon="pen"></span><h2 class="ch-card__title">Your notes</h2>
+                    <div class="ch-segmented up-mode" role="group" aria-label="Show">
+                        <button type="button" id="mode-write" aria-pressed="true">Write</button>
+                        <button type="button" id="mode-preview" aria-pressed="false">Preview</button>
+                    </div>
+                </div>
+                <div class="up-toolbar" role="toolbar" aria-label="Formatting" id="toolbar">
+                    <button type="button" class="up-tool" data-fmt="h" aria-label="Heading" title="Heading"><span data-icon="heading"></span></button>
+                    <button type="button" class="up-tool" data-fmt="b" aria-label="Bold" title="Bold"><span data-icon="bold"></span></button>
+                    <button type="button" class="up-tool" data-fmt="ul" aria-label="Bullet list" title="Bullet list"><span data-icon="list"></span></button>
+                    <button type="button" class="up-tool" data-fmt="todo" aria-label="Checklist" title="Checklist"><span data-icon="checklist"></span></button>
+                    <span class="up-toolbar__sp"></span>
+                    <button type="button" class="ch-btn ch-btn--sm ch-btn--secondary up-mic" id="btn-dictate" aria-pressed="false" hidden><span data-icon="mic"></span><span class="up-mic__label">Dictate</span></button>
+                </div>
+                <div class="ch-field">
+                    <label class="ch-label ch-sr" for="notes">Notes</label>
+                    <textarea class="ch-input up-editor" id="notes" rows="10" maxlength="50000" spellcheck="true" autocapitalize="sentences"></textarea>
+                    <div class="up-preview up-prose" id="preview" hidden></div>
+                    <p class="ch-help up-savestate" id="save-state" aria-live="polite">Your notes save on this device as you type.</p>
+                </div>
+                <div class="up-ai" id="ai-box" hidden>
+                    <div class="up-ai__head"><span data-icon="sparkles"></span><b>Tidied by AI</b><span class="ch-muted">Check it looks right.</span></div>
+                    <div class="up-prose up-ai__body" id="ai-result"></div>
+                    <div class="ch-cluster"><button type="button" class="ch-btn ch-btn--primary ch-btn--sm" id="ai-use">Use this</button><button type="button" class="ch-btn ch-btn--ghost ch-btn--sm" id="ai-keep">Keep mine</button></div>
+                </div>
+                <div class="ch-cluster up-ai-row">
+                    <button type="button" class="ch-btn ch-btn--secondary ch-btn--sm" id="btn-tidy"><span data-icon="sparkles"></span>Tidy with AI</button>
+                    <button type="button" class="ch-btn ch-btn--ghost ch-btn--sm" id="btn-undo" hidden><span data-icon="undo"></span>Undo tidy</button>
+                </div>
+            </div>
+
+            <div class="ch-card" id="card-photos">
+                <div class="ch-card__head"><span class="ch-card__icon" data-icon="camera"></span><h2 class="ch-card__title">Photos</h2><span class="ch-muted up-count" id="photo-count">0 of 8</span></div>
+                <p class="ch-help up-lead">Snap your paper notes or the whiteboard.</p>
+                <div class="up-photos" id="photos"></div>
+                <div class="ch-cluster">
+                    <label class="ch-btn ch-btn--secondary ch-btn--sm up-filebtn" id="lbl-camera"><span data-icon="camera"></span>Take a photo<input type="file" id="in-camera" accept="image/*" capture="environment"></label>
+                    <label class="ch-btn ch-btn--secondary ch-btn--sm up-filebtn" id="lbl-gallery"><span data-icon="image"></span>Choose photos<input type="file" id="in-gallery" accept="image/*" multiple></label>
+                </div>
+            </div>
+
+            <div class="ch-card" id="card-todos">
+                <div class="ch-card__head"><span class="ch-card__icon" data-icon="checklist"></span><h2 class="ch-card__title">Things to do</h2><span class="ch-muted up-count">Optional</span></div>
+                <div id="todos" class="up-todos"></div>
+                <button type="button" class="ch-btn ch-btn--ghost ch-btn--sm up-addtodo" id="btn-addtodo"><span data-icon="plus"></span>Add a thing to do</button>
+            </div>
+
+            <div class="up-sendbar">
+                <p class="ch-error" id="send-error" role="alert" hidden></p>
+                <button type="button" class="ch-btn ch-btn--primary ch-btn--lg ch-btn--block" id="btn-send"><span data-icon="send"></span><span id="send-label">Send to Gabriel, Vicky and Nicole</span></button>
+            </div>
+        </section>
+
+        <!-- Sent! -->
+        <section id="view-done" class="ch-card ch-card--accent up-done" hidden aria-live="polite">
+            <div class="up-done__tick" data-icon="check"></div>
+            <h2 class="ch-display up-done__title">Sent!</h2>
+            <p class="up-done__meeting" id="done-meeting"></p>
+            <p class="ch-muted" id="done-text">Gabriel, Vicky and Nicole have your notes.</p>
+            <div class="ch-cluster" style="justify-content:center;margin-top:16px">
+                <button type="button" class="ch-btn ch-btn--primary" id="done-open">See who has read it</button>
+                <button type="button" class="ch-btn ch-btn--secondary" id="done-new">Send more notes</button>
+            </div>
+        </section>
+
+        <!-- Inbox / Sent list -->
+        <section id="view-list" hidden>
+            <div class="up-filters" id="filters" hidden>
+                <div class="up-chips" id="filter-chips" role="group" aria-label="Filter"></div>
+                <div class="ch-field up-search">
+                    <label class="ch-label" for="filter-meeting">Find a meeting</label>
+                    <input class="ch-input" id="filter-meeting" type="search" autocomplete="off">
+                </div>
+            </div>
+            <ul class="ch-list ch-list--inset up-list" id="list" aria-live="polite"></ul>
+            <div id="list-empty" hidden></div>
+        </section>
+
+        <!-- One submission -->
+        <section id="view-detail" hidden>
+            <button type="button" class="ch-btn ch-btn--ghost ch-btn--sm up-backlink" id="detail-back"><span data-icon="chevronLeft"></span><span id="detail-back-label">Inbox</span></button>
+            <article class="ch-stack" id="detail"></article>
+        </section>
+    </main>
+</div>
+
+<!-- Delete confirmation -->
+<div class="ch-sheet" id="sheet-delete" role="dialog" aria-modal="true" aria-labelledby="sheet-delete-t" hidden>
+    <div class="ch-sheet__panel"><div class="ch-sheet__handle"></div>
+        <h2 id="sheet-delete-t" class="ch-sheet__title">Delete these notes?</h2>
+        <p class="ch-muted" style="margin-bottom:20px">The notes and photos are removed for everyone. A copy saved to Notes stays there.</p>
+        <div class="ch-stack" style="gap:8px">
+            <button type="button" class="ch-btn ch-btn--danger ch-btn--block" id="confirm-delete">Delete</button>
+            <button type="button" class="ch-btn ch-btn--secondary ch-btn--block" data-sheet-close>Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Full-screen photo viewer -->
+<div class="up-viewer" id="viewer" role="dialog" aria-modal="true" aria-label="Photo" hidden>
+    <div class="up-viewer__bar">
+        <span class="up-viewer__count" id="viewer-count"></span>
+        <a class="up-viewer__btn" id="viewer-open" target="_blank" rel="noopener" aria-label="Open the full photo"><span data-icon="external"></span></a>
+        <button type="button" class="up-viewer__btn" id="viewer-close" aria-label="Close"><span data-icon="x"></span></button>
+    </div>
+    <img id="viewer-img" alt="">
+    <button type="button" class="up-viewer__nav up-viewer__nav--prev" id="viewer-prev" aria-label="Previous photo"><span data-icon="chevronLeft"></span></button>
+    <button type="button" class="up-viewer__nav up-viewer__nav--next" id="viewer-next" aria-label="Next photo"><span data-icon="chevronRight"></span></button>
+</div>
+
+<div class="up-toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="/uploader/uploader.js"></script>
+</body>
+</html>

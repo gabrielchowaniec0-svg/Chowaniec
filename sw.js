@@ -4,7 +4,7 @@
 //   Chat photos  (/.netlify/functions/group?media=…, immutable)   cache first, capped
 //   Other API calls are never cached here (the pages keep their own offline copies of chats and notes).
 // Bumping VERSION throws the old caches away and re-downloads the shell, so every deploy busts stale scripts.
-const VERSION = 'v10';
+const VERSION = 'v12';
 const SHELL_CACHE = `chowaniec-shell-${VERSION}`;
 const RUNTIME_CACHE = `chowaniec-rt-${VERSION}`;
 const MEDIA_CACHE = `chowaniec-media-${VERSION}`;
@@ -15,7 +15,7 @@ const PAGE_TIMEOUT_MS = 3000;
 // Must succeed for the worker to install.
 const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/badge-96.png', '/manifest.webmanifest'];
 // The main pages: each is cached along with the scripts and styles it links to. Missing pages (a 404) are skipped.
-const PAGES = ['/', '/group/', '/messages/', '/notes/', '/calendar/', '/lists/', '/games/', '/ai/', '/settings/', '/watch/', '/trophies/', '/studio/'];
+const PAGES = ['/', '/group/', '/messages/', '/notes/', '/calendar/', '/lists/', '/games/', '/ai/', '/settings/', '/watch/', '/trophies/', '/studio/', '/uploader/'];
 // Studio (camera app): its own files, plus the export helpers export.js loads on demand, so it opens offline.
 const STUDIO = ['/studio/studio.css', '/studio/studio.js', '/studio/store.js', '/studio/camera.js', '/studio/gestures.js', '/studio/export.js',
   '/studio/vendor/mp4-muxer.js', '/studio/vendor/webm-muxer.js', '/studio/vendor/mp4box.all.min.js'];

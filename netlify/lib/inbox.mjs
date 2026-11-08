@@ -20,6 +20,7 @@ export function actionsFor(url) {
   if (/^\/calendar\//.test(u)) return [{ label: 'View event', url: u, icon: 'calendar' }];
   if (/^\/notes\//.test(u)) return [{ label: 'Open note', url: u, icon: 'externalLink' }];
   if (/^\/lists\//.test(u)) return [{ label: 'Open list', url: u, icon: 'externalLink' }];
+  if (/^\/uploader\//.test(u)) return [{ label: 'Open notes', url: u, icon: 'externalLink' }];
   return u && u !== '/' ? [{ label: 'Open', url: u, icon: 'externalLink' }] : [];
 }
 

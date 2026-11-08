@@ -54,6 +54,15 @@ window.DIRECTORY_CONFIG = [
     description: "Shared groceries, packing and costume lists the whole family can tick off."
   },
   {
+    id: "uploader",
+    title: "Note Uploader",
+    path: "/uploader/",
+    localFallback: "./uploader/index.html",
+    icon: "file-text",
+    status: "Active",
+    description: "Liliana, Amelia and Emilia send meeting notes and photos to Gabriel, Vicky and Nicole."
+  },
+  {
     id: "studio",
     title: "Chowaniec Studio",
     path: "/studio/",
